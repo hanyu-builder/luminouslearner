@@ -1,1 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二次方程計算機 (Quadratic Solver) - Luminous Learner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .math-font { font-family: 'Roboto Mono', monospace; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
 
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i data-lucide="calculator" class="w-6 h-6"></i>
+                <h1 class="text-xl font-bold">Luminous Learner Math</h1>
+            </div>
+            <span class="text-xs bg-indigo-500 px-2 py-1 rounded">HKDSE / IB 工具</span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto p-4 max-w-2xl">
+        
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+            <div class="p-6 bg-indigo-50 border-b border-indigo-100">
+                <h2 class="text-2xl font-bold text-indigo-900 mb-2">二次方程計算機</h2>
+                <p class="text-indigo-600 text-sm">輸入 a, b, c 係數，立即計算根 (Roots) 及判別式 (Discriminant)。</p>
+                <div class="mt-4 p-3 bg-white rounded-lg border border-indigo-200 text-center">
+                    <span class="math-font text-xl text-slate-700">
+                        <span class="text-blue-600 font-bold">a</span>x² + <span class="text-blue-600 font-bold">b</span>x + <span class="text-blue-600 font-bold">c</span> = 0
+                    </span>
+                </div>
+            </div>
+
+            <div class="p-6 space-y-6">
+                <!-- Inputs -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-600 text-center">a (x²)</label>
+                        <input type="number" id="input-a" value="1" class="w-full p-3 text-center text-lg border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors math-font" placeholder="1">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-600 text-center">b (x)</label>
+                        <input type="number" id="input-b" value="-5" class="w-full p-3 text-center text-lg border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors math-font" placeholder="0">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-600 text-center">c (常數)</label>
+                        <input type="number" id="input-c" value="6" class="w-full p-3 text-center text-lg border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:outline-none transition-colors math-font" placeholder="0">
+                    </div>
+                </div>
+
+                <button onclick="calculate()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 text-lg">
+                    <i data-lucide="function-square"></i> 開始計算 (Calculate)
+                </button>
+
+                <!-- Results Area -->
+                <div id="result-area" class="hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    
+                    <!-- Delta Card -->
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-4">
+                        <h3 class="text-sm font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                            <i data-lucide="search"></i> 判別式 (Discriminant, Δ)
+                        </h3>
+                        <div class="math-font text-lg text-slate-800">
+                            Δ = b² - 4ac <br>
+                            Δ = (<span id="disp-b"></span>)² - 4(<span id="disp-a"></span>)(<span id="disp-c"></span>) <br>
+                            Δ = <span id="val-delta" class="font-bold text-indigo-600 text-2xl"></span>
+                        </div>
+                        <p id="delta-msg" class="mt-2 text-sm font-medium px-2 py-1 bg-slate-200 inline-block rounded text-slate-700"></p>
+                    </div>
+
+                    <!-- Roots Card -->
+                    <div class="bg-green-50 rounded-xl p-4 border border-green-200">
+                        <h3 class="text-sm font-bold text-green-700 uppercase mb-2 flex items-center gap-2">
+                            <i data-lucide="check-circle-2"></i> 根 (Roots)
+                        </h3>
+                        <div id="roots-content" class="math-font text-xl text-slate-800 space-y-2">
+                            <!-- Roots will appear here -->
+                        </div>
+                    </div>
+
+                     <!-- Steps Card -->
+                     <div class="mt-4 bg-white rounded-xl p-4 border-2 border-dashed border-slate-300">
+                        <h3 class="text-sm font-bold text-slate-400 uppercase mb-2">公式步驟 (Quadratic Formula)</h3>
+                        <div class="math-font text-slate-600 overflow-x-auto">
+                            x = <span class="whitespace-nowrap">[-b ± √(b² - 4ac)] / 2a</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <p class="text-center text-slate-400 text-xs mt-8">Designed for Luminous Learner | HKDSE Mathematics</p>
+    </main>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        function calculate() {
+            const a = parseFloat(document.getElementById('input-a').value);
+            const b = parseFloat(document.getElementById('input-b').value);
+            const c = parseFloat(document.getElementById('input-c').value);
+            
+            if (isNaN(a) || isNaN(b) || isNaN(c)) {
+                alert("請輸入所有數值 (Please enter all numbers)");
+                return;
+            }
+
+            if (a === 0) {
+                alert("a 不能為 0 (這不是二次方程!)");
+                return;
+            }
+
+            // Display Display Values
+            document.getElementById('disp-a').innerText = a;
+            document.getElementById('disp-b').innerText = b;
+            document.getElementById('disp-c').innerText = c;
+
+            // Calculate Delta
+            const delta = (b * b) - (4 * a * c);
+            document.getElementById('val-delta').innerText = delta;
+
+            const resultArea = document.getElementById('result-area');
+            const deltaMsg = document.getElementById('delta-msg');
+            const rootsContent = document.getElementById('roots-content');
+
+            resultArea.classList.remove('hidden');
+
+            // Logic for Roots
+            if (delta > 0) {
+                const x1 = (-b + Math.sqrt(delta)) / (2 * a);
+                const x2 = (-b - Math.sqrt(delta)) / (2 * a);
+                
+                deltaMsg.innerText = "Δ > 0: 兩個相異實根 (Two distinct real roots)";
+                deltaMsg.className = "mt-2 text-sm font-medium px-2 py-1 bg-green-100 text-green-800 inline-block rounded";
+                
+                rootsContent.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500">x₁ =</span> 
+                        <span class="font-bold">${formatNumber(x1)}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500">x₂ =</span> 
+                        <span class="font-bold">${formatNumber(x2)}</span>
+                    </div>
+                `;
+            } else if (delta === 0) {
+                const x = -b / (2 * a);
+                
+                deltaMsg.innerText = "Δ = 0: 一個重根 (One double real root)";
+                deltaMsg.className = "mt-2 text-sm font-medium px-2 py-1 bg-yellow-100 text-yellow-800 inline-block rounded";
+
+                rootsContent.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500">x =</span> 
+                        <span class="font-bold">${formatNumber(x)}</span>
+                    </div>
+                `;
+            } else {
+                deltaMsg.innerText = "Δ < 0: 無實根 (No real roots)";
+                deltaMsg.className = "mt-2 text-sm font-medium px-2 py-1 bg-red-100 text-red-800 inline-block rounded";
+
+                rootsContent.innerHTML = `
+                    <div class="text-slate-500 italic">
+                        沒有實數解 (Complex roots not shown)
+                    </div>
+                `;
+            }
+        }
+
+        function formatNumber(num) {
+            // Format logic: if integer, show integer. If float, max 4 decimal places.
+            if (Number.isInteger(num)) return num;
+            return Number(num.toFixed(4));
+        }
+    </script>
+</body>
+</html>
