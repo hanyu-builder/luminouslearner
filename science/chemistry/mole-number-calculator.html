@@ -55,11 +55,23 @@
             // Focus State for visualization
             const [activeField, setActiveField] = useState(null); // 'mass', 'mole', 'particles'
 
-            // Helper: Format scientific notation
-            const formatSci = (num) => {
-                if (!num) return '';
+            // Helper: Format scientific notation (Fix applied here)
+            const formatSci = (input) => {
+                if (input === '' || input === null || input === undefined) return '';
+                
+                // Ensure input is treated as a number
+                const num = parseFloat(input);
+                
+                if (isNaN(num)) return '';
                 if (num === 0) return '0';
-                if (Math.abs(num) < 10000 && Math.abs(num) > 0.001) return parseFloat(num.toFixed(3));
+                
+                // Standard number for reasonable range
+                if (Math.abs(num) < 10000 && Math.abs(num) > 0.001) {
+                    // Safe to use toFixed on a Number type
+                    return parseFloat(num.toFixed(3));
+                }
+                
+                // Scientific notation for very large/small numbers
                 return num.toExponential(3).replace('e+', ' × 10^');
             };
 
@@ -116,11 +128,11 @@
                 setSubstance(sub);
                 if (MolarMasses[sub]) {
                     setMolarMass(MolarMasses[sub]);
-                    // Recalculate based on current active field
-                    // Simplest is to reset or keep mole constant? Let's keep mole constant if exists
-                    if (mole) {
-                        setMass(mole * MolarMasses[sub]);
-                        // particles stay same
+                    // Recalculate based on current mole if exists
+                    if (mole && !isNaN(mole)) {
+                        const n = parseFloat(mole);
+                        setMass(n * MolarMasses[sub]);
+                        // particles stay same as they depend on mole, not mass directly
                     }
                 }
             };
