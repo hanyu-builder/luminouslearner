@@ -19,13 +19,13 @@
         
         @keyframes float {
             0% { transform: translate(0, 0); }
-            25% { transform: translate(2px, 2px); }
-            50% { transform: translate(-2px, 1px); }
-            75% { transform: translate(1px, -2px); }
+            25% { transform: translate(3px, 3px); }
+            50% { transform: translate(-3px, 1px); }
+            75% { transform: translate(2px, -3px); }
             100% { transform: translate(0, 0); }
         }
         .animate-float {
-            animation: float 3s infinite ease-in-out;
+            animation: float 4s infinite ease-in-out;
         }
     </style>
 </head>
@@ -167,7 +167,7 @@
             };
 
             return (
-                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-4xl">
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
                     
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
@@ -183,15 +183,21 @@
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-8 flex-grow">
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
                         
-                        {/* Left: Microscope View */}
-                        <div className="w-full md:w-1/2 aspect-square bg-slate-900 rounded-full shadow-2xl border-8 border-slate-700 relative overflow-hidden flex items-center justify-center group">
-                            {/* Lens Glare */}
-                            <div className="absolute top-10 left-10 w-20 h-10 bg-white opacity-10 rounded-full transform -rotate-45 pointer-events-none z-20"></div>
+                        {/* Left: Microscope View (Rectangle Window) */}
+                        <div className="w-full lg:w-3/5 bg-slate-900 rounded-3xl shadow-2xl border-8 border-slate-700 relative overflow-hidden flex items-center justify-center group min-h-[400px] lg:min-h-[500px]">
                             
+                            {/* Screen Glare Effect */}
+                            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-white/5 to-transparent pointer-events-none z-10"></div>
+                            
+                            {/* Grid Background (Subtle) */}
+                            <div className="absolute inset-0 opacity-10" 
+                                 style={{backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
+                            </div>
+
                             {/* Particles Layer */}
-                            <div className="relative w-full h-full">
+                            <div className="relative w-full h-full p-8">
                                 {particles.map((p, i) => (
                                     <div 
                                         key={p.id}
@@ -206,16 +212,23 @@
                                         {p.atoms.map((atom, idx) => (
                                             <div 
                                                 key={idx}
-                                                className={`w-6 h-6 rounded-full border-2 shadow-inner ${atom.color} ${atom.border} ${idx > 0 ? '-ml-2' : ''}`}
-                                            ></div>
+                                                className={`w-8 h-8 rounded-full border-2 shadow-[inset_-2px_-2px_6px_rgba(0,0,0,0.3)] ${atom.color} ${atom.border} ${idx > 0 ? '-ml-2' : ''}`}
+                                            >
+                                                <div className="w-2 h-2 bg-white/30 rounded-full absolute top-1 left-1"></div>
+                                            </div>
                                         ))}
                                     </div>
                                 ))}
                             </div>
+                            
+                            {/* Label */}
+                            <div className="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded text-xs text-slate-400 font-mono border border-slate-600">
+                                MAGNIFICATION: 1,000,000x
+                            </div>
                         </div>
 
                         {/* Right: Controls */}
-                        <div className="w-full md:w-1/2 flex flex-col gap-4 justify-center">
+                        <div className="w-full lg:w-2/5 flex flex-col gap-4 justify-center">
                             
                             <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
                                 <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
@@ -233,7 +246,7 @@
                                         `}
                                     >
                                         <span>元素 (Element)</span>
-                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">A</span>
+                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">A</span>
                                     </button>
 
                                     <button 
@@ -246,7 +259,7 @@
                                         `}
                                     >
                                         <span>化合物 (Compound)</span>
-                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">B</span>
+                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">B</span>
                                     </button>
 
                                     <button 
@@ -259,27 +272,27 @@
                                         `}
                                     >
                                         <span>混合物 (Mixture)</span>
-                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">C</span>
+                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">C</span>
                                     </button>
                                 </div>
                             </div>
 
                             {/* Feedback Section */}
                             {showExplanation && (
-                                <div className={`p-5 rounded-xl border-l-4 animate-in slide-in-from-bottom-2
+                                <div className={`p-5 rounded-xl border-l-4 animate-in slide-in-from-bottom-2 shadow-lg
                                     ${feedback.type === 'success' ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}
                                 `}>
-                                    <div className="font-bold text-lg mb-1 flex items-center gap-2">
+                                    <div className="font-bold text-lg mb-2 flex items-center gap-2">
                                         {feedback.type === 'success' ? <i data-lucide="check-circle" /> : <i data-lucide="x-circle" />}
                                         {feedback.msg}
                                     </div>
-                                    <div className="text-sm opacity-90 whitespace-pre-line leading-relaxed">
+                                    <div className="text-sm opacity-90 whitespace-pre-line leading-relaxed bg-white/50 p-3 rounded-lg">
                                         {feedback.explanation}
                                     </div>
                                     
                                     <button 
                                         onClick={generateQuestion}
-                                        className="mt-4 w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                                        className="mt-4 w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
                                     >
                                         <i data-lucide="refresh-cw" size={18} /> 下一題 (Next Question)
                                     </button>
