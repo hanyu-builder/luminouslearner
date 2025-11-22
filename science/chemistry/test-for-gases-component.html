@@ -55,14 +55,50 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Gas Definitions
+        // Gas Definitions with Explanation
         const Gases = [
-            { id: 'A', name: '氫氣 (Hydrogen)', formula: 'H₂', type: 'combustible' },
-            { id: 'B', name: '氧氣 (Oxygen)', formula: 'O₂', type: 'oxidizing' },
-            { id: 'C', name: '二氧化碳 (Carbon Dioxide)', formula: 'CO₂', type: 'acidic' },
-            { id: 'D', name: '氨氣 (Ammonia)', formula: 'NH₃', type: 'alkaline' },
-            { id: 'E', name: '氯氣 (Chlorine)', formula: 'Cl₂', type: 'bleaching' },
-            { id: 'F', name: '氮氣 (Nitrogen)', formula: 'N₂', type: 'inert' }
+            { 
+                id: 'A', 
+                name: '氫氣 (Hydrogen)', 
+                formula: 'H₂', 
+                type: 'combustible',
+                explanation: '氫氣是易燃氣體。當燃燒木條接近時，氫氣與空氣混合燃燒，會發出特徵性的「波」一聲爆鳴聲 (Pop sound)。'
+            },
+            { 
+                id: 'B', 
+                name: '氧氣 (Oxygen)', 
+                formula: 'O₂', 
+                type: 'oxidizing',
+                explanation: '氧氣能助燃。當帶有餘燼的木條 (Glowing splint) 放入充滿氧氣的瓶中，高濃度的氧氣會使木條重新劇烈燃燒 (Relights)。'
+            },
+            { 
+                id: 'C', 
+                name: '二氧化碳 (Carbon Dioxide)', 
+                formula: 'CO₂', 
+                type: 'acidic',
+                explanation: '二氧化碳是酸性氣體，且能與石灰水 (氫氧化鈣溶液) 反應生成白色的碳酸鈣沉澱，使石灰水變混濁 (Milky)。'
+            },
+            { 
+                id: 'D', 
+                name: '氨氣 (Ammonia)', 
+                formula: 'NH₃', 
+                type: 'alkaline',
+                explanation: '氨氣是唯一常見的鹼性氣體。它極易溶於水生成氫氧根離子，因此能使濕潤的紅色石蕊試紙變藍 (Turns moist red litmus paper blue)。'
+            },
+            { 
+                id: 'E', 
+                name: '氯氣 (Chlorine)', 
+                formula: 'Cl₂', 
+                type: 'bleaching',
+                explanation: '氯氣溶於水會生成次氯酸 (HOCl)，具有漂白性。因此濕潤的藍色石蕊試紙會先變紅 (酸性)，隨即褪色變白 (Bleaches)。'
+            },
+            { 
+                id: 'F', 
+                name: '氮氣 (Nitrogen)', 
+                formula: 'N₂', 
+                type: 'inert',
+                explanation: '氮氣是惰性氣體。它既不燃燒也不助燃 (熄滅木條)，不使石灰水混濁，也不是酸性或鹼性。通常用排除法確認。'
+            }
         ];
 
         // Tools
@@ -311,17 +347,30 @@
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="animate-in zoom-in text-center space-y-4">
-                                            <div className="text-sm text-slate-400">Gas {currentGas.id} 是：</div>
-                                            <div className="text-3xl font-black text-white bg-slate-900 p-4 rounded-lg border border-slate-600 shadow-inner">
-                                                {currentGas.name} <span className="text-blue-400">({currentGas.formula})</span>
+                                        <div className="animate-in zoom-in space-y-4">
+                                            <div className="text-center">
+                                                <div className="text-sm text-slate-400">Gas {currentGas.id} 是：</div>
+                                                <div className="text-3xl font-black text-white bg-slate-900 p-4 rounded-lg border border-slate-600 shadow-inner mb-4">
+                                                    {currentGas.name} <span className="text-blue-400">({currentGas.formula})</span>
+                                                </div>
                                             </div>
-                                            <button 
-                                                onClick={() => selectGas(null)}
-                                                className="text-sm text-slate-400 hover:text-white underline mt-4"
-                                            >
-                                                測試下一個氣體樣本
-                                            </button>
+                                            
+                                            {/* New Explanation Section */}
+                                            <div className="bg-slate-700/50 p-4 rounded-lg border-l-4 border-blue-400 text-slate-200 text-sm leading-relaxed">
+                                                <div className="font-bold text-blue-300 mb-1 flex items-center gap-2">
+                                                    <i data-lucide="info" size={16}></i> 詳解：
+                                                </div>
+                                                {currentGas.explanation}
+                                            </div>
+
+                                            <div className="text-center">
+                                                <button 
+                                                    onClick={() => selectGas(null)}
+                                                    className="text-sm text-slate-400 hover:text-white underline mt-2"
+                                                >
+                                                    測試下一個氣體樣本
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
