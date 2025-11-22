@@ -189,14 +189,6 @@
                 setSteps(null);
             };
 
-            const nextCategory = () => {
-                setActiveCategory((prev) => (prev + 1) % ExampleCategories.length);
-            };
-
-            const prevCategory = () => {
-                setActiveCategory((prev) => (prev - 1 + ExampleCategories.length) % ExampleCategories.length);
-            };
-
             return (
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
                     
@@ -218,33 +210,28 @@
                         {/* Left: Input & Setup */}
                         <div className="w-full lg:w-5/12 flex flex-col gap-6">
                             
-                            {/* Example Loader (Improved UI) */}
+                            {/* Example Loader (Updated with Dropdown) */}
                             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                                 <div className="flex justify-between items-center mb-3">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                        <i data-lucide="zap" size={14} /> 快速載入例子
+                                        <i data-lucide="zap" size={14} /> 選擇更多例子 (Quick Pre Load)
                                     </h4>
                                 </div>
                                 
-                                {/* Category Navigation - Updated Buttons */}
-                                <div className="flex items-center justify-between bg-slate-50 rounded-lg p-1 mb-3">
-                                    <button 
-                                        onClick={prevCategory}
-                                        className="p-2 rounded-md hover:bg-white text-indigo-600 hover:text-indigo-800 shadow-sm transition-all"
+                                {/* Category Selection: Dropdown */}
+                                <div className="relative mb-3">
+                                    <select 
+                                        value={activeCategory}
+                                        onChange={(e) => setActiveCategory(Number(e.target.value))}
+                                        className="w-full p-2 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-indigo-700 font-bold text-sm appearance-none cursor-pointer focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
                                     >
-                                        <i data-lucide="chevron-left" size={20} strokeWidth={3} />
-                                    </button>
-                                    
-                                    <span className="text-sm font-bold text-indigo-600 select-none">
-                                        {ExampleCategories[activeCategory].name}
-                                    </span>
-
-                                    <button 
-                                        onClick={nextCategory}
-                                        className="p-2 rounded-md hover:bg-white text-indigo-600 hover:text-indigo-800 shadow-sm transition-all"
-                                    >
-                                        <i data-lucide="chevron-right" size={20} strokeWidth={3} />
-                                    </button>
+                                        {ExampleCategories.map((cat, idx) => (
+                                            <option key={idx} value={idx}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
+                                        <i data-lucide="chevron-down" size={16} />
+                                    </div>
                                 </div>
                                 
                                 <div className="flex gap-2 flex-wrap">
@@ -341,7 +328,7 @@
 
                                 <button 
                                     onClick={handleCalculate}
-                                    className="mt-6 w-full py-4 bg-indigo-50 text-indigo-600 font-bold rounded-xl shadow-md hover:bg-indigo-100 border border-indigo-200 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
+                                    className="mt-6 w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
                                 >
                                     <i data-lucide="calculator" /> 計算質量 (Calculate Mass)
                                 </button>
