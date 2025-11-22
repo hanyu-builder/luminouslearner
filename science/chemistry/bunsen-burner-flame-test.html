@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虛擬本生燈與焰色反應 (Virtual Bunsen Burner & Flame Test)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        /* 火焰動畫基礎 */
+        .flame-container {
+            filter: blur(2px) contrast(1.5);
+        }
+        
+        @keyframes flicker {
+            0% { transform: scale(1, 1) skewX(0deg) translate(0,0); }
+            25% { transform: scale(1.05, 1.05) skewX(-2deg) translate(-1px, -2px); }
+            50% { transform: scale(0.95, 1.02) skewX(2deg) translate(1px, 0); }
+            75% { transform: scale(1.02, 0.98) skewX(-1deg) translate(-1px, 2px); }
+            100% { transform: scale(1, 1) skewX(0deg) translate(0,0); }
+        }
+        
+        @keyframes roar {
+            0% { transform: scale(1, 1); opacity: 0.9; }
+            50% { transform: scale(0.98, 1.05); opacity: 1; }
+            100% { transform: scale(1, 1); opacity: 0.9; }
+        }
+
+        /* 黃色火焰 (Luminous) */
+        .flame-luminous {
+            background: linear-gradient(to top, orange, yellow, rgba(255, 255, 255, 0.5));
+            border-radius: 50% 50% 20% 20%;
+            box-shadow: 0 0 30px orange;
+            animation: flicker 0.5s infinite alternate;
+            width: 80px;
+            height: 180px;
+        }
+
+        /* 藍色火焰 (Non-luminous) */
+        .flame-non-luminous {
+            background: linear-gradient(to top, rgba(0,0,255,0.1) 0%, rgba(100, 200, 255, 0.6) 40%, rgba(100, 200, 255, 0) 100%);
+            border-radius: 50% 50% 30% 30%;
+            width: 50px;
+            height: 160px;
+            animation: roar 0.1s infinite linear;
+            position: relative;
+        }
+        /* 藍焰內錐 (Inner Cone) */
+        .flame-non-luminous::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 50px;
+            background: cyan;
+            border-radius: 50% 50% 0 0;
+            filter: blur(1px);
+            opacity: 0.8;
+        }
+
+        /* 焰色反應顏色覆蓋 (Overlay) */
+        .flame-color-na { box-shadow: 0 -40px 40px gold; background: linear-gradient(to top, blue 10%, gold 60%, orange 100%); }
+        .flame-color-k { box-shadow: 0 -40px 40px plum; background: linear-gradient(to top, blue 10%, plum 60%, violet 100%); }
+        .flame-color-ca { box-shadow: 0 -40px 40px orangered; background: linear-gradient(to top, blue 10%, orangered 60%, red 100%); }
+        .flame-color-cu { box-shadow: 0 -40px 40px seagreen; background: linear-gradient(to top, blue 10%, limegreen 40%, seagreen 100%); }
+
+        /* 鉑金絲動畫 */
+        @keyframes dip-in {
+            0% { transform: translate(100%, -100%) rotate(45deg); }
+            100% { transform: translate(0, 0) rotate(10deg); }
+        }
+        .wire-rod {
+            animation: dip-in 1s ease-out forwards;
+            transform-origin: top right;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        const Metals = [
+            { id: 'none', name: '無 (None)', symbol: '', color: '', desc: '' },
+            { id: 'na', name: '氯化鈉 (Sodium)', symbol: 'Na⁺', color: 'flame-color-na', desc: '金黃色 (Golden Yellow)' },
+            { id: 'k', name: '氯化鉀 (Potassium)', symbol: 'K⁺', color: 'flame-color-k', desc: '淡紫色 (Lilac)' },
+            { id: 'ca', name: '氯化鈣 (Calcium)', symbol: 'Ca²⁺', color: 'flame-color-ca', desc: '磚紅色 (Brick Red)' },
+            { id: 'cu', name: '氯化銅 (Copper)', symbol: 'Cu²⁺', color: 'flame-color-cu', desc: '藍綠色 (Bluish Green)' },
+        ];
+
+        const App = () => {
+            const [airHoleOpen, setAirHoleOpen] = useState(0); // 0 = closed, 100 = full open
+            const [selectedMetal, setSelectedMetal] = useState(Metals[0]);
+            const [showWire, setShowWire] = useState(false);
+            
+            // Derived states
+            const isLuminous = airHoleOpen < 50;
+            const flameClass = isLuminous ? 'flame-luminous' : 'flame-non-luminous';
+            
+            // Handle Metal Selection
+            const handleMetalSelect = (metal) => {
+                setShowWire(false);
+                setTimeout(() => {
+                    setSelectedMetal(metal);
+                    if (metal.id !== 'none') {
+                        setShowWire(true);
+                    }
+                }, 100);
+            };
+
+            // Logic for display text
+            const getFlameStatus = () => {
+                if (isLuminous) return { 
+                    type: 'Luminous Flame (發光焰)', 
+                    desc: '氣孔關閉。燃燒不完全，產生碳粒(Soot)，火焰呈黃色，不穩定。不適合加熱或焰色測試。',
+                    color: 'text-yellow-400'
+                };
+                return { 
+                    type: 'Non-luminous Flame (無光焰)', 
+                    desc: '氣孔打開。燃燒完全，溫度高，火焰呈藍色，穩定。適合加熱及進行焰色測試。',
+                    color: 'text-blue-300'
+                };
+            };
+
+            const status = getFlameStatus();
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-400 flex items-center gap-2">
+                                <i data-lucide="flame"></i> Virtual Bunsen Burner
+                            </h1>
+                            <p className="text-slate-400 text-sm">HKDSE Chemistry - Topic I & XV</p>
+                        </div>
+                        <div className="bg-slate-800 px-4 py-2 rounded-lg text-sm">
+                            當前模式: <span className={`font-bold ${status.color}`}>{status.type}</span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: The Burner Visualization */}
+                        <div className="flex-grow bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 relative flex flex-col items-center justify-end overflow-hidden min-h-[500px]">
+                            
+                            {/* Background Lab Context */}
+                            <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none" 
+                                 style={{backgroundImage: 'radial-gradient(circle at 50% 80%, #475569 0%, #0f172a 70%)'}}></div>
+
+                            {/* Flame Area */}
+                            <div className="relative mb-2 z-10 flex justify-center items-end h-[250px] w-full">
+                                <div className="flame-container flex justify-center items-end">
+                                    <div className={`transition-all duration-500 ${flameClass} 
+                                        ${(!isLuminous && showWire && selectedMetal.id !== 'none') ? selectedMetal.color : ''}
+                                    `}></div>
+                                </div>
+
+                                {/* Platinum Wire Animation */}
+                                {showWire && (
+                                    <div className="wire-rod absolute bottom-[40px] right-[30%] w-[200px] h-[10px] flex items-center z-20">
+                                        <div className="w-full h-1 bg-gray-400 rounded-full relative">
+                                            {/* Handle */}
+                                            <div className="absolute right-0 w-20 h-3 bg-amber-700 rounded"></div>
+                                            {/* Loop with Chemical */}
+                                            <div className="absolute left-0 w-3 h-3 rounded-full bg-white shadow-[0_0_10px_white]"></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Burner Hardware */}
+                            <div className="relative z-10 flex flex-col items-center">
+                                {/* Chimney */}
+                                <div className="w-8 h-32 bg-gradient-to-r from-slate-400 via-slate-200 to-slate-400 border-x border-slate-600 relative">
+                                    {/* Heat distortion effect at top */}
+                                    <div className="absolute -top-2 left-0 w-full h-4 bg-white/10 blur-sm"></div>
+                                </div>
+                                
+                                {/* Collar (The Air Hole Control) */}
+                                <div className="w-12 h-10 bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600 rounded-sm relative flex items-center justify-center shadow-lg transition-transform"
+                                     style={{transform: `rotate(${airHoleOpen * 1.8}deg)`}}>
+                                    {/* The Air Hole Visual */}
+                                    <div className="w-4 h-6 bg-slate-800 rounded-full overflow-hidden relative border border-yellow-800">
+                                        {/* Inner sliding shutter */}
+                                        <div className="absolute bottom-0 w-full bg-yellow-500 transition-all duration-100"
+                                             style={{height: `${100 - airHoleOpen}%`}}></div>
+                                    </div>
+                                </div>
+
+                                {/* Base */}
+                                <div className="w-24 h-6 bg-gradient-to-b from-slate-500 to-slate-700 rounded-t-lg mt-1 shadow-xl border-t border-slate-400"></div>
+                                <div className="w-32 h-4 bg-slate-800 rounded-full -mt-2 shadow-2xl"></div>
+
+                                {/* Gas Tubing */}
+                                <div className="absolute bottom-4 right-[-40px] w-40 h-4 bg-orange-600 -z-10 rounded-full transform -rotate-12"></div>
+                            </div>
+
+                            {/* Safety Warning for Luminous Flame Test */}
+                            {isLuminous && selectedMetal.id !== 'none' && (
+                                <div className="absolute top-4 bg-yellow-500/90 text-black px-4 py-2 rounded-lg shadow-lg font-bold flex items-center gap-2 animate-bounce">
+                                    <i data-lucide="alert-triangle"></i>
+                                    注意：發光焰的黃色會干擾顏色觀察！
+                                </div>
+                            )}
+
+                        </div>
+
+                        {/* Right: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            {/* 1. Air Hole Control */}
+                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-yellow-400">
+                                    <i data-lucide="wind"></i> 氣孔控制 (Air Hole)
+                                </h3>
+                                <div className="mb-2 flex justify-between text-xs text-slate-400 uppercase font-bold">
+                                    <span>關閉 (Closed)</span>
+                                    <span>打開 (Open)</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min="0" 
+                                    max="100" 
+                                    value={airHoleOpen} 
+                                    onChange={(e) => setAirHoleOpen(Number(e.target.value))}
+                                    className="w-full h-3 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-yellow-400"
+                                />
+                                <div className="mt-4 p-3 bg-slate-700/50 rounded-lg border border-slate-600">
+                                    <p className="text-sm text-slate-300 leading-relaxed">
+                                        {status.desc}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* 2. Flame Test Selection */}
+                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex-grow">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-purple-400">
+                                    <i data-lucide="flask-conical"></i> 焰色反應 (Flame Test)
+                                </h3>
+                                <p className="text-xs text-slate-400 mb-4">
+                                    將沾有金屬鹽溶液的潔淨鉑金絲 (Platinum wire) 放入無光焰中。
+                                </p>
+
+                                <div className="grid grid-cols-1 gap-2">
+                                    {Metals.map((m) => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => handleMetalSelect(m)}
+                                            className={`
+                                                flex items-center justify-between p-3 rounded-lg border transition-all
+                                                ${selectedMetal.id === m.id 
+                                                    ? 'bg-blue-900/50 border-blue-400 text-white shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
+                                                    : 'bg-slate-700/30 border-slate-600 text-slate-300 hover:bg-slate-700'}
+                                            `}
+                                        >
+                                            <span className="font-bold">{m.name}</span>
+                                            {m.id !== 'none' && (
+                                                <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-400 border border-slate-700">
+                                                    {m.symbol}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Result Display */}
+                                {selectedMetal.id !== 'none' && (
+                                    <div className="mt-6 animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="bg-slate-900 p-4 rounded-lg border border-slate-600 text-center">
+                                            <p className="text-xs text-slate-500 uppercase font-bold mb-1">觀察結果 (Observation)</p>
+                                            <p className={`text-xl font-bold ${
+                                                selectedMetal.id === 'na' ? 'text-yellow-400' :
+                                                selectedMetal.id === 'k' ? 'text-purple-300' :
+                                                selectedMetal.id === 'ca' ? 'text-red-400' :
+                                                selectedMetal.id === 'cu' ? 'text-teal-300' : 'text-white'
+                                            }`}>
+                                                {selectedMetal.desc}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-500 text-xs mt-6">
+                        Luminous Learner Science Tools | HKDSE Chemistry
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
