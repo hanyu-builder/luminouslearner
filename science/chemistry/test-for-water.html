@@ -147,8 +147,8 @@
 
                     <div className="flex flex-col lg:flex-row gap-6 flex-grow">
                         
-                        {/* Left: Experiment Area */}
-                        <div className="lg:w-2/3 bg-white rounded-2xl border border-slate-200 shadow-lg p-6 flex flex-col relative min-h-[500px]">
+                        {/* Left: Experiment Area - Increased min-height to 600px */}
+                        <div className="lg:w-2/3 bg-white rounded-2xl border border-slate-200 shadow-lg p-6 flex flex-col relative min-h-[600px]">
                             
                             {/* Step 1: Select Reagent */}
                             <div className="mb-6">
@@ -181,8 +181,8 @@
                                 <div className="absolute inset-0 opacity-10 pointer-events-none" 
                                      style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
 
-                                {/* Reagent Visual */}
-                                <div className="relative z-10">
+                                {/* Reagent Visual - Shifted up using -translate-y-8 to avoid overlap */}
+                                <div className="relative z-10 transform -translate-y-8">
                                     {selectedReagent.type === 'paper' ? (
                                         // Cobalt Chloride Paper
                                         <div className={`w-40 h-16 ${selectedReagent.baseColor} shadow-lg transform -rotate-2 transition-colors duration-500 relative overflow-hidden`}>
@@ -207,9 +207,9 @@
                                     )}
                                 </div>
 
-                                {/* Dropper Animation */}
+                                {/* Dropper Animation - Adjusted position */}
                                 {isDropping && (
-                                    <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
+                                    <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
                                         {/* Dropper Body */}
                                         <div className="w-4 h-24 bg-slate-200 border border-slate-400 rounded-b-full relative shadow-xl">
                                             <div className={`absolute bottom-0 w-full h-8 ${selectedSample?.color} rounded-b-full`}></div>
@@ -219,8 +219,8 @@
                                     </div>
                                 )}
 
-                                {/* Controls Overlay */}
-                                <div className="absolute bottom-4 left-0 w-full flex justify-center gap-2 px-4">
+                                {/* Controls Overlay - Added pt-4 for spacing */}
+                                <div className="absolute bottom-4 left-0 w-full flex justify-center gap-2 px-4 pt-4">
                                     {Samples.map((sample) => (
                                         <button
                                             key={sample.id}
