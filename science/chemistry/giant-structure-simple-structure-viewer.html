@@ -81,6 +81,14 @@
                 typeColor: 'bg-green-600',
                 desc: '簡單分子晶體：水分子通過氫鍵 (Hydrogen Bonds) 連接，形成開放式的六角形結構。',
                 observe: '留意結構中的空洞，這就是為什麼冰的密度比水低。'
+            },
+            {
+                id: 'C60',
+                name: '碳60 (Buckminsterfullerene)',
+                type: 'Simple Molecular',
+                typeColor: 'bg-green-600',
+                desc: '簡單分子晶體：由 60 個碳原子組成的球狀分子 (Buckyball)，由五邊形和六邊形組成。',
+                observe: '這是一個獨立的分子，與巨型共價結構的金剛石完全不同。'
             }
         ];
 
@@ -98,7 +106,7 @@
 
                 // 2. Setup Camera
                 const camera = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
-                camera.position.z = 12;
+                camera.position.z = 14;
 
                 // 3. Setup Renderer
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -150,6 +158,23 @@
                     const geoAtomSmall = new THREE.SphereGeometry(0.5, 32, 32);
                     const geoAtomTiny = new THREE.SphereGeometry(0.3, 32, 32);
 
+                    // Helper: Create Bond between coordinates
+                    const createBondVector = (parent, start, end, mat, radius = 0.1) => {
+                        const direction = new THREE.Vector3().subVectors(end, start);
+                        const length = direction.length();
+                        const bond = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 8), mat);
+                        bond.position.copy(start);
+                        bond.position.lerp(end, 0.5);
+                        bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+                        parent.add(bond);
+                    };
+
+                    const createBond = (parent, x1, y1, z1, x2, y2, z2, mat) => {
+                        const start = new THREE.Vector3(x1, y1, z1);
+                        const end = new THREE.Vector3(x2, y2, z2);
+                        createBondVector(parent, start, end, mat);
+                    };
+
                     // --- Structure Builders ---
 
                     if (id === 'NaCl') {
@@ -162,7 +187,6 @@
                                     mesh.position.set(x*offset, y*offset, z*offset);
                                     group.add(mesh);
                                     
-                                    // Bonds
                                     if (x < 1) createBond(group, x*offset, y*offset, z*offset, (x+1)*offset, y*offset, z*offset, matBond);
                                     if (y < 1) createBond(group, x*offset, y*offset, z*offset, x*offset, (y+1)*offset, z*offset, matBond);
                                     if (z < 1) createBond(group, x*offset, y*offset, z*offset, x*offset, y*offset, (z+1)*offset, matBond);
@@ -175,16 +199,30 @@
                             [2,2,0], [2,0,2], [0,2,2],
                             [-2,-2,0], [-2,0,-2], [0,-2,-2]
                         ];
+                        const atomMeshes = [];
                         positions.forEach(pos => {
                             const mesh = new THREE.Mesh(geoAtomSmall, matC);
                             mesh.position.set(pos[0]*1.5, pos[1]*1.5, pos[2]*1.5);
                             group.add(mesh);
+                            atomMeshes.push(mesh);
                         });
-                        connectNeighbors(group, positions, 1.5, 3.0, matBond);
+                        
+                        for(let i=0; i<atomMeshes.length; i++) {
+                            for(let j=i+1; j<atomMeshes.length; j++) {
+                                const p1 = atomMeshes[i].position;
+                                const p2 = atomMeshes[j].position;
+                                if (p1.distanceTo(p2) < 3.0) {
+                                    createBondVector(group, p1, p2, matBond);
+                                }
+                            }
+                        }
 
                     } else if (id === 'Graphite') {
                         const layers = [-1.5, 1.5];
+                        const atomList = [];
+
                         layers.forEach(y => {
+                            // Create hexagon rings
                             for(let i=0; i<7; i++) { 
                                 const cx = (i%3 - 1) * 2.5;
                                 const cz = (Math.floor(i/3) - 0.5) * 4;
@@ -192,60 +230,60 @@
                                     const angle = (k/6) * Math.PI * 2;
                                     const ax = cx + Math.cos(angle) * 1.4;
                                     const az = cz + Math.sin(angle) * 1.4;
+                                    
                                     const mesh = new THREE.Mesh(geoAtomSmall, matC);
                                     mesh.position.set(ax, y, az);
                                     group.add(mesh);
-                                    
-                                    // Intra-layer bonds logic simplified: connect center to ring
-                                    // For visual purposes, we connect manually or use distance
+                                    atomList.push(mesh);
                                 }
                             }
                         });
-                        // Visual bonds for hexagonal rings (Distance based connection for simplicity)
-                         for(let i=0; i<group.children.length; i++) {
-                            for(let j=i+1; j<group.children.length; j++) {
-                                const p1 = group.children[i].position;
-                                const p2 = group.children[j].position;
-                                // Only connect within same layer (y close) and close distance
+
+                        // FIX: Iterate over fixed list to create bonds
+                        for(let i=0; i<atomList.length; i++) {
+                            for(let j=i+1; j<atomList.length; j++) {
+                                const p1 = atomList[i].position;
+                                const p2 = atomList[j].position;
+                                
+                                // Intra-layer bonds (close distance, same y)
                                 if (Math.abs(p1.y - p2.y) < 0.1 && p1.distanceTo(p2) < 1.6) {
                                     createBondVector(group, p1, p2, matBond);
-                                }
-                                // Van der Waals (dashed lines)
-                                if (Math.abs(p1.y - p2.y) > 2.0 && p1.distanceTo(p2) < 3.2) {
-                                    // createBondVector(group, p1, p2, matHBond); // Optional
                                 }
                             }
                         }
 
                     } else if (id === 'Copper') {
-                        // FCC Lattice
                         const offset = 1.8;
+                        // Face Centered Cubic (FCC) Unit Cell Block
                         for(let x=-1; x<=1; x++) {
                             for(let y=-1; y<=1; y++) {
                                 for(let z=-1; z<=1; z++) {
                                     // Corner atoms
                                     const mesh = new THREE.Mesh(geoAtomBig, matCu);
-                                    mesh.position.set(x*offset, y*offset, z*offset);
+                                    mesh.position.set(x*2, y*2, z*2);
                                     group.add(mesh);
                                     
-                                    // Face centers (simplified block)
-                                    if (x===-1 && y===-1) { // Add some face atoms for demo
-                                        const face1 = new THREE.Mesh(geoAtomBig, matCu);
-                                        face1.position.set(x*offset + offset/2, y*offset + offset/2, z*offset);
-                                        group.add(face1);
+                                    // Face centers (X plane)
+                                    if (x < 1) {
+                                        const f1 = new THREE.Mesh(geoAtomBig, matCu);
+                                        f1.position.set((x+0.5)*2, (y+0.5)*2, (z+0.5)*2);
+                                        // group.add(f1); // Simplified view for clarity or add all
                                     }
                                 }
                             }
                         }
-                        // Fill in more for FCC look
-                         const s = 1.8;
-                         // Just a dense packing block
-                         for(let x=-1.5; x<=1.5; x+=1) {
-                             for(let y=-1.5; y<=1.5; y+=1) {
-                                 for(let z=-1.5; z<=1.5; z+=1) {
+                        // Just a dense packing block 3x3x3
+                         for(let x=-1; x<=1; x++) {
+                             for(let y=-1; y<=1; y++) {
+                                 for(let z=-1; z<=1; z++) {
                                      const mesh = new THREE.Mesh(geoAtomBig, matCu);
-                                     mesh.position.set(x*2, y*2, z*2);
+                                     mesh.position.set(x*1.8, y*1.8, z*1.8);
                                      group.add(mesh);
+                                     
+                                     // Add intermediate atoms for close packing visual (Shifted rows)
+                                     const mesh2 = new THREE.Mesh(geoAtomBig, matCu);
+                                     mesh2.position.set(x*1.8 + 0.9, y*1.8 + 0.9, z*1.8 + 0.9);
+                                     group.add(mesh2);
                                  }
                              }
                          }
@@ -272,8 +310,6 @@
                             }
                         }
                     } else if (id === 'Ice') {
-                        // Hexagonal Ice structure (Simplified)
-                        // Water molecules arranged in hex rings
                         const r = 2.5;
                         for(let layer=0; layer<2; layer++) {
                             const y = layer * 3;
@@ -282,27 +318,78 @@
                                 const x = Math.cos(angle) * r;
                                 const z = Math.sin(angle) * r;
                                 
-                                // Oxygen
                                 const o = new THREE.Mesh(geoAtomSmall, matO);
                                 o.position.set(x, y, z);
                                 group.add(o);
                                 
-                                // Hydrogens (approximate)
                                 const h1 = new THREE.Mesh(geoAtomTiny, matH);
-                                h1.position.set(x, y+0.5, z+0.5);
+                                h1.position.set(x, y+0.6, z);
                                 group.add(h1);
                                 const h2 = new THREE.Mesh(geoAtomTiny, matH);
-                                h2.position.set(x, y-0.5, z+0.5);
+                                h2.position.set(x*0.8, y-0.3, z*0.8); // Inward
                                 group.add(h2);
                                 
-                                createBondVector(group, o.position, h1.position, matBond);
-                                createBondVector(group, o.position, h2.position, matBond);
+                                createBondVector(group, o.position, h1.position, matBond, 0.05);
+                                createBondVector(group, o.position, h2.position, matBond, 0.05);
                                 
-                                // Hydrogen Bonds (visualize as dashed lines or just gap)
                                 if (layer > 0) {
-                                    // Connect to layer below
-                                    const belowPos = new THREE.Vector3(x, y-3, z);
-                                    createBondVector(group, o.position, belowPos, matHBond); 
+                                    const belowPos = new THREE.Vector3(x, y-3+0.6, z);
+                                    createBondVector(group, h2.position, belowPos, matHBond, 0.02); 
+                                }
+                            }
+                        }
+                    } else if (id === 'C60') {
+                        // C60 coordinates are complex, using a simplified sphere approximation with points
+                        const phi = (1 + Math.sqrt(5)) / 2;
+                        const vertices = [];
+                        
+                        // Icosahedron vertices
+                        const addVerts = (a, b, c) => {
+                             vertices.push(new THREE.Vector3(a, b, c));
+                             vertices.push(new THREE.Vector3(a, b, -c));
+                             vertices.push(new THREE.Vector3(a, -b, c));
+                             vertices.push(new THREE.Vector3(a, -b, -c));
+                             vertices.push(new THREE.Vector3(-a, b, c));
+                             vertices.push(new THREE.Vector3(-a, b, -c));
+                             vertices.push(new THREE.Vector3(-a, -b, c));
+                             vertices.push(new THREE.Vector3(-a, -b, -c));
+                        };
+                        
+                        addVerts(0, 1, 3*phi);
+                        addVerts(1, 3*phi, 0);
+                        addVerts(3*phi, 0, 1);
+                        addVerts(2, (1+3*phi), phi);
+                        addVerts((1+3*phi), phi, 2);
+                        addVerts(phi, 2, (1+3*phi));
+
+                        // Simplified Truncated Icosahedron logic is hard without external OBJ
+                        // Let's make a geodesic sphere for visual
+                        const geoSphere = new THREE.IcosahedronGeometry(3, 1);
+                        const posAttr = geoSphere.attributes.position;
+                        
+                        const c60atoms = [];
+                        
+                        for(let i=0; i<posAttr.count; i++){
+                            const v = new THREE.Vector3().fromBufferAttribute(posAttr, i);
+                            // Check if we already have an atom close by
+                            let exists = false;
+                            for(let a of c60atoms) {
+                                if(a.position.distanceTo(v) < 0.1) exists = true;
+                            }
+                            if(!exists) {
+                                const mesh = new THREE.Mesh(geoAtomSmall, matC);
+                                mesh.position.copy(v);
+                                group.add(mesh);
+                                c60atoms.push(mesh);
+                            }
+                        }
+                        
+                        // Connect nearest neighbors (approx 1.5 - 2.0 units)
+                        for(let i=0; i<c60atoms.length; i++) {
+                            for(let j=i+1; j<c60atoms.length; j++) {
+                                const dist = c60atoms[i].position.distanceTo(c60atoms[j].position);
+                                if(dist > 1.0 && dist < 2.2) {
+                                    createBondVector(group, c60atoms[i].position, c60atoms[j].position, matBond);
                                 }
                             }
                         }
@@ -311,36 +398,7 @@
                     scene.add(group);
                 };
 
-                // Helper Functions
-                const createBond = (parent, x1, y1, z1, x2, y2, z2, mat) => {
-                    const start = new THREE.Vector3(x1, y1, z1);
-                    const end = new THREE.Vector3(x2, y2, z2);
-                    createBondVector(parent, start, end, mat);
-                };
-
-                const createBondVector = (parent, start, end, mat) => {
-                    const direction = new THREE.Vector3().subVectors(end, start);
-                    const length = direction.length();
-                    const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, length, 8), mat);
-                    bond.position.copy(start);
-                    bond.position.lerp(end, 0.5);
-                    bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-                    parent.add(bond);
-                };
-
-                const connectNeighbors = (group, positions, scale, distThreshold, mat) => {
-                    for(let i=0; i<positions.length; i++) {
-                        for(let j=i+1; j<positions.length; j++) {
-                            const p1 = new THREE.Vector3(positions[i][0]*scale, positions[i][1]*scale, positions[i][2]*scale);
-                            const p2 = new THREE.Vector3(positions[j][0]*scale, positions[j][1]*scale, positions[j][2]*scale);
-                            if (p1.distanceTo(p2) < distThreshold) {
-                                createBondVector(group, p1, p2, mat);
-                            }
-                        }
-                    }
-                };
-
-                // Init
+                // Initial Build
                 buildStructure(structureId);
 
                 // Animation Loop
@@ -424,24 +482,24 @@
                         <div className="w-full lg:w-1/4 flex flex-col gap-6">
                             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow animate-in slide-in-from-right duration-500">
                                 <div className="mb-6 border-b border-slate-700 pb-4">
-                                    <div className="text-[10px] text-slate-400 uppercase font-bold mb-2 tracking-wider">Structure Type</div>
+                                    <div className="text-sm text-slate-400 uppercase font-bold mb-2 tracking-wider">Structure Type</div>
                                     <div className={`inline-block ${currentStruct.typeColor || 'bg-blue-600'} text-white px-3 py-1 rounded-full text-sm font-bold mb-3 shadow-sm`}>
                                         {currentStruct.type}
                                     </div>
                                     <div className="text-3xl font-bold text-white leading-tight">{currentStruct.name}</div>
                                 </div>
                                 
-                                <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
+                                <div className="space-y-6 text-base text-slate-300 leading-relaxed">
                                     <div className="p-4 bg-slate-900/50 rounded-xl border-l-4 border-blue-500 shadow-inner">
-                                        <strong className="text-white block mb-2 text-base">結構特點 (Characteristics)</strong>
+                                        <strong className="text-white block mb-2 text-lg">結構特點 (Characteristics)</strong>
                                         {currentStruct.desc}
                                     </div>
                                     
                                     <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-600">
-                                        <strong className="text-white block mb-2 flex items-center gap-2 text-base">
-                                            <i data-lucide="eye" size={18} className="text-yellow-400" /> 觀察指南
+                                        <strong className="text-white block mb-2 flex items-center gap-2 text-lg">
+                                            <i data-lucide="eye" size={20} className="text-yellow-400" /> 觀察指南
                                         </strong>
-                                        <p className="text-xs opacity-90">
+                                        <p className="opacity-90">
                                             {currentStruct.observe}
                                         </p>
                                     </div>
