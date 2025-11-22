@@ -81,12 +81,10 @@
             const [currentReaction, setCurrentReaction] = useState(Reactions[0]);
             const [transferredCount, setTransferredCount] = useState(0);
             const [stage, setStage] = useState('transfer'); // transfer, success, lattice
-            // Using simplified tracking: just count how many electrons moved
             
             const metal = Atoms[currentReaction.metal];
             const nonmetal = Atoms[currentReaction.nonmetal];
             
-            // Total electrons to transfer = metal valence * metal count
             const totalToTransfer = metal.valence * currentReaction.mCount;
 
             // Initialize
@@ -117,52 +115,36 @@
 
             // Render Single Atom
             const renderAtom = (atomData, isMetal, index, totalTypeCount) => {
-                // For metals: how many electrons THIS atom has lost?
-                // We distribute losses sequentially.
-                // e.g., Li2O (total 2 to lose). 1st Li loses 1st, 2nd Li loses 2nd.
-                
                 let myTransferred = 0;
                 let myReceived = 0;
 
                 if (isMetal) {
-                    // Calculate how many electrons THIS metal atom has lost
-                    // Total transferred is distributed among mCount atoms.
-                    // Each can lose `atomData.valence`.
                     const maxLoss = atomData.valence;
-                    // Previous atoms took this much from the pool
                     const consumedByPrevious = index * maxLoss;
                     const availableForMe = Math.max(0, transferredCount - consumedByPrevious);
                     myTransferred = Math.min(availableForMe, maxLoss);
                 } else {
-                    // Non-metal: gains electrons
-                    // Each needs (8 - valence)
                     const maxGain = 8 - atomData.valence;
                     const consumedByPrevious = index * maxGain;
                     const availableForMe = Math.max(0, transferredCount - consumedByPrevious);
                     myReceived = Math.min(availableForMe, maxGain);
                 }
 
-                // Check if THIS atom is stable/complete
                 const isComplete = isMetal 
                     ? myTransferred === atomData.valence 
                     : myReceived === (8 - atomData.valence);
 
-                // Calculate electron positions
                 const electrons = [];
-                // For metal: show remaining. For non-metal: show original + received
                 const currentElectrons = isMetal 
                     ? atomData.valence - myTransferred 
                     : atomData.valence + myReceived;
 
                 for (let i = 0; i < currentElectrons; i++) {
                     const angle = (i / (isMetal ? atomData.valence : 8)) * 2 * Math.PI - Math.PI/2;
-                    const r = 50; // Reduced radius for multi-atom view
+                    const r = 50; 
                     const x = Math.cos(angle) * r;
                     const y = Math.sin(angle) * r;
                     
-                    // Determine color: 
-                    // If non-metal and this is a received electron (index >= original valence)
-                    // use Metal's color to show transfer source
                     const isReceivedElectron = !isMetal && i >= atomData.valence;
                     const colorClass = isReceivedElectron ? Atoms[currentReaction.metal].color : atomData.color;
                     
@@ -231,99 +213,98 @@
                     <div className="flex-grow flex flex-col lg:flex-row gap-8">
                         
                         {/* Visualization Area */}
-                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-center min-h-[400px] shadow-2xl overflow-hidden p-4">
+                        {/* UPDATE: Increased min-height to 500px for better vertical spacing */}
+                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-center min-h-[500px] shadow-2xl overflow-hidden p-8">
                             
                             {/* Background Grid */}
                             <div className="absolute inset-0 opacity-10" 
                                  style={{backgroundImage: 'radial-gradient(#4ade80 1px, transparent 1px)', backgroundSize: '30px 30px'}}></div>
 
-                            {stage !== 'lattice' ? (
-                                <div className="flex flex-col md:flex-row items-center justify-center gap-4 w-full relative z-10">
-                                    
-                                    {/* Metal Atoms Column */}
-                                    <div className="flex flex-col gap-2">
-                                        {Array.from({length: currentReaction.mCount}).map((_, i) => 
-                                            renderAtom(metal, true, i, currentReaction.mCount)
-                                        )}
-                                        <div className="text-center mt-2">
-                                            <div className="text-sm font-bold text-white">{metal.name}</div>
-                                            <div className="text-xs text-slate-400">失去 e⁻</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Transfer Controls */}
-                                    <div className="flex flex-col items-center justify-center px-4">
-                                        <i data-lucide="arrow-right" size={40} className={`text-slate-600 transition-all duration-500 hidden md:block ${transferredCount > 0 ? 'text-green-400 scale-125' : ''}`} />
-                                        <i data-lucide="arrow-down" size={40} className={`text-slate-600 transition-all duration-500 md:hidden mb-4 ${transferredCount > 0 ? 'text-green-400 scale-125' : ''}`} />
+                            {/* Content Container - Ensures content is centered but flexible */}
+                            <div className="flex-grow flex flex-col justify-center items-center w-full z-10">
+                                {stage !== 'lattice' ? (
+                                    <div className="flex flex-col md:flex-row items-center justify-center gap-8 w-full">
                                         
-                                        {stage === 'transfer' && (
-                                            <button 
-                                                onClick={handleTransfer}
-                                                className="whitespace-nowrap px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-full shadow-lg transition-transform active:scale-95 animate-bounce"
-                                            >
-                                                轉移電子 ({transferredCount}/{totalToTransfer})
-                                            </button>
-                                        )}
-                                    </div>
+                                        {/* Metal Atoms Column */}
+                                        {/* UPDATE: Increased gap between atoms */}
+                                        <div className="flex flex-col gap-4">
+                                            {Array.from({length: currentReaction.mCount}).map((_, i) => 
+                                                renderAtom(metal, true, i, currentReaction.mCount)
+                                            )}
+                                            <div className="text-center mt-1">
+                                                <div className="text-sm font-bold text-white">{metal.name}</div>
+                                                <div className="text-xs text-slate-400">失去 e⁻</div>
+                                            </div>
+                                        </div>
 
-                                    {/* Non-Metal Atoms Column */}
-                                    <div className="flex flex-col gap-2">
-                                        {Array.from({length: currentReaction.nmCount}).map((_, i) => 
-                                            renderAtom(nonmetal, false, i, currentReaction.nmCount)
-                                        )}
-                                        <div className="text-center mt-2">
-                                            <div className="text-sm font-bold text-white">{nonmetal.name}</div>
-                                            <div className="text-xs text-slate-400">接收 e⁻</div>
+                                        {/* Transfer Controls */}
+                                        <div className="flex flex-col items-center justify-center px-4 py-4">
+                                            <i data-lucide="arrow-right" size={40} className={`text-slate-600 transition-all duration-500 hidden md:block ${transferredCount > 0 ? 'text-green-400 scale-125' : ''}`} />
+                                            <i data-lucide="arrow-down" size={40} className={`text-slate-600 transition-all duration-500 md:hidden mb-4 ${transferredCount > 0 ? 'text-green-400 scale-125' : ''}`} />
+                                            
+                                            {stage === 'transfer' && (
+                                                <button 
+                                                    onClick={handleTransfer}
+                                                    className="whitespace-nowrap px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-full shadow-lg transition-transform active:scale-95 animate-bounce"
+                                                >
+                                                    轉移電子 ({transferredCount}/{totalToTransfer})
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Non-Metal Atoms Column */}
+                                        <div className="flex flex-col gap-4">
+                                            {Array.from({length: currentReaction.nmCount}).map((_, i) => 
+                                                renderAtom(nonmetal, false, i, currentReaction.nmCount)
+                                            )}
+                                            <div className="text-center mt-1">
+                                                <div className="text-sm font-bold text-white">{nonmetal.name}</div>
+                                                <div className="text-xs text-slate-400">接收 e⁻</div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ) : (
-                                /* Lattice View */
-                                <div className="flex flex-col items-center animate-in zoom-in duration-700">
-                                    <div className="grid grid-cols-3 gap-2 lattice-grid mb-6">
-                                        {/* Dynamically generate lattice based on ratio */}
-                                        {Array.from({length: 9}).map((_, i) => {
-                                            // Simple pattern logic: 
-                                            // for 1:1 (NaCl) -> Alt
-                                            // for 1:2 (MgCl2) -> 1 M, 2 NM
-                                            let atom;
-                                            let sign;
-                                            
-                                            if (currentReaction.mCount === 1 && currentReaction.nmCount === 1) {
-                                                const isPos = i % 2 === 0;
-                                                atom = isPos ? metal : nonmetal;
-                                                sign = isPos ? '+' : '-';
-                                            } else if (currentReaction.mCount === 1 && currentReaction.nmCount === 2) {
-                                                // 1:2 ratio (MgCl2) - More anions
-                                                const isPos = i % 3 === 0;
-                                                atom = isPos ? metal : nonmetal;
-                                                sign = isPos ? '2+' : '-';
-                                            } else {
-                                                // 2:1 ratio (Li2O) - More cations
-                                                const isNeg = i % 3 === 0;
-                                                atom = isNeg ? nonmetal : metal;
-                                                sign = isNeg ? '2-' : '+';
-                                            }
+                                ) : (
+                                    /* Lattice View */
+                                    <div className="flex flex-col items-center animate-in zoom-in duration-700">
+                                        <div className="grid grid-cols-3 gap-2 lattice-grid mb-6">
+                                            {Array.from({length: 9}).map((_, i) => {
+                                                let atom;
+                                                let sign;
+                                                
+                                                if (currentReaction.mCount === 1 && currentReaction.nmCount === 1) {
+                                                    const isPos = i % 2 === 0;
+                                                    atom = isPos ? metal : nonmetal;
+                                                    sign = isPos ? '+' : '-';
+                                                } else if (currentReaction.mCount === 1 && currentReaction.nmCount === 2) {
+                                                    const isPos = i % 3 === 0;
+                                                    atom = isPos ? metal : nonmetal;
+                                                    sign = isPos ? '2+' : '-';
+                                                } else {
+                                                    const isNeg = i % 3 === 0;
+                                                    atom = isNeg ? nonmetal : metal;
+                                                    sign = isNeg ? '2-' : '+';
+                                                }
 
-                                            return (
-                                                <div key={i} className={`w-16 h-16 rounded-full ${atom.color} flex items-center justify-center text-white font-bold text-xl shadow-[inset_-5px_-5px_10px_rgba(0,0,0,0.3)] border-2 border-white/20 lattice-ion animate-float`} style={{animationDelay: `${i*0.2}s`}}>
-                                                    {sign}
-                                                </div>
-                                            )
-                                        })}
+                                                return (
+                                                    <div key={i} className={`w-16 h-16 rounded-full ${atom.color} flex items-center justify-center text-white font-bold text-xl shadow-[inset_-5px_-5px_10px_rgba(0,0,0,0.3)] border-2 border-white/20 lattice-ion animate-float`} style={{animationDelay: `${i*0.2}s`}}>
+                                                        {sign}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold text-white mb-2">{currentReaction.product}</h2>
+                                            <p className="text-slate-300 max-w-md text-sm">
+                                                正負離子以 {currentReaction.mCount}:{currentReaction.nmCount} 的比例，通過強大的靜電引力緊密堆積。
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="text-center">
-                                        <h2 className="text-2xl font-bold text-white mb-2">{currentReaction.product}</h2>
-                                        <p className="text-slate-300 max-w-md text-sm">
-                                            正負離子以 {currentReaction.mCount}:{currentReaction.nmCount} 的比例，通過強大的靜電引力緊密堆積。
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
 
-                            {/* Success Message */}
+                            {/* Success Message - MOVED to be static flow (no absolute positioning) */}
                             {stage === 'success' && (
-                                <div className="absolute bottom-4 bg-green-600/90 text-white px-6 py-3 rounded-xl shadow-lg backdrop-blur flex items-center gap-3 animate-in slide-in-from-bottom-4">
+                                <div className="mt-8 bg-green-600/90 text-white px-6 py-3 rounded-xl shadow-lg backdrop-blur flex items-center gap-3 animate-in slide-in-from-bottom-4 z-20">
                                     <i data-lucide="check-circle" size={24} />
                                     <div>
                                         <div className="font-bold">反應完成！</div>
