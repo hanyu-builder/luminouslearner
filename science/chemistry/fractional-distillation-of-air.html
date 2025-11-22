@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>液態空氣分餾模擬 (Fractional Distillation of Liquid Air)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        /* 氣泡動畫 */
+        @keyframes bubble {
+            0% { transform: translateY(0) scale(1); opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-150px) scale(1.2); opacity: 0; }
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: bubble 2s infinite ease-in;
+        }
+        
+        /* 液體晃動 */
+        @keyframes liquid-wave {
+            0% { transform: skewY(0deg); }
+            25% { transform: skewY(1deg); }
+            75% { transform: skewY(-1deg); }
+            100% { transform: skewY(0deg); }
+        }
+        .liquid-surface {
+            animation: liquid-wave 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [stage, setStage] = useState('prep'); // prep, liquefy, distillation
+            const [impuritiesRemoved, setImpuritiesRemoved] = useState({ dust: false, co2_water: false });
+            const [temperature, setTemperature] = useState(-200);
+            const [collectedGas, setCollectedGas] = useState({ nitrogen: 0, argon: 0, oxygen: 0 });
+            const [isWarming, setIsWarming] = useState(false);
+            
+            // Data
+            const Gases = {
+                nitrogen: { name: '氮氣 (Nitrogen)', bp: -196, symbol: 'N₂', color: 'bg-blue-100', uses: '製造氨 (Ammonia)、食品包裝保鮮、液氮冷凍劑' },
+                argon: { name: '氬氣 (Argon)', bp: -186, symbol: 'Ar', color: 'bg-purple-100', uses: '電燈泡填充氣體、焊接保護氣 (Inert atmosphere)' },
+                oxygen: { name: '氧氣 (Oxygen)', bp: -183, symbol: 'O₂', color: 'bg-green-100', uses: '醫療輔助呼吸、煉鋼 (Steel making)、切割金屬' }
+            };
+
+            // Animation Loop for Distillation
+            useEffect(() => {
+                let interval;
+                if (isWarming && stage === 'distillation') {
+                    interval = setInterval(() => {
+                        setTemperature(prev => {
+                            if (prev >= -180) {
+                                setIsWarming(false);
+                                return -180;
+                            }
+                            return parseFloat((prev + 0.2).toFixed(1));
+                        });
+                    }, 50);
+                }
+                return () => clearInterval(interval);
+            }, [isWarming, stage]);
+
+            // Collection Logic
+            useEffect(() => {
+                if (stage === 'distillation') {
+                    // Nitrogen boils at -196
+                    if (temperature >= -196 && temperature < -186) {
+                        setCollectedGas(prev => ({ ...prev, nitrogen: Math.min(100, prev.nitrogen + 1) }));
+                    }
+                    // Argon boils at -186
+                    if (temperature >= -186 && temperature < -183) {
+                        setCollectedGas(prev => ({ ...prev, argon: Math.min(100, prev.argon + 1) }));
+                    }
+                    // Oxygen boils at -183 (or stays liquid at bottom)
+                    if (temperature >= -183) {
+                        setCollectedGas(prev => ({ ...prev, oxygen: Math.min(100, prev.oxygen + 1) }));
+                    }
+                }
+            }, [temperature, stage]);
+
+            const resetSimulation = () => {
+                setStage('prep');
+                setImpuritiesRemoved({ dust: false, co2_water: false });
+                setTemperature(-200);
+                setCollectedGas({ nitrogen: 0, argon: 0, oxygen: 0 });
+                setIsWarming(false);
+            };
+
+            const renderBubbles = (type) => {
+                // Simple random bubbles
+                return Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="bubble" style={{
+                        left: `${Math.random() * 80 + 10}%`,
+                        bottom: `${Math.random() * 20}%`,
+                        width: `${Math.random() * 10 + 5}px`,
+                        height: `${Math.random() * 10 + 5}px`,
+                        animationDelay: `${Math.random()}s`
+                    }}></div>
+                ));
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                        <div>
+                            <h1 className="text-2xl font-bold text-sky-600 flex items-center gap-2">
+                                <i data-lucide="wind"></i> 液態空氣分餾模擬
+                            </h1>
+                            <p className="text-slate-400 text-sm">Fractional Distillation of Liquid Air</p>
+                        </div>
+                        <button onClick={resetSimulation} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center gap-2 transition-colors text-sm font-bold">
+                            <i data-lucide="rotate-ccw" size={16}></i> 重置 (Reset)
+                        </button>
+                    </div>
+
+                    {/* Main Content Area */}
+                    <div className="flex flex-col lg:flex-row gap-6 flex-grow">
+                        
+                        {/* Left Column: Simulation Visuals */}
+                        <div className="lg:w-2/3 bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden relative min-h-[500px] flex flex-col">
+                            
+                            {/* Stage 1: Preparation */}
+                            {stage === 'prep' && (
+                                <div className="flex-grow flex flex-col items-center justify-center p-8 text-center space-y-8 animate-in fade-in">
+                                    <div className="bg-sky-50 p-6 rounded-full mb-4 relative">
+                                        <i data-lucide="filter" size={64} className="text-sky-500" />
+                                        {impuritiesRemoved.dust && impuritiesRemoved.co2_water && (
+                                            <div className="absolute -right-2 -top-2 bg-green-500 text-white p-1 rounded-full">
+                                                <i data-lucide="check" size={20} />
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800 mb-2">第一步：空氣淨化 (Purification)</h2>
+                                        <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                                            在液化空氣之前，必須移除雜質，否則它們在低溫下會結冰並堵塞管道。
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg">
+                                        <button 
+                                            onClick={() => setImpuritiesRemoved(prev => ({ ...prev, dust: true }))}
+                                            disabled={impuritiesRemoved.dust}
+                                            className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all
+                                                ${impuritiesRemoved.dust ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 hover:border-sky-400 hover:bg-sky-50'}
+                                            `}
+                                        >
+                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${impuritiesRemoved.dust ? 'border-green-600 bg-green-600 text-white' : 'border-slate-300'}`}>
+                                                {impuritiesRemoved.dust && <i data-lucide="check" size={14} />}
+                                            </div>
+                                            <span className="font-bold">移除灰塵 (Dust)</span>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => setImpuritiesRemoved(prev => ({ ...prev, co2_water: true }))}
+                                            disabled={impuritiesRemoved.co2_water}
+                                            className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all
+                                                ${impuritiesRemoved.co2_water ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 hover:border-sky-400 hover:bg-sky-50'}
+                                            `}
+                                        >
+                                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${impuritiesRemoved.co2_water ? 'border-green-600 bg-green-600 text-white' : 'border-slate-300'}`}>
+                                                {impuritiesRemoved.co2_water && <i data-lucide="check" size={14} />}
+                                            </div>
+                                            <div className="text-left">
+                                                <span className="font-bold block">移除水氣 & CO₂</span>
+                                                <span className="text-xs opacity-70">防止結冰堵塞管道</span>
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    {impuritiesRemoved.dust && impuritiesRemoved.co2_water && (
+                                        <button 
+                                            onClick={() => setStage('liquefy')}
+                                            className="mt-8 px-8 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-full shadow-lg shadow-sky-200 transition-all animate-bounce"
+                                        >
+                                            下一步：壓縮與冷卻
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Stage 2: Liquefaction (Simplified Transition) */}
+                            {stage === 'liquefy' && (
+                                <div className="flex-grow flex flex-col items-center justify-center bg-sky-900 text-white p-8 text-center animate-in zoom-in duration-500">
+                                    <i data-lucide="snowflake" size={64} className="mb-6 animate-spin-slow" />
+                                    <h2 className="text-2xl font-bold mb-4">壓縮與冷卻 (Compression & Cooling)</h2>
+                                    <p className="max-w-md mb-8 opacity-80">
+                                        空氣被反覆壓縮並膨脹冷卻，直到溫度降至約 -200°C，變成淡藍色的液態空氣。
+                                    </p>
+                                    <button 
+                                        onClick={() => setStage('distillation')}
+                                        className="px-8 py-3 bg-white text-sky-900 font-bold rounded-full shadow-lg hover:bg-sky-50 transition-all"
+                                    >
+                                        開始分餾 (Start Distillation)
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Stage 3: Distillation Column */}
+                            {stage === 'distillation' && (
+                                <div className="flex-grow relative bg-slate-100 overflow-hidden flex flex-col animate-in fade-in">
+                                    
+                                    {/* Temperature Display Overlay */}
+                                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-48">
+                                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Current Temp</div>
+                                        <div className={`text-3xl font-mono font-bold transition-colors duration-300
+                                            ${temperature > -190 ? 'text-red-500' : 'text-sky-600'}
+                                        `}>
+                                            {temperature.toFixed(1)}°C
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-2 mt-2 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-r from-sky-500 to-red-500 transition-all duration-300"
+                                                 style={{ width: `${((temperature + 200) / 20) * 100}%` }}></div>
+                                        </div>
+                                    </div>
+
+                                    {/* The Column Visual */}
+                                    <div className="flex-grow flex justify-center items-end pb-8 relative">
+                                        
+                                        {/* Column Body */}
+                                        <div className="w-48 h-[400px] bg-gradient-to-b from-white via-sky-50 to-sky-100 border-x-4 border-slate-300 relative rounded-b-lg">
+                                            
+                                            {/* Outlets */}
+                                            <div className="absolute top-10 -right-8 w-12 h-4 bg-slate-300 border border-slate-400"></div>
+                                            <div className="absolute top-10 -right-24 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold shadow-sm">
+                                                氮氣 (N₂) -196°C
+                                            </div>
+
+                                            <div className="absolute top-1/2 -right-8 w-12 h-4 bg-slate-300 border border-slate-400"></div>
+                                            <div className="absolute top-1/2 -right-24 bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold shadow-sm">
+                                                氬氣 (Ar) -186°C
+                                            </div>
+
+                                            <div className="absolute bottom-10 -right-8 w-12 h-4 bg-slate-300 border border-slate-400"></div>
+                                            <div className="absolute bottom-10 -right-24 bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-bold shadow-sm">
+                                                氧氣 (O₂) -183°C
+                                            </div>
+
+                                            {/* Liquid/Gas Simulation */}
+                                            <div className="absolute bottom-0 left-0 w-full transition-all duration-500 bg-sky-200 opacity-50 liquid-surface border-t-2 border-sky-300"
+                                                 style={{ height: `${Math.max(10, 100 - ((temperature + 200) * 4))}%` }}>
+                                                
+                                                {/* Boiling Effect */}
+                                                {isWarming && temperature >= -196 && (
+                                                    <div className="absolute inset-0">
+                                                        {renderBubbles()}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Active Gas Indicators */}
+                                            {temperature >= -196 && temperature < -186 && (
+                                                <div className="absolute top-12 left-1/2 -translate-x-1/2 animate-pulse">
+                                                    <div className="text-blue-500 font-bold text-sm">N₂ 正在沸騰...</div>
+                                                    <i data-lucide="arrow-up" className="mx-auto text-blue-400" />
+                                                </div>
+                                            )}
+                                            {temperature >= -186 && temperature < -183 && (
+                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse">
+                                                    <div className="text-purple-500 font-bold text-sm">Ar 正在沸騰...</div>
+                                                    <i data-lucide="arrow-up" className="mx-auto text-purple-400" />
+                                                </div>
+                                            )}
+
+                                        </div>
+                                    </div>
+
+                                    {/* Heat Source */}
+                                    <div className="absolute bottom-0 w-full bg-slate-200 p-4 border-t border-slate-300 flex justify-center items-center gap-4">
+                                        <span className="text-sm font-bold text-slate-600">加熱控制:</span>
+                                        <button 
+                                            onMouseDown={() => setIsWarming(true)}
+                                            onMouseUp={() => setIsWarming(false)}
+                                            onMouseLeave={() => setIsWarming(false)}
+                                            onTouchStart={() => setIsWarming(true)}
+                                            onTouchEnd={() => setIsWarming(false)}
+                                            className={`px-6 py-3 rounded-lg font-bold text-white transition-all transform active:scale-95 select-none flex items-center gap-2
+                                                ${isWarming ? 'bg-red-500 shadow-inner' : 'bg-slate-500 shadow-lg hover:bg-slate-600'}
+                                            `}
+                                        >
+                                            <i data-lucide="flame" size={20} />
+                                            {isWarming ? '加熱中...' : '按住加熱 (Hold to Warm)'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Column: Info & Collection Status */}
+                        <div className="lg:w-1/3 flex flex-col gap-4">
+                            
+                            {/* Concept Card */}
+                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-3">
+                                    <i data-lucide="book-open" className="text-sky-500" /> 核心概念
+                                </h3>
+                                <p className="text-sm text-slate-600 leading-relaxed">
+                                    空氣分餾利用不同氣體<strong>沸點 (Boiling Point)</strong> 的差異來分離它們。
+                                    <br/><br/>
+                                    液態空氣在分餾塔底部慢慢<strong>升溫</strong>。
+                                    沸點<strong>較低</strong>的氣體（如氮氣）會先沸騰並上升到塔頂收集。
+                                </p>
+                            </div>
+
+                            {/* Collection Tanks */}
+                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex-grow">
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-4">
+                                    <i data-lucide="package" className="text-sky-500" /> 收集儲存缸
+                                </h3>
+
+                                <div className="space-y-4">
+                                    {/* Nitrogen */}
+                                    <div className={`p-3 rounded-lg border transition-all ${collectedGas.nitrogen > 0 ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-bold text-slate-700">{Gases.nitrogen.name}</span>
+                                            <span className="text-xs font-mono bg-white px-2 py-1 rounded border">{Gases.nitrogen.bp}°C</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-2">
+                                            <div className="h-full bg-blue-500 transition-all duration-300" style={{width: `${collectedGas.nitrogen}%`}}></div>
+                                        </div>
+                                        {collectedGas.nitrogen > 0 && (
+                                            <p className="text-xs text-slate-500 mt-1">用途：{Gases.nitrogen.uses}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Argon */}
+                                    <div className={`p-3 rounded-lg border transition-all ${collectedGas.argon > 0 ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-100'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-bold text-slate-700">{Gases.argon.name}</span>
+                                            <span className="text-xs font-mono bg-white px-2 py-1 rounded border">{Gases.argon.bp}°C</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-2">
+                                            <div className="h-full bg-purple-500 transition-all duration-300" style={{width: `${collectedGas.argon}%`}}></div>
+                                        </div>
+                                        {collectedGas.argon > 0 && (
+                                            <p className="text-xs text-slate-500 mt-1">用途：{Gases.argon.uses}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Oxygen */}
+                                    <div className={`p-3 rounded-lg border transition-all ${collectedGas.oxygen > 0 ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-bold text-slate-700">{Gases.oxygen.name}</span>
+                                            <span className="text-xs font-mono bg-white px-2 py-1 rounded border">{Gases.oxygen.bp}°C</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-2">
+                                            <div className="h-full bg-green-500 transition-all duration-300" style={{width: `${collectedGas.oxygen}%`}}></div>
+                                        </div>
+                                        {collectedGas.oxygen > 0 && (
+                                            <p className="text-xs text-slate-500 mt-1">用途：{Gases.oxygen.uses}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-6">
+                        Luminous Learner Science Tools
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
