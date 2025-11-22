@@ -239,40 +239,37 @@
                                     <button 
                                         onClick={() => handleGuess('element')}
                                         disabled={showExplanation}
-                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-center group
                                             ${showExplanation && currentType === 'element' 
                                                 ? 'bg-green-100 border-green-500 text-green-800' 
                                                 : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
                                         `}
                                     >
                                         <span>元素 (Element)</span>
-                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">A</span>
                                     </button>
 
                                     <button 
                                         onClick={() => handleGuess('compound')}
                                         disabled={showExplanation}
-                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-center group
                                             ${showExplanation && currentType === 'compound' 
                                                 ? 'bg-green-100 border-green-500 text-green-800' 
                                                 : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
                                         `}
                                     >
                                         <span>化合物 (Compound)</span>
-                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">B</span>
                                     </button>
 
                                     <button 
                                         onClick={() => handleGuess('mixture')}
                                         disabled={showExplanation}
-                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-center group
                                             ${showExplanation && currentType === 'mixture' 
                                                 ? 'bg-green-100 border-green-500 text-green-800' 
                                                 : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
                                         `}
                                     >
                                         <span>混合物 (Mixture)</span>
-                                        <span className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-sm font-bold text-slate-500 group-hover:text-indigo-500">C</span>
                                     </button>
                                 </div>
                             </div>
