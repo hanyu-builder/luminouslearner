@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>元素、化合物與混合物辨識器</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        .particle-container {
+            transition: all 0.3s ease;
+        }
+        
+        @keyframes float {
+            0% { transform: translate(0, 0); }
+            25% { transform: translate(2px, 2px); }
+            50% { transform: translate(-2px, 1px); }
+            75% { transform: translate(1px, -2px); }
+            100% { transform: translate(0, 0); }
+        }
+        .animate-float {
+            animation: float 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Particle Types
+        const AtomTypes = [
+            { color: 'bg-red-500', border: 'border-red-700' },    // Red Atom
+            { color: 'bg-blue-500', border: 'border-blue-700' },  // Blue Atom
+            { color: 'bg-green-500', border: 'border-green-700' }, // Green Atom
+            { color: 'bg-yellow-400', border: 'border-yellow-600' } // Yellow Atom
+        ];
+
+        const App = () => {
+            const [currentType, setCurrentType] = useState(null); // 'element', 'compound', 'mixture'
+            const [particles, setParticles] = useState([]);
+            const [score, setScore] = useState(0);
+            const [streak, setStreak] = useState(0);
+            const [feedback, setFeedback] = useState(null); // { type: 'success'/'error', msg: '', explanation: '' }
+            const [showExplanation, setShowExplanation] = useState(false);
+
+            // Generate a new question
+            const generateQuestion = () => {
+                const types = ['element', 'compound', 'mixture'];
+                // Weighted random (optional, keep simple for now)
+                const type = types[Math.floor(Math.random() * types.length)];
+                setCurrentType(type);
+                setFeedback(null);
+                setShowExplanation(false);
+
+                const newParticles = [];
+                const count = 6 + Math.floor(Math.random() * 4); // 6 to 9 particles
+
+                // Helper to create molecule visual
+                const createMolecule = (atoms, x, y) => ({ atoms, x, y, id: Math.random() });
+
+                if (type === 'element') {
+                    // Case 1: Monoatomic (e.g. Ne) OR Diatomic (e.g. O2) of SAME color
+                    const atomType = AtomTypes[Math.floor(Math.random() * AtomTypes.length)];
+                    const isDiatomic = Math.random() > 0.5;
+
+                    for (let i = 0; i < count; i++) {
+                        const x = Math.random() * 80 + 10;
+                        const y = Math.random() * 80 + 10;
+                        
+                        if (isDiatomic) {
+                            newParticles.push(createMolecule([atomType, atomType], x, y));
+                        } else {
+                            newParticles.push(createMolecule([atomType], x, y));
+                        }
+                    }
+                } else if (type === 'compound') {
+                    // Different atoms bonded together, ALL molecules must be IDENTICAL
+                    const atomA = AtomTypes[0]; 
+                    const atomB = AtomTypes[1]; // Pick 2 distinct
+                    // Shuffle colors for variety
+                    const shuffled = [...AtomTypes].sort(() => 0.5 - Math.random());
+                    const a = shuffled[0];
+                    const b = shuffled[1];
+
+                    for (let i = 0; i < count; i++) {
+                        const x = Math.random() * 80 + 10;
+                        const y = Math.random() * 80 + 10;
+                        // Example: AB or AB2
+                        const isAB2 = Math.random() > 0.5;
+                        const composition = isAB2 ? [a, b, b] : [a, b];
+                        newParticles.push(createMolecule(composition, x, y));
+                    }
+                } else { // mixture
+                    // Mixture of Elements OR Compounds OR Both
+                    const mixType = Math.random();
+                    
+                    // Mix of two monoatomic elements
+                    const a = AtomTypes[0];
+                    const b = AtomTypes[1];
+                    
+                    for (let i = 0; i < count; i++) {
+                        const x = Math.random() * 80 + 10;
+                        const y = Math.random() * 80 + 10;
+                        
+                        // Randomly pick particle A or B
+                        if (Math.random() > 0.5) {
+                            newParticles.push(createMolecule([a], x, y));
+                        } else {
+                            // Make B distinct (maybe diatomic?)
+                            if (mixType > 0.5) {
+                                newParticles.push(createMolecule([b, b], x, y)); // Element B (diatomic)
+                            } else {
+                                newParticles.push(createMolecule([a, b], x, y)); // Compound AB
+                            }
+                        }
+                    }
+                }
+                setParticles(newParticles);
+            };
+
+            // Initial Load
+            useEffect(() => {
+                generateQuestion();
+            }, []);
+
+            const handleGuess = (guess) => {
+                if (feedback) return; // Prevent double guessing
+
+                if (guess === currentType) {
+                    setScore(s => s + 10);
+                    setStreak(s => s + 1);
+                    setFeedback({ 
+                        type: 'success', 
+                        msg: '答對了！(Correct!)', 
+                        explanation: getExplanation(currentType)
+                    });
+                } else {
+                    setStreak(0);
+                    setFeedback({ 
+                        type: 'error', 
+                        msg: '答錯了...(Incorrect)', 
+                        explanation: `正確答案是 **${getTypeName(currentType)}**。\n${getExplanation(currentType)}` 
+                    });
+                }
+                setShowExplanation(true);
+            };
+
+            const getTypeName = (type) => {
+                if (type === 'element') return '元素 (Element)';
+                if (type === 'compound') return '化合物 (Compound)';
+                return '混合物 (Mixture)';
+            };
+
+            const getExplanation = (type) => {
+                if (type === 'element') return '圖中只有**一種**原子 (或是同種原子組成的分子)。(Only one type of atom present)';
+                if (type === 'compound') return '圖中有兩種或以上不同的原子，並以**固定比例**化學鍵合在一起。所有分子都是一模一樣的。(Different atoms chemically bonded in fixed ratio. All molecules are identical)';
+                return '圖中含有**兩種或以上**不同的物質 (粒子)，且它們沒有化學鍵合在一起。(Contains two or more different substances/particles not chemically bonded)';
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-4xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="microscope"></i> 物質分類辨識器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Element, Compound, Mixture Identifier</p>
+                        </div>
+                        <div className="flex gap-4 text-xl font-mono font-bold">
+                            <div className="text-indigo-600">得分: {score}</div>
+                            <div className="text-orange-500">連勝: {streak} 🔥</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Microscope View */}
+                        <div className="w-full md:w-1/2 aspect-square bg-slate-900 rounded-full shadow-2xl border-8 border-slate-700 relative overflow-hidden flex items-center justify-center group">
+                            {/* Lens Glare */}
+                            <div className="absolute top-10 left-10 w-20 h-10 bg-white opacity-10 rounded-full transform -rotate-45 pointer-events-none z-20"></div>
+                            
+                            {/* Particles Layer */}
+                            <div className="relative w-full h-full">
+                                {particles.map((p, i) => (
+                                    <div 
+                                        key={p.id}
+                                        className="absolute animate-float flex items-center justify-center"
+                                        style={{ 
+                                            left: `${p.x}%`, 
+                                            top: `${p.y}%`, 
+                                            animationDelay: `${i * 0.5}s`
+                                        }}
+                                    >
+                                        {/* Render Atoms in a Molecule */}
+                                        {p.atoms.map((atom, idx) => (
+                                            <div 
+                                                key={idx}
+                                                className={`w-6 h-6 rounded-full border-2 shadow-inner ${atom.color} ${atom.border} ${idx > 0 ? '-ml-2' : ''}`}
+                                            ></div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Right: Controls */}
+                        <div className="w-full md:w-1/2 flex flex-col gap-4 justify-center">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="search"></i> 請判斷物質類別：
+                                </h3>
+                                
+                                <div className="space-y-3">
+                                    <button 
+                                        onClick={() => handleGuess('element')}
+                                        disabled={showExplanation}
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                            ${showExplanation && currentType === 'element' 
+                                                ? 'bg-green-100 border-green-500 text-green-800' 
+                                                : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
+                                        `}
+                                    >
+                                        <span>元素 (Element)</span>
+                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">A</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => handleGuess('compound')}
+                                        disabled={showExplanation}
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                            ${showExplanation && currentType === 'compound' 
+                                                ? 'bg-green-100 border-green-500 text-green-800' 
+                                                : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
+                                        `}
+                                    >
+                                        <span>化合物 (Compound)</span>
+                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">B</span>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => handleGuess('mixture')}
+                                        disabled={showExplanation}
+                                        className={`w-full p-4 rounded-xl border-2 font-bold text-lg transition-all flex items-center justify-between group
+                                            ${showExplanation && currentType === 'mixture' 
+                                                ? 'bg-green-100 border-green-500 text-green-800' 
+                                                : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md'}
+                                        `}
+                                    >
+                                        <span>混合物 (Mixture)</span>
+                                        <span className="w-6 h-6 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center text-xs">C</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Feedback Section */}
+                            {showExplanation && (
+                                <div className={`p-5 rounded-xl border-l-4 animate-in slide-in-from-bottom-2
+                                    ${feedback.type === 'success' ? 'bg-green-50 border-green-500 text-green-800' : 'bg-red-50 border-red-500 text-red-800'}
+                                `}>
+                                    <div className="font-bold text-lg mb-1 flex items-center gap-2">
+                                        {feedback.type === 'success' ? <i data-lucide="check-circle" /> : <i data-lucide="x-circle" />}
+                                        {feedback.msg}
+                                    </div>
+                                    <div className="text-sm opacity-90 whitespace-pre-line leading-relaxed">
+                                        {feedback.explanation}
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={generateQuestion}
+                                        className="mt-4 w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <i data-lucide="refresh-cw" size={18} /> 下一題 (Next Question)
+                                    </button>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
