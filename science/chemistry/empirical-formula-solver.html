@@ -25,11 +25,12 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Common Atomic Masses
+        // Expanded Atomic Masses (DSE Standard)
         const AtomicMasses = {
-            H: 1.0, C: 12.0, N: 14.0, O: 16.0, Na: 23.0, Mg: 24.3, Al: 27.0, 
-            S: 32.1, Cl: 35.5, K: 39.1, Ca: 40.1, Fe: 55.8, Cu: 63.5, Zn: 65.4, 
-            Ag: 107.9, Pb: 207.2
+            H: 1.0, He: 4.0, Li: 6.9, Be: 9.0, B: 10.8, C: 12.0, N: 14.0, O: 16.0, F: 19.0, Ne: 20.2,
+            Na: 23.0, Mg: 24.3, Al: 27.0, Si: 28.1, P: 31.0, S: 32.1, Cl: 35.5, K: 39.1, Ar: 39.9, Ca: 40.1,
+            Fe: 55.8, Cu: 63.5, Zn: 65.4, Br: 79.9, Ag: 107.9, I: 126.9, Ba: 137.3, Pb: 207.2, Hg: 200.6,
+            Au: 197.0, Mn: 54.9, Cr: 52.0, Sn: 118.7
         };
 
         const App = () => {
@@ -73,19 +74,18 @@
                 try {
                     // Step 1: Calculate Moles
                     const moleData = validElements.map(e => {
-                        const sym = e.symbol.trim(); // Keep original case for display
-                        // Try to find atomic mass (case insensitive search in our small DB)
-                        // In real app, use a robust periodic table lookup
+                        const sym = e.symbol.trim(); 
+                        // Try to find atomic mass (case insensitive search)
                         const lookupSym = Object.keys(AtomicMasses).find(k => k.toLowerCase() === sym.toLowerCase());
                         const atomicMass = lookupSym ? AtomicMasses[lookupSym] : null;
                         
-                        if (!atomicMass) throw new Error(`未知元素符號: ${sym}`);
+                        if (!atomicMass) throw new Error(`未知元素符號: ${sym} (請檢查拼寫)`);
 
                         const massVal = parseFloat(e.mass);
                         if (isNaN(massVal) || massVal <= 0) throw new Error(`無效質量數值: ${e.mass}`);
 
                         const moles = massVal / atomicMass;
-                        return { symbol: sym, mass: massVal, atomicMass, moles };
+                        return { symbol: lookupSym, mass: massVal, atomicMass, moles }; // Use correct casing from DB
                     });
 
                     // Step 2: Divide by Smallest
@@ -96,12 +96,10 @@
                     }));
 
                     // Step 3: Find Simplest Integer Ratio
-                    // Check for common fractions: .5, .33, .25, .66, .75
                     let multiplier = 1;
                     const fractions = ratioData.map(d => d.rawRatio % 1);
                     
                     // Simple heuristic to find multiplier
-                    // Check if any ratio is close to X.5, X.33, X.25 etc.
                     const isClose = (val, target) => Math.abs(val - target) < 0.1 || Math.abs(val - target) > 0.9;
                     
                     if (fractions.some(f => isClose(f, 0.5))) multiplier = 2;
@@ -218,7 +216,7 @@
                                                     placeholder="e.g. Cu"
                                                     value={el.symbol}
                                                     onChange={(e) => handleInputChange(el.id, 'symbol', e.target.value)}
-                                                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-teal-400 outline-none font-mono uppercase"
+                                                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-teal-400 outline-none font-mono"
                                                 />
                                             </div>
                                             <div className="col-span-6">
