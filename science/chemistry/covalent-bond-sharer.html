@@ -36,18 +36,20 @@
             width: 12px;
             height: 12px;
             box-shadow: 0 0 8px rgba(251, 191, 36, 0.8);
+            z-index: 10;
         }
 
         .electron.shared {
             background-color: #34d399; /* Green-400 */
             box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
-            z-index: 20;
+            z-index: 20; /* Ensure shared electrons are on top */
+            border: 1px solid white;
         }
 
         /* Bond Formation Glow */
         @keyframes bond-pulse {
             0% { box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); }
-            50% { box-shadow: 0 0 25px rgba(52, 211, 153, 0.6); }
+            50% { box-shadow: 0 0 30px rgba(52, 211, 153, 0.5); }
             100% { box-shadow: 0 0 10px rgba(52, 211, 153, 0.2); }
         }
         .bonded-zone {
@@ -66,17 +68,22 @@
         const Molecules = [
             { id: 'H2', name: '氫氣 (Hydrogen)', formula: 'H₂', type: 'single', atoms: ['H', 'H'], bondCount: 1, desc: '單鍵 (Single Bond)' },
             { id: 'Cl2', name: '氯氣 (Chlorine)', formula: 'Cl₂', type: 'single', atoms: ['Cl', 'Cl'], bondCount: 1, desc: '單鍵 (Single Bond)' },
+            { id: 'F2', name: '氟氣 (Fluorine)', formula: 'F₂', type: 'single', atoms: ['F', 'F'], bondCount: 1, desc: '單鍵 (Single Bond)' },
+            { id: 'HCl', name: '氯化氫 (Hydrogen Chloride)', formula: 'HCl', type: 'single', atoms: ['H', 'Cl'], bondCount: 1, desc: '極性共價鍵 (Polar Covalent)' },
+            { id: 'HF', name: '氟化氫 (Hydrogen Fluoride)', formula: 'HF', type: 'single', atoms: ['H', 'F'], bondCount: 1, desc: '強極性共價鍵 (Strongly Polar)' },
             { id: 'O2', name: '氧氣 (Oxygen)', formula: 'O₂', type: 'double', atoms: ['O', 'O'], bondCount: 2, desc: '雙鍵 (Double Bond)' },
             { id: 'N2', name: '氮氣 (Nitrogen)', formula: 'N₂', type: 'triple', atoms: ['N', 'N'], bondCount: 3, desc: '三鍵 (Triple Bond)' },
-            { id: 'HCl', name: '氯化氫 (Hydrogen Chloride)', formula: 'HCl', type: 'single', atoms: ['H', 'Cl'], bondCount: 1, desc: '極性共價鍵 (Polar Covalent)' }
+            { id: 'CO', name: '一氧化碳 (Carbon Monoxide)', formula: 'CO', type: 'triple', atoms: ['C', 'O'], bondCount: 3, desc: '三鍵 (Triple Bond)' }
         ];
 
         // Atom Properties
         const AtomProps = {
-            H: { symbol: 'H', color: 'bg-slate-200 text-slate-800', size: 80, valence: 1, max: 2 },
-            Cl: { symbol: 'Cl', color: 'bg-green-200 text-green-900', size: 120, valence: 7, max: 8 },
-            O: { symbol: 'O', color: 'bg-red-200 text-red-900', size: 100, valence: 6, max: 8 },
-            N: { symbol: 'N', color: 'bg-blue-200 text-blue-900', size: 100, valence: 5, max: 8 }
+            H: { symbol: 'H', color: 'bg-slate-200 text-slate-800', size: 70, valence: 1, max: 2 },
+            Cl: { symbol: 'Cl', color: 'bg-green-200 text-green-900', size: 110, valence: 7, max: 8 },
+            F: { symbol: 'F', color: 'bg-teal-200 text-teal-900', size: 90, valence: 7, max: 8 }, // Smaller than Cl
+            O: { symbol: 'O', color: 'bg-red-200 text-red-900', size: 90, valence: 6, max: 8 },
+            N: { symbol: 'N', color: 'bg-blue-200 text-blue-900', size: 90, valence: 5, max: 8 },
+            C: { symbol: 'C', color: 'bg-gray-400 text-gray-900', size: 95, valence: 4, max: 8 }
         };
 
         const App = () => {
@@ -99,6 +106,7 @@
                 setDistance(newDist);
                 
                 // Bond logic: Ideal distance approx 100-120px
+                // Adjust threshold based on atom size sum slightly? Keeping simple for now.
                 if (newDist < 130) {
                     setIsBonded(true);
                     setBondStrength(Math.min(100, Math.max(0, (130 - newDist) * 2)));
@@ -112,54 +120,39 @@
             const atom2 = AtomProps[currentMolecule.atoms[1]];
             
             // Calculate shared electrons based on bond count
-            // e.g., Double bond = 2 pairs = 4 shared electrons
             const sharedCount = currentMolecule.bondCount * 2;
 
             // Render Electron Shell
             const renderShell = (atom, isLeft) => {
                 const electrons = [];
-                // Total valence electrons
                 const totalValence = atom.valence;
-                // Electrons involved in bonding (from this atom)
                 const bondingElectrons = currentMolecule.bondCount;
-                // Lone pairs / non-bonding
                 const loneElectrons = totalValence - bondingElectrons;
-
-                // Position Logic
-                // If bonded, shared electrons move to the "middle"
-                // Non-bonding stay on the outer side
-                
-                // 1. Render Shared Electrons (if bonded)
-                // We render HALF of the shared pair from THIS atom's perspective to keep logic simple, 
-                // but visually place them in the overlap zone.
-                
-                // Actually, easier to render ALL electrons belonging to this atom.
-                // If bonded, move 'bondingElectrons' towards the center.
 
                 for (let i = 0; i < totalValence; i++) {
                     let isBonding = i < bondingElectrons;
                     let angle;
-                    let radius = atom.size / 2 + 10; // Shell radius
+                    let radius = atom.size / 2 + 12; // Shell radius
 
                     if (isBonding) {
                         // Bonding electrons face the other atom
-                        // Left atom faces right (0 deg), Right atom faces left (180 deg)
-                        // Add slight spread for multiple bonds
-                        const spread = (i - (bondingElectrons-1)/2) * 0.3; 
+                        const spread = (i - (bondingElectrons-1)/2) * 0.4; 
                         angle = isLeft ? 0 + spread : Math.PI + spread;
                         
                         // If bonded, pull them closer to the midpoint
                         if (isBonded) {
-                             radius = distance / 2 - 10; // Meet in middle
+                             // Calculate exact midpoint offset
+                             // Center is 0. This atom is at +/- distance/2.
+                             // We want electron at 0.
+                             // Relative to atom center, that is -distance/2 (for right atom) or +distance/2 (for left).
+                             // We use a fixed offset to prevent full overlap visual mess
+                             radius = distance / 2 - 5; 
                         }
                     } else {
                         // Lone electrons spread around the BACK
-                        // Left atom: 90 to 270 deg. Right atom: -90 to 90 (via 270-360)
                         const rangeStart = isLeft ? Math.PI/2 : -Math.PI/2;
-                        const range = Math.PI; // 180 deg spread
-                        // Distribute evenly
+                        const range = Math.PI; 
                         const loneIndex = i - bondingElectrons;
-                        // Simple distribution
                         angle = rangeStart + Math.PI + (loneIndex + 1) * (range / (loneElectrons + 1));
                     }
 
@@ -173,7 +166,7 @@
                              className={`electron ${isShared ? 'shared' : ''}`}
                              style={{ 
                                  transform: `translate(${x}px, ${y}px)`,
-                                 transition: 'all 0.3s ease-out'
+                                 transition: 'all 0.3s ease-out' // Smooth movement
                              }}
                         ></div>
                     );
@@ -185,7 +178,7 @@
                         {atom.symbol}
                         {/* Shell Circle */}
                         <div className="absolute rounded-full border-2 border-slate-500/30 border-dashed"
-                             style={{ width: atom.size + 20, height: atom.size + 20 }}></div>
+                             style={{ width: atom.size + 24, height: atom.size + 24 }}></div>
                         {/* Electrons */}
                         {showElectrons && electrons}
                     </div>
@@ -201,10 +194,10 @@
                             <h1 className="text-2xl font-bold text-cyan-400 flex items-center gap-2">
                                 <i data-lucide="share-2"></i> 共價鍵共享器
                             </h1>
-                            <p className="text-slate-400 text-sm">Covalent Bond Sharer</p>
+                            <p className="text-slate-400 text-sm">Covalent Bond Sharer: Visualizing Electron Sharing</p>
                         </div>
                         
-                        <div className="flex gap-2 flex-wrap justify-end">
+                        <div className="flex gap-2 flex-wrap justify-end max-w-md">
                             {Molecules.map(m => (
                                 <button
                                     key={m.id}
@@ -232,41 +225,50 @@
                                  style={{backgroundImage: 'radial-gradient(#22d3ee 1px, transparent 1px)', backgroundSize: '30px 30px'}}></div>
 
                             {/* Atoms Container */}
-                            <div className="relative w-full h-64 flex items-center justify-center">
+                            <div className="relative w-full h-80 flex items-center justify-center">
                                 
                                 {/* Bond Glow Area */}
                                 <div 
                                     className={`absolute bg-cyan-500/20 rounded-full transition-all duration-300 ${isBonded ? 'opacity-100 bonded-zone' : 'opacity-0'}`}
                                     style={{ 
                                         width: distance + 50, 
-                                        height: 100,
+                                        height: 120,
                                         filter: 'blur(20px)'
                                     }}
                                 ></div>
 
                                 {/* Left Atom */}
-                                <div className="absolute transition-all duration-200 ease-out"
+                                <div className="absolute transition-all duration-200 ease-out z-10"
                                      style={{ transform: `translateX(-${distance/2}px)` }}>
                                     {renderShell(atom1, true)}
                                 </div>
 
                                 {/* Right Atom */}
-                                <div className="absolute transition-all duration-200 ease-out"
+                                <div className="absolute transition-all duration-200 ease-out z-10"
                                      style={{ transform: `translateX(${distance/2}px)` }}>
                                     {renderShell(atom2, false)}
                                 </div>
 
-                                {/* Shared Pair Label */}
+                                {/* Shared Pair Label - MOVED BELOW */}
                                 {isBonded && (
-                                    <div className="absolute top-24 bg-cyan-900/80 px-3 py-1 rounded-full border border-cyan-500/50 backdrop-blur animate-in zoom-in text-cyan-300 text-xs font-bold flex items-center gap-2">
-                                        <i data-lucide="link" size={12}/> 
-                                        共用電子對 (Shared Pair)
+                                    <div className="absolute bottom-10 flex flex-col items-center animate-in slide-in-from-bottom-4 fade-in duration-500 z-30">
+                                        {/* Arrows pointing up to the bond */}
+                                        <div className="flex gap-8 mb-1 opacity-60">
+                                            <i data-lucide="arrow-up" className="text-cyan-400 animate-bounce" size={20} />
+                                        </div>
+                                        <div className="bg-cyan-900/90 px-4 py-2 rounded-xl border border-cyan-500/50 backdrop-blur text-cyan-300 text-sm font-bold flex items-center gap-2 shadow-lg">
+                                            <i data-lucide="link" size={16}/> 
+                                            <span>共用電子對 (Shared Pair)</span>
+                                        </div>
+                                        <div className="mt-1 text-xs text-cyan-200/70 font-mono">
+                                            {currentMolecule.bondCount * 2} electrons shared
+                                        </div>
                                     </div>
                                 )}
                             </div>
 
                             {/* Controls: Distance Slider */}
-                            <div className="w-full max-w-md mt-12 bg-slate-900/50 p-6 rounded-xl border border-slate-600 relative z-10">
+                            <div className="w-full max-w-md bg-slate-900/80 p-6 rounded-xl border border-slate-600 relative z-20 backdrop-blur-sm">
                                 <div className="flex justify-between text-sm mb-2">
                                     <span className="text-slate-400">原子距離 (Distance)</span>
                                     <span className={isBonded ? 'text-green-400 font-bold' : 'text-slate-400'}>
@@ -297,8 +299,8 @@
                                     <i data-lucide="book-open" /> 化學原理
                                 </h3>
                                 
-                                <div className="mb-6">
-                                    <div className="text-sm text-slate-400 mb-1">當前分子 (Molecule)</div>
+                                <div className="mb-6 p-4 bg-slate-900 rounded-xl border border-slate-600">
+                                    <div className="text-xs text-slate-400 uppercase font-bold mb-1">當前分子 (Molecule)</div>
                                     <div className="text-3xl font-bold text-white mb-1">{currentMolecule.name}</div>
                                     <div className="text-xl font-mono text-cyan-400 font-bold">{currentMolecule.formula}</div>
                                 </div>
@@ -312,13 +314,14 @@
                                     <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-yellow-500">
                                         <strong className="text-white block mb-1">2. 鍵的類型 (Bond Type)</strong>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className="bg-slate-700 px-2 py-1 rounded text-white font-mono font-bold">
-                                                {currentMolecule.bondCount === 1 ? 'H-H' : currentMolecule.bondCount === 2 ? 'O=O' : 'N≡N'}
+                                            <span className="bg-slate-700 px-2 py-1 rounded text-white font-mono font-bold border border-slate-600">
+                                                {currentMolecule.bondCount === 1 ? 'X — X' : currentMolecule.bondCount === 2 ? 'X = X' : 'X ≡ X'}
                                             </span>
                                             <span>{currentMolecule.desc}</span>
                                         </div>
-                                        <p className="mt-1 text-xs opacity-70">
-                                            共用 {currentMolecule.bondCount} 對電子 (= {currentMolecule.bondCount * 2} 粒)。
+                                        <p className="mt-2 text-xs opacity-70 border-t border-slate-700 pt-2">
+                                            每個原子提供 {currentMolecule.bondCount} 粒電子，
+                                            共用 {currentMolecule.bondCount} 對 (= {currentMolecule.bondCount * 2} 粒)。
                                         </p>
                                     </div>
 
@@ -330,7 +333,7 @@
                                             </span>
                                         ) : (
                                             <span className="text-slate-400">
-                                                請拖動滑桿讓原子靠近，直到它們的軌域重疊。
+                                                請拖動滑桿讓原子靠近，直到它們的軌域重疊，觀察電子如何配對。
                                             </span>
                                         )}
                                     </div>
