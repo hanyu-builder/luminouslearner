@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>氣體偵探實驗室 (Gas Detective Lab)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        /* 氣體流動動畫 */
+        @keyframes float {
+            0% { transform: translateY(0px); opacity: 0.5; }
+            50% { transform: translateY(-10px); opacity: 0.8; }
+            100% { transform: translateY(-20px); opacity: 0; }
+        }
+        .gas-particle {
+            animation: float 2s infinite;
+        }
+
+        /* 爆鳴聲動畫 (Pop sound visual) */
+        @keyframes pop-explode {
+            0% { transform: scale(0); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .pop-effect {
+            animation: pop-explode 0.3s ease-out forwards;
+        }
+
+        /* 復燃動畫 */
+        @keyframes relight {
+            0% { opacity: 0.5; filter: brightness(1); }
+            50% { opacity: 1; filter: brightness(3); box-shadow: 0 0 20px orange; }
+            100% { opacity: 1; filter: brightness(1.5); }
+        }
+        .relight-effect {
+            animation: relight 0.5s ease-out forwards;
+        }
+
+        /* 石灰水變混濁 */
+        .limewater { transition: background-color 2s ease, opacity 2s ease; }
+        .cloudy { background-color: rgba(255, 255, 255, 0.9) !important; opacity: 1 !important; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Gas Definitions
+        const Gases = [
+            { id: 'A', name: '氫氣 (Hydrogen)', formula: 'H₂', type: 'combustible' },
+            { id: 'B', name: '氧氣 (Oxygen)', formula: 'O₂', type: 'oxidizing' },
+            { id: 'C', name: '二氧化碳 (Carbon Dioxide)', formula: 'CO₂', type: 'acidic' },
+            { id: 'D', name: '氨氣 (Ammonia)', formula: 'NH₃', type: 'alkaline' },
+            { id: 'E', name: '氯氣 (Chlorine)', formula: 'Cl₂', type: 'bleaching' },
+            { id: 'F', name: '氮氣 (Nitrogen)', formula: 'N₂', type: 'inert' }
+        ];
+
+        // Tools
+        const Tools = [
+            { id: 'burning_splint', name: '燃燒木條 (Burning Splint)', icon: '🔥' },
+            { id: 'glowing_splint', name: '餘燼木條 (Glowing Splint)', icon: '🪵' },
+            { id: 'limewater', name: '石灰水 (Limewater)', icon: '🧪' },
+            { id: 'red_litmus', name: '濕潤紅色石蕊試紙', icon: '📄', color: 'bg-red-400' },
+            { id: 'blue_litmus', name: '濕潤藍色石蕊試紙', icon: '📄', color: 'bg-blue-400' }
+        ];
+
+        const App = () => {
+            const [currentGas, setCurrentGas] = useState(null);
+            const [activeTool, setActiveTool] = useState(null);
+            const [observation, setObservation] = useState(null);
+            const [history, setHistory] = useState([]);
+            const [animationState, setAnimationState] = useState('idle'); // idle, playing, finished
+            const [showAnswer, setShowAnswer] = useState(false);
+
+            const selectGas = (gas) => {
+                setCurrentGas(gas);
+                setActiveTool(null);
+                setObservation(null);
+                setAnimationState('idle');
+                setHistory([]);
+                setShowAnswer(false);
+            };
+
+            const performTest = (tool) => {
+                if (!currentGas || animationState === 'playing') return;
+                
+                setActiveTool(tool);
+                setAnimationState('playing');
+                setObservation(null);
+
+                // Simulate delay for animation
+                setTimeout(() => {
+                    const result = getResult(currentGas, tool.id);
+                    setObservation(result);
+                    setHistory(prev => [{ tool: tool.name, result: result.text, type: result.type }, ...prev]);
+                    setAnimationState('finished');
+                }, 1500);
+            };
+
+            const getResult = (gas, toolId) => {
+                // Default: No Reaction
+                let res = { text: "無明顯變化 (No observable change)", type: 'neutral', visual: 'none' };
+
+                if (toolId === 'burning_splint') {
+                    if (gas.formula === 'H₂') return { text: "發出「Pop」的一聲爆鳴聲 (Pop sound)", type: 'positive', visual: 'pop' };
+                    if (gas.formula === 'O₂') return { text: "燃燒更旺盛 (Burns more brightly)", type: 'positive', visual: 'bright' };
+                    if (['CO₂', 'N₂', 'Cl₂'].includes(gas.formula)) return { text: "火焰熄滅 (Flame extinguishes)", type: 'negative', visual: 'extinguish' };
+                }
+
+                if (toolId === 'glowing_splint') {
+                    if (gas.formula === 'O₂') return { text: "木條復燃 (Relights)", type: 'positive', visual: 'relight' };
+                    if (['H₂', 'CO₂', 'N₂'].includes(gas.formula)) return { text: "餘燼熄滅 (Glow extinguishes)", type: 'negative', visual: 'extinguish_glow' };
+                }
+
+                if (toolId === 'limewater') {
+                    if (gas.formula === 'CO₂') return { text: "石灰水變混濁/乳白色 (Turns milky/cloudy)", type: 'positive', visual: 'cloudy' };
+                    if (gas.formula === 'Cl₂') return { text: "無沉澱，但可能變黃 (No ppt, turns slight yellow)", type: 'neutral', visual: 'none' };
+                }
+
+                if (toolId === 'red_litmus') {
+                    if (gas.formula === 'NH₃') return { text: "試紙變藍色 (Turns Blue)", type: 'positive', visual: 'turn_blue' };
+                    if (gas.formula === 'Cl₂') return { text: "先變紅後褪色/漂白 (Turns red then bleaches)", type: 'positive', visual: 'bleach' };
+                }
+
+                if (toolId === 'blue_litmus') {
+                    if (['CO₂', 'Cl₂', 'SO₂'].includes(gas.formula)) return { text: "試紙變紅色 (Turns Red)", type: 'positive', visual: 'turn_red' };
+                    if (gas.formula === 'Cl₂') return { text: "變紅後褪色/漂白 (Turns red then bleaches)", type: 'positive', visual: 'bleach' }; // Overwrite for Cl2
+                }
+
+                return res;
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-400 flex items-center gap-2">
+                                <i data-lucide="flask-conical"></i> 氣體偵探實驗室
+                            </h1>
+                            <p className="text-slate-400 text-sm">Gas Detective Lab: Test for Gases</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <div className="text-xs text-slate-500 bg-slate-800 px-3 py-1 rounded border border-slate-700">Topic XV</div>
+                        </div>
+                    </div>
+
+                    {!currentGas ? (
+                        /* Selection Screen */
+                        <div className="flex-grow flex flex-col justify-center items-center animate-in zoom-in">
+                            <h2 className="text-xl font-bold text-slate-200 mb-8">請選擇一個未知氣體集氣瓶：</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                                {Gases.map(g => (
+                                    <button 
+                                        key={g.id}
+                                        onClick={() => selectGas(g)}
+                                        className="w-40 h-48 bg-slate-800 border-2 border-slate-700 hover:border-green-500 hover:bg-slate-700 rounded-xl flex flex-col items-center justify-center gap-4 transition-all shadow-lg group relative overflow-hidden"
+                                    >
+                                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                                        <i data-lucide="wind" size={40} className="text-slate-500 group-hover:text-green-400 transition-colors" />
+                                        <div className="font-bold text-slate-300 text-lg">Gas {g.id}</div>
+                                        <div className="text-xs text-slate-500">未知氣體</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        /* Lab Interface */
+                        <div className="flex flex-col lg:flex-row gap-8 flex-grow animate-in fade-in">
+                            
+                            {/* Left: Visual Area */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                                
+                                {/* The Gas Jar Visualization */}
+                                <div className="bg-slate-800 rounded-2xl border border-slate-700 p-8 flex justify-center items-center relative min-h-[400px] shadow-2xl overflow-hidden">
+                                    
+                                    {/* Lab Bench */}
+                                    <div className="absolute bottom-0 w-full h-4 bg-slate-900 border-t border-slate-600"></div>
+
+                                    {/* Gas Jar */}
+                                    <div className="w-32 h-48 border-4 border-slate-400/30 rounded-lg relative bg-white/5 backdrop-blur-sm overflow-hidden z-10 flex items-center justify-center">
+                                        {/* Gas Particles */}
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                                            <div className={`w-full h-full ${currentGas.formula === 'Cl₂' ? 'bg-yellow-200/20' : 'bg-white/5'}`}></div>
+                                        </div>
+                                        <div className="text-slate-500 font-bold text-4xl opacity-20 select-none">{currentGas.id}</div>
+                                    </div>
+
+                                    {/* Animation Overlay Layer */}
+                                    <div className="absolute inset-0 z-20 pointer-events-none flex justify-center items-center">
+                                        
+                                        {/* Tool Animations */}
+                                        {animationState === 'playing' && activeTool && (
+                                            <div className="animate-in slide-in-from-right duration-1000 absolute top-1/4">
+                                                {activeTool.id === 'burning_splint' && (
+                                                    <div className="w-40 h-2 bg-amber-800 rounded relative transform rotate-12">
+                                                        <div className="absolute -left-2 -top-4 w-8 h-8 bg-orange-500 rounded-full blur-sm animate-pulse"></div>
+                                                        <div className="absolute -left-2 -top-4 w-4 h-6 bg-yellow-300 rounded-full blur-[2px]"></div>
+                                                    </div>
+                                                )}
+                                                {activeTool.id === 'glowing_splint' && (
+                                                    <div className="w-40 h-2 bg-amber-900 rounded relative transform rotate-12">
+                                                        <div className="absolute -left-1 -top-1 w-3 h-3 bg-red-600 rounded-full shadow-[0_0_10px_red] animate-pulse"></div>
+                                                    </div>
+                                                )}
+                                                {(activeTool.id === 'red_litmus' || activeTool.id === 'blue_litmus') && (
+                                                    <div className={`w-32 h-8 ${activeTool.color} rounded shadow-lg transform rotate-12 border border-white/50`}></div>
+                                                )}
+                                                {activeTool.id === 'limewater' && (
+                                                    <div className="w-12 h-24 border-2 border-slate-400 rounded-b-lg bg-blue-50/20 relative overflow-hidden">
+                                                        <div className="absolute inset-x-0 bottom-0 h-16 bg-transparent border-t border-slate-300/50"></div>
+                                                        <div className="absolute bottom-0 w-full h-full flex justify-center pt-8">
+                                                            <div className="w-1 h-1 bg-white rounded-full animate-ping"></div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Reaction Effects (Pop, Relight, Color Change) */}
+                                        {observation && (
+                                            <div className="absolute inset-0 flex justify-center items-center">
+                                                {observation.visual === 'pop' && (
+                                                    <div className="pop-effect text-6xl font-black text-yellow-400 drop-shadow-[0_0_15px_red]">POP!</div>
+                                                )}
+                                                {observation.visual === 'relight' && (
+                                                    <div className="relight-effect text-6xl">🔥</div>
+                                                )}
+                                                {observation.visual === 'cloudy' && (
+                                                    <div className="w-32 h-48 bg-white/80 blur-md transition-all duration-1000"></div>
+                                                )}
+                                                {observation.visual === 'turn_blue' && (
+                                                    <div className="w-32 h-8 bg-blue-600 rounded shadow-lg transform rotate-12 border border-white/50 animate-in fade-in"></div>
+                                                )}
+                                                {observation.visual === 'turn_red' && (
+                                                    <div className="w-32 h-8 bg-red-500 rounded shadow-lg transform rotate-12 border border-white/50 animate-in fade-in"></div>
+                                                )}
+                                                {observation.visual === 'bleach' && (
+                                                    <div className="w-32 h-8 bg-white rounded shadow-lg transform rotate-12 border border-slate-300 animate-in fade-in"></div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Tool Selection */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    {Tools.map(tool => (
+                                        <button 
+                                            key={tool.id}
+                                            onClick={() => performTest(tool)}
+                                            disabled={animationState === 'playing' || showAnswer}
+                                            className={`p-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-slate-700 text-center transition-colors flex flex-col items-center gap-2
+                                                ${activeTool?.id === tool.id ? 'ring-2 ring-blue-500 bg-slate-700' : ''}
+                                            `}
+                                        >
+                                            <div className="text-2xl">{tool.icon}</div>
+                                            <div className="text-xs font-bold text-slate-300">{tool.name}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Right: Observations & Conclusion */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                                
+                                {/* Observation Panel */}
+                                <div className="bg-white rounded-xl p-6 text-slate-800 shadow-lg min-h-[200px]">
+                                    <h3 className="font-bold border-b pb-2 mb-4 flex items-center gap-2 text-slate-700">
+                                        <i data-lucide="eye"></i> 觀察結果 (Observations)
+                                    </h3>
+                                    {observation ? (
+                                        <div className={`p-4 rounded-lg border-l-4 text-lg font-bold animate-in slide-in-from-bottom-2
+                                            ${observation.type === 'positive' ? 'bg-green-50 border-green-500 text-green-800' : 
+                                              observation.type === 'negative' ? 'bg-red-50 border-red-500 text-red-800' : 
+                                              'bg-slate-50 border-slate-400 text-slate-600'}
+                                        `}>
+                                            {observation.text}
+                                        </div>
+                                    ) : (
+                                        <div className="text-slate-400 text-center py-8 italic">
+                                            請選擇一種工具進行測試...
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Reveal Answer */}
+                                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 flex-grow flex flex-col">
+                                    <h3 className="font-bold text-blue-400 mb-4 flex items-center gap-2">
+                                        <i data-lucide="key"></i> 揭曉答案
+                                    </h3>
+                                    
+                                    {!showAnswer ? (
+                                        <div className="flex-grow flex items-center justify-center">
+                                            <button 
+                                                onClick={() => setShowAnswer(true)}
+                                                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-full shadow-lg transition-all"
+                                            >
+                                                我已完成測試，顯示氣體身份
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="animate-in zoom-in text-center space-y-4">
+                                            <div className="text-sm text-slate-400">Gas {currentGas.id} 是：</div>
+                                            <div className="text-3xl font-black text-white bg-slate-900 p-4 rounded-lg border border-slate-600 shadow-inner">
+                                                {currentGas.name} <span className="text-blue-400">({currentGas.formula})</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => selectGas(null)}
+                                                className="text-sm text-slate-400 hover:text-white underline mt-4"
+                                            >
+                                                測試下一個氣體樣本
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="text-center text-slate-600 text-xs mt-8 border-t border-slate-800 pt-4">
+                        Designed for HKDSE Chemistry | Luminous Learner Science Tools
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
