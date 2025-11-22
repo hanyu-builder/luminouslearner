@@ -1,0 +1,417 @@
+﻿<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>原油分餾模擬實驗室</title>
+  
+   <!-- 載入 React 和 ReactDOM -->
+   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+   <!-- 載入 Babel 用於瀏覽器內編譯 JSX -->
+   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+   <!-- 載入 Tailwind CSS -->
+   <script src="https://cdn.tailwindcss.com"></script>
+
+
+   <style>
+       @keyframes rise {
+           0% { transform: translateY(0) scale(1); opacity: 0.5; }
+           100% { transform: translateY(-500px) scale(1.5); opacity: 0; }
+       }
+       .animate-rise {
+           animation: rise 3s infinite linear;
+       }
+   </style>
+</head>
+<body>
+   <div id="root"></div>
+
+
+   <script type="text/babel">
+       const { useState, useEffect } = React;
+
+
+       // 簡易的 SVG 圖示組件 (替代 Lucide-React 以確保單檔運作)
+       const Icons = {
+           FlaskConical: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>
+           ),
+           Flame: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.243-2.185.7-3.14 1.54 1.045 2.6 2.088 2.8 3.64Z"/></svg>
+           ),
+           Thermometer: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
+           ),
+           Droplets: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.8-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>
+           ),
+           Car: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+           ),
+           Plane: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 22h20"/><path d="M20.4 9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L14.5 4c-.5-1.3-2.2-1.3-2.7 0L10 8.3l-7.8 2.6c-.9.3-1.3 1.3-1 2.2l1 3 11.6-3.9c.5-.2 1.1.1 1.3.6l.5 1.4L2 18"/></svg>
+           ),
+           Ship: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9 1 2.5 1S14 21 14 21c2.5 0 2.5-2 5-2 1.3 0 1.9 1 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.9 5.8 2.2 7.5"/><path d="M5 10 2 7l9-4 9 4-3 3"/><path d="M10 2v4"/><path d="M14 2v4"/><path d="M10 6h4"/></svg>
+           ),
+           Hammer: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V2.4a1 1 0 0 0-1-1h-3.4a1 1 0 0 0-1 1v5.8c0 .85-.33 1.65-.93 2.25L11.2 11.7a2.1 2.1 0 0 0 0 2.98l4.25 4.25a2.1 2.1 0 0 0 2.98 0l2.48-2.48a2.1 2.1 0 0 0 0-2.98Z"/></svg>
+           ),
+           FlameKindling: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 2c-1.66 0-3 .67-3 2.25A3.25 3.25 0 0 0 12.25 7.5a3.25 3.25 0 0 1 3.25 3.25c0 2.5-2.24 4.25-5.5 4.25C6.14 15 2 12.16 2 8.5"/><path d="M2 18h20"/><path d="M6 22v-4"/><path d="M10 22v-4"/><path d="M14 22v-4"/><path d="M18 22v-4"/></svg>
+           ),
+           Info: ({size=24, className=""}) => (
+               <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+           )
+       };
+
+
+       const FractionDistillationApp = () => {
+           const [selectedFraction, setSelectedFraction] = useState(null);
+           const [isSimulating, setIsSimulating] = useState(false);
+           const [temperature, setTemperature] = useState(25);
+
+
+           const fractions = [
+               {
+                   id: 'gas',
+                   name: '煉油氣 (Refinery Gases)',
+                   tempRange: '< 40°C',
+                   carbonCount: 'C1 - C4',
+                   uses: '家用煮食燃料、露營氣體',
+                   icon: <Icons.FlameKindling size={24} />,
+                   color: 'bg-blue-100',
+                   position: 0,
+                   description: '沸點最低，分子最小。在室溫下即為氣體，從塔頂逸出。'
+               },
+               {
+                   id: 'petrol',
+                   name: '汽油 (Petrol / Gasoline)',
+                   tempRange: '40°C - 70°C',
+                   carbonCount: 'C5 - C10',
+                   uses: '私家車燃料',
+                   icon: <Icons.Car size={24} />,
+                   color: 'bg-yellow-100',
+                   position: 1,
+                   description: '易揮發的液體，極易燃燒。'
+               },
+               {
+                   id: 'naphtha',
+                   name: '石腦油 (Naphtha)',
+                   tempRange: '70°C - 170°C',
+                   carbonCount: 'C8 - C12',
+                   uses: '製造化學品、塑膠原料',
+                   icon: <Icons.FlaskConical size={24} />,
+                   color: 'bg-orange-100',
+                   position: 2,
+                   description: '主要用於石油化工行業，裂解後生產乙烯等。'
+               },
+               {
+                   id: 'kerosene',
+                   name: '煤油 / 火水 (Kerosene)',
+                   tempRange: '170°C - 250°C',
+                   carbonCount: 'C10 - C16',
+                   uses: '飛機燃料 (Jet Fuel)、取暖',
+                   icon: <Icons.Plane size={24} />,
+                   color: 'bg-orange-200',
+                   position: 3,
+                   description: '比汽油更黏稠，不易揮發。'
+               },
+               {
+                   id: 'diesel',
+                   name: '柴油 (Diesel Oil)',
+                   tempRange: '250°C - 350°C',
+                   carbonCount: 'C14 - C20',
+                   uses: '貨車、火車、重型機械燃料',
+                   icon: <Icons.Car size={24} className="text-gray-700" />,
+                   color: 'bg-orange-300',
+                   position: 4,
+                   description: '黏度較高，能量密度高。'
+               },
+               {
+                   id: 'fuel_oil',
+                   name: '燃料油 (Fuel Oil)',
+                   tempRange: '350°C - 400°C',
+                   carbonCount: 'C20 - C70',
+                   uses: '大型船隻、發電廠燃料',
+                   icon: <Icons.Ship size={24} />,
+                   color: 'bg-orange-400',
+                   position: 5,
+                   description: '非常黏稠的液體，難以點燃。'
+               },
+               {
+                   id: 'bitumen',
+                   name: '瀝青 (Bitumen)',
+                   tempRange: '> 400°C',
+                   carbonCount: '> C70',
+                   uses: '鋪設道路、屋頂防水層',
+                   icon: <Icons.Hammer size={24} />,
+                   color: 'bg-gray-800 text-white',
+                   position: 6,
+                   description: '沸點最高，分子最大。在塔底以黑色黏稠殘渣形式流出。'
+               }
+           ];
+
+
+           useEffect(() => {
+               let interval;
+               if (isSimulating) {
+                   setTemperature(25);
+                   interval = setInterval(() => {
+                       setTemperature((prev) => {
+                           if (prev >= 450) {
+                               setIsSimulating(false);
+                               return 450;
+                           }
+                           return prev + 2;
+                       });
+                   }, 20);
+               } else {
+                   setTemperature(25);
+               }
+               return () => clearInterval(interval);
+           }, [isSimulating]);
+
+
+           const getActiveFraction = () => {
+               if (!isSimulating) return null;
+               if (temperature < 40) return 'gas';
+               if (temperature < 100) return 'petrol';
+               if (temperature < 170) return 'naphtha';
+               if (temperature < 250) return 'kerosene';
+               if (temperature < 350) return 'diesel';
+               if (temperature < 400) return 'fuel_oil';
+               return 'bitumen';
+           };
+
+
+           const activeId = getActiveFraction();
+
+
+           return (
+               <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+                   <header className="bg-blue-900 text-white p-4 shadow-lg">
+                       <div className="container mx-auto flex justify-between items-center">
+                           <h1 className="text-2xl font-bold flex items-center gap-2">
+                               <Icons.FlaskConical /> 原油分餾模擬實驗室
+                           </h1>
+                           <span className="text-sm bg-blue-800 px-3 py-1 rounded-full">High School Chemistry</span>
+                       </div>
+                   </header>
+
+
+                   <main className="flex-grow container mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
+                       <div className="flex-1 flex flex-col items-center bg-white p-6 rounded-2xl shadow-xl border border-slate-200 relative overflow-hidden">
+                           <h2 className="text-xl font-bold mb-4 text-slate-700 w-full text-center">分餾塔 (Fractionating Column)</h2>
+                          
+                           <div className="relative w-full max-w-md h-[600px] flex flex-col">
+                               <div className="absolute inset-y-0 left-1/4 right-1/4 rounded-lg bg-gradient-to-b from-blue-50 via-yellow-50 to-red-100 border-x-4 border-slate-400 z-0 opacity-80"></div>
+
+
+                               <div className="absolute left-0 h-full flex flex-col justify-between text-xs font-mono text-slate-500 py-4">
+                                   <span>25°C (冷)</span>
+                                   <span>|</span>
+                                   <span>100°C</span>
+                                   <span>|</span>
+                                   <span>200°C</span>
+                                   <span>|</span>
+                                   <span>300°C</span>
+                                   <span>|</span>
+                                   <span>400°C (熱)</span>
+                               </div>
+
+
+                               <div className="z-10 flex flex-col h-full justify-between w-full py-2">
+                                   {fractions.map((fraction) => (
+                                       <div
+                                           key={fraction.id}
+                                           onClick={() => setSelectedFraction(fraction)}
+                                           className={`
+                                               relative group cursor-pointer transition-all duration-300
+                                               flex items-center
+                                               ${selectedFraction?.id === fraction.id ? 'scale-105' : 'hover:scale-105'}
+                                           `}
+                                       >
+                                           <div className={`
+                                               hidden md:block absolute right-[25%] w-[15%] h-3 bg-slate-300
+                                               border-y border-slate-400
+                                               group-hover:bg-blue-200
+                                           `}></div>
+
+
+                                           <div className={`
+                                               w-full md:w-1/2 md:mx-auto p-2 md:p-3 rounded-lg border-2
+                                               flex justify-between items-center shadow-sm
+                                               ml-[20%] md:ml-auto
+                                               ${fraction.color}
+                                               ${selectedFraction?.id === fraction.id ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg' : 'border-transparent'}
+                                               ${isSimulating && activeId === fraction.id ? 'animate-pulse ring-4 ring-red-400' : ''}
+                                           `}>
+                                               <div className="flex items-center gap-2">
+                                                   <span className="font-bold text-sm md:text-base">{fraction.name.split(' ')[0]}</span>
+                                               </div>
+                                               <span className="text-xs font-mono hidden sm:inline-block">{fraction.carbonCount}</span>
+                                           </div>
+
+
+                                           <div className="absolute right-0 md:right-4 text-xs md:text-sm bg-white/80 px-2 py-1 rounded shadow-sm w-24 text-right">
+                                               {fraction.uses.split('、')[0]}
+                                           </div>
+                                       </div>
+                                   ))}
+                               </div>
+                              
+                               <div className="absolute bottom-0 left-1/4 right-1/4 h-16 bg-slate-700 rounded-b-lg flex flex-col items-center justify-center text-white z-20">
+                                   <span className="text-sm font-bold">加熱爐</span>
+                                   {isSimulating && <Icons.Flame className="text-orange-500 animate-bounce" />}
+                               </div>
+
+
+                               <div className="absolute bottom-8 left-0 w-1/4 h-4 bg-black flex items-center">
+                                   <div className="w-full text-[10px] text-white text-center">原油</div>
+                               </div>
+
+
+                               {isSimulating && (
+                               <div className="absolute inset-0 left-1/4 right-1/4 pointer-events-none overflow-hidden z-0">
+                                   <div className="animate-rise absolute bottom-0 left-1/3 w-4 h-4 bg-yellow-200 rounded-full opacity-50"></div>
+                                   <div className="animate-rise absolute bottom-0 left-1/2 w-6 h-6 bg-white rounded-full opacity-40 delay-100"></div>
+                                   <div className="animate-rise absolute bottom-0 right-1/3 w-3 h-3 bg-orange-200 rounded-full opacity-50 delay-200"></div>
+                               </div>
+                               )}
+                           </div>
+                       </div>
+
+
+                       <div className="flex-1 flex flex-col gap-6">
+                           <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
+                               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                   <Icons.Thermometer className="text-red-500" /> 實驗控制
+                               </h3>
+                              
+                               <div className="flex items-center gap-4 mb-4">
+                                   <button
+                                       onClick={() => setIsSimulating(!isSimulating)}
+                                       className={`
+                                           flex-1 py-3 px-6 rounded-xl font-bold text-white transition-colors
+                                           ${isSimulating
+                                               ? 'bg-red-500 hover:bg-red-600'
+                                               : 'bg-green-500 hover:bg-green-600'}
+                                       `}
+                                   >
+                                       {isSimulating ? '停止加熱' : '開始加熱 / 模擬'}
+                                   </button>
+                               </div>
+
+
+                               <div className="bg-slate-100 rounded-xl p-4 flex items-center justify-between">
+                                   <span className="text-slate-500 text-sm font-semibold">當前爐溫</span>
+                                   <span className="text-3xl font-mono font-bold text-slate-800">{temperature}°C</span>
+                               </div>
+                              
+                               <p className="text-xs text-slate-400 mt-2">
+                                   提示：點擊左側的分餾塔層級以查看詳細資料。
+                               </p>
+                           </div>
+
+
+                           <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 flex-grow">
+                               {selectedFraction ? (
+                                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                       <div className="flex items-start justify-between mb-6">
+                                           <div>
+                                               <h2 className="text-2xl font-bold text-slate-800">{selectedFraction.name}</h2>
+                                               <p className="text-slate-500">碳鏈長度: {selectedFraction.carbonCount}</p>
+                                           </div>
+                                           <div className={`p-3 rounded-full ${selectedFraction.color} shadow-inner`}>
+                                               {selectedFraction.icon}
+                                           </div>
+                                       </div>
+
+
+                                       <div className="space-y-4">
+                                           <div className="flex items-center gap-3">
+                                               <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+                                                   <Icons.Thermometer size={20} />
+                                               </div>
+                                               <div>
+                                                   <p className="text-xs text-slate-400 uppercase font-bold">沸點範圍</p>
+                                                   <p className="font-medium">{selectedFraction.tempRange}</p>
+                                               </div>
+                                           </div>
+
+
+                                           <div className="flex items-center gap-3">
+                                               <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+                                                   <Icons.Droplets size={20} />
+                                               </div>
+                                               <div>
+                                                   <p className="text-xs text-slate-400 uppercase font-bold">黏滯度 (Viscosity)</p>
+                                                   <p className="font-medium">
+                                                       {selectedFraction.position > 4 ? '極高 (像蜜糖)' : selectedFraction.position > 2 ? '中等' : '極低 (易流動)'}
+                                                   </p>
+                                               </div>
+                                           </div>
+
+
+                                           <div className="flex items-center gap-3">
+                                               <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
+                                                   <Icons.Flame size={20} />
+                                               </div>
+                                               <div>
+                                                   <p className="text-xs text-slate-400 uppercase font-bold">易燃性 (Flammability)</p>
+                                                   <p className="font-medium">
+                                                       {selectedFraction.position > 4 ? '難以點燃' : selectedFraction.position > 2 ? '一般' : '極易燃'}
+                                                   </p>
+                                               </div>
+                                           </div>
+
+
+                                           <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                               <p className="text-sm text-slate-600 leading-relaxed">
+                                                   <span className="font-bold text-slate-800 block mb-1">詳細說明：</span>
+                                                   {selectedFraction.description}
+                                               </p>
+                                               <p className="text-sm text-slate-600 mt-2">
+                                                   <span className="font-bold text-slate-800 block mb-1">主要用途：</span>
+                                                   {selectedFraction.uses}
+                                               </p>
+                                           </div>
+                                       </div>
+                                   </div>
+                               ) : (
+                                   <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+                                       <Icons.FlaskConical size={48} className="mb-4 opacity-20" />
+                                       <p>請點擊分餾塔的任意層級</p>
+                                       <p className="text-sm">查看該餾分的詳細化學性質</p>
+                                   </div>
+                               )}
+                           </div>
+
+
+                           <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
+                               <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                                   <Icons.Info size={16} /> 核心概念 (Key Concepts)
+                               </h4>
+                               <ul className="text-sm text-blue-900 space-y-2 list-disc list-inside">
+                                   <li>分餾塔底部溫度<strong>最高</strong>，頂部溫度<strong>最低</strong>。</li>
+                                   <li><strong>分子越小</strong>，沸點越低，在塔的<strong>較高</strong>處冷凝。</li>
+                                   <li><strong>分子越大</strong>，分子間引力(范德華力)越強，沸點越高，在塔底流出。</li>
+                               </ul>
+                           </div>
+                       </div>
+                   </main>
+               </div>
+           );
+       };
+
+
+       // Render the app
+       const root = ReactDOM.createRoot(document.getElementById('root'));
+       root.render(<FractionDistillationApp />);
+   </script>
+</body>
+</html>
