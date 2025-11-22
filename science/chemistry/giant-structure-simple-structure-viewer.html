@@ -34,10 +34,54 @@
         const { useState, useEffect, useRef } = React;
 
         const Structures = [
-            { id: 'NaCl', name: '氯化鈉 (NaCl)', type: 'Giant Ionic', desc: '立方體晶格：每個 Na⁺ 被 6 個 Cl⁻ 包圍，反之亦然 (6:6 Coordination)。' },
-            { id: 'Diamond', name: '金剛石 (Diamond)', type: 'Giant Covalent', desc: '四面體網絡：每個碳原子與 4 個其他碳原子形成強共價鍵。' },
-            { id: 'Graphite', name: '石墨 (Graphite)', type: 'Giant Covalent', desc: '層狀結構：六邊形平面層，層與層之間只有微弱的范德華力。' },
-            { id: 'CO2', name: '乾冰 (Dry Ice)', type: 'Simple Molecular', desc: '簡單分子晶體：CO₂ 分子規則排列，分子間只有微弱引力。' }
+            { 
+                id: 'NaCl', 
+                name: '氯化鈉 (NaCl)', 
+                type: 'Giant Ionic', 
+                typeColor: 'bg-purple-600',
+                desc: '巨型離子結構：正負離子交替排列，形成立方體晶格。每個 Na⁺ 被 6 個 Cl⁻ 包圍 (6:6 配位)。',
+                observe: '注意紫色 (Na⁺) 和綠色 (Cl⁻) 球體的交替排列。'
+            },
+            { 
+                id: 'Diamond', 
+                name: '金剛石 (Diamond)', 
+                type: 'Giant Covalent', 
+                typeColor: 'bg-blue-600',
+                desc: '巨型共價結構：每個碳原子與 4 個其他碳原子形成強共價鍵，構成堅固的四面體網絡。',
+                observe: '旋轉觀察每個碳原子是否都連接了 4 個鄰居。'
+            },
+            { 
+                id: 'Graphite', 
+                name: '石墨 (Graphite)', 
+                type: 'Giant Covalent', 
+                typeColor: 'bg-blue-600',
+                desc: '層狀結構：碳原子形成六邊形平面層。層內有強共價鍵，層與層之間只有微弱的范德華力。',
+                observe: '嘗試從側面觀察層與層之間的空隙 (Gap)。'
+            },
+            { 
+                id: 'Copper', 
+                name: '銅 (Copper)', 
+                type: 'Giant Metallic', 
+                typeColor: 'bg-orange-600',
+                desc: '巨型金屬結構：金屬陽離子緊密堆積 (Face-Centered Cubic)，浸泡在離域電子海中。',
+                observe: '這是最緊密堆積的方式之一 (Close-packed structure)。'
+            },
+            { 
+                id: 'CO2', 
+                name: '乾冰 (Dry Ice)', 
+                type: 'Simple Molecular', 
+                typeColor: 'bg-green-600',
+                desc: '簡單分子晶體：CO₂ 分子規則排列。分子內部是強共價鍵，但分子之間只有微弱的范德華力。',
+                observe: '注意每個 O=C=O 分子是獨立存在的單元。'
+            },
+            { 
+                id: 'Ice', 
+                name: '冰 (Ice)', 
+                type: 'Simple Molecular', 
+                typeColor: 'bg-green-600',
+                desc: '簡單分子晶體：水分子通過氫鍵 (Hydrogen Bonds) 連接，形成開放式的六角形結構。',
+                observe: '留意結構中的空洞，這就是為什麼冰的密度比水低。'
+            }
         ];
 
         const ThreeScene = ({ structureId }) => {
@@ -49,13 +93,12 @@
                 // 1. Setup Scene
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x1e293b); // Slate-800
-                // Add some fog for depth
-                scene.fog = new THREE.Fog(0x1e293b, 10, 50);
+                scene.fog = new THREE.Fog(0x1e293b, 5, 40);
                 sceneRef.current = scene;
 
                 // 2. Setup Camera
                 const camera = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
-                camera.position.z = 15;
+                camera.position.z = 12;
 
                 // 3. Setup Renderer
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -64,15 +107,14 @@
                 mountRef.current.appendChild(renderer.domElement);
 
                 // 4. Add Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                 scene.add(ambientLight);
                 
                 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
                 dirLight.position.set(10, 20, 10);
-                dirLight.castShadow = true;
                 scene.add(dirLight);
                 
-                const pointLight = new THREE.PointLight(0x60a5fa, 0.5); // Blue tint
+                const pointLight = new THREE.PointLight(0x60a5fa, 0.5);
                 pointLight.position.set(-10, -10, 10);
                 scene.add(pointLight);
 
@@ -84,7 +126,6 @@
 
                 // 6. Build Structure Function
                 const buildStructure = (id) => {
-                    // Clear previous
                     while(scene.children.length > 0){ 
                         scene.remove(scene.children[0]); 
                     }
@@ -94,20 +135,24 @@
 
                     const group = new THREE.Group();
 
-                    // Materials
-                    const matNa = new THREE.MeshPhongMaterial({ color: 0xa855f7, shininess: 100 }); // Purple
-                    const matCl = new THREE.MeshPhongMaterial({ color: 0x22c55e, shininess: 100 }); // Green
-                    const matC = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 50 }); // Dark Grey
-                    const matO = new THREE.MeshPhongMaterial({ color: 0xef4444 }); // Red
-                    const matBond = new THREE.MeshPhongMaterial({ color: 0x94a3b8 }); // Bond Grey
+                    // Common Materials
+                    const matNa = new THREE.MeshPhongMaterial({ color: 0xa855f7, shininess: 100 });
+                    const matCl = new THREE.MeshPhongMaterial({ color: 0x22c55e, shininess: 100 });
+                    const matC = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 50 });
+                    const matO = new THREE.MeshPhongMaterial({ color: 0xef4444 });
+                    const matH = new THREE.MeshPhongMaterial({ color: 0xffffff });
+                    const matCu = new THREE.MeshPhongMaterial({ color: 0xb45309, shininess: 150, specular: 0xffaa00 });
+                    const matBond = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
+                    const matHBond = new THREE.MeshBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.5, dashSize: 0.2, gapSize: 0.1 });
 
                     // Geometries
                     const geoAtomBig = new THREE.SphereGeometry(0.8, 32, 32);
                     const geoAtomSmall = new THREE.SphereGeometry(0.5, 32, 32);
-                    const geoBond = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+                    const geoAtomTiny = new THREE.SphereGeometry(0.3, 32, 32);
+
+                    // --- Structure Builders ---
 
                     if (id === 'NaCl') {
-                        // 3x3x3 Lattice
                         const offset = 2;
                         for(let x=-1; x<=1; x++) {
                             for(let y=-1; y<=1; y++) {
@@ -117,7 +162,7 @@
                                     mesh.position.set(x*offset, y*offset, z*offset);
                                     group.add(mesh);
                                     
-                                    // Add bonds (visual connectors)
+                                    // Bonds
                                     if (x < 1) createBond(group, x*offset, y*offset, z*offset, (x+1)*offset, y*offset, z*offset, matBond);
                                     if (y < 1) createBond(group, x*offset, y*offset, z*offset, x*offset, (y+1)*offset, z*offset, matBond);
                                     if (z < 1) createBond(group, x*offset, y*offset, z*offset, x*offset, y*offset, (z+1)*offset, matBond);
@@ -125,67 +170,98 @@
                             }
                         }
                     } else if (id === 'Diamond') {
-                        // Tetrahedral structure
-                        // Simplified coordinates for a diamond unit cell fragment
                         const positions = [
                             [0,0,0], [1,1,1], [-1,-1,1], [-1,1,-1], [1,-1,-1],
                             [2,2,0], [2,0,2], [0,2,2],
                             [-2,-2,0], [-2,0,-2], [0,-2,-2]
                         ];
-                        
                         positions.forEach(pos => {
                             const mesh = new THREE.Mesh(geoAtomSmall, matC);
                             mesh.position.set(pos[0]*1.5, pos[1]*1.5, pos[2]*1.5);
                             group.add(mesh);
                         });
-                        
-                        // Connect close atoms
-                        for(let i=0; i<positions.length; i++) {
-                            for(let j=i+1; j<positions.length; j++) {
-                                const p1 = new THREE.Vector3(positions[i][0]*1.5, positions[i][1]*1.5, positions[i][2]*1.5);
-                                const p2 = new THREE.Vector3(positions[j][0]*1.5, positions[j][1]*1.5, positions[j][2]*1.5);
-                                if (p1.distanceTo(p2) < 3.0) { // Connect nearest neighbors
-                                    createBondVector(group, p1, p2, matBond);
-                                }
-                            }
-                        }
+                        connectNeighbors(group, positions, 1.5, 3.0, matBond);
+
                     } else if (id === 'Graphite') {
-                        // Layered structure
-                        const layers = [-2, 2];
+                        const layers = [-1.5, 1.5];
                         layers.forEach(y => {
-                            // Create hexagon rings
-                            for(let i=0; i<7; i++) { // 7 hexagons
+                            for(let i=0; i<7; i++) { 
                                 const cx = (i%3 - 1) * 2.5;
                                 const cz = (Math.floor(i/3) - 0.5) * 4;
-                                // Add atoms for a hex
                                 for(let k=0; k<6; k++) {
                                     const angle = (k/6) * Math.PI * 2;
                                     const ax = cx + Math.cos(angle) * 1.4;
                                     const az = cz + Math.sin(angle) * 1.4;
-                                    
                                     const mesh = new THREE.Mesh(geoAtomSmall, matC);
                                     mesh.position.set(ax, y, az);
                                     group.add(mesh);
+                                    
+                                    // Intra-layer bonds logic simplified: connect center to ring
+                                    // For visual purposes, we connect manually or use distance
                                 }
                             }
                         });
-                        // Note: Full bond logic is complex for procedural graphite, keeping simple atoms for demo
+                        // Visual bonds for hexagonal rings (Distance based connection for simplicity)
+                         for(let i=0; i<group.children.length; i++) {
+                            for(let j=i+1; j<group.children.length; j++) {
+                                const p1 = group.children[i].position;
+                                const p2 = group.children[j].position;
+                                // Only connect within same layer (y close) and close distance
+                                if (Math.abs(p1.y - p2.y) < 0.1 && p1.distanceTo(p2) < 1.6) {
+                                    createBondVector(group, p1, p2, matBond);
+                                }
+                                // Van der Waals (dashed lines)
+                                if (Math.abs(p1.y - p2.y) > 2.0 && p1.distanceTo(p2) < 3.2) {
+                                    // createBondVector(group, p1, p2, matHBond); // Optional
+                                }
+                            }
+                        }
+
+                    } else if (id === 'Copper') {
+                        // FCC Lattice
+                        const offset = 1.8;
+                        for(let x=-1; x<=1; x++) {
+                            for(let y=-1; y<=1; y++) {
+                                for(let z=-1; z<=1; z++) {
+                                    // Corner atoms
+                                    const mesh = new THREE.Mesh(geoAtomBig, matCu);
+                                    mesh.position.set(x*offset, y*offset, z*offset);
+                                    group.add(mesh);
+                                    
+                                    // Face centers (simplified block)
+                                    if (x===-1 && y===-1) { // Add some face atoms for demo
+                                        const face1 = new THREE.Mesh(geoAtomBig, matCu);
+                                        face1.position.set(x*offset + offset/2, y*offset + offset/2, z*offset);
+                                        group.add(face1);
+                                    }
+                                }
+                            }
+                        }
+                        // Fill in more for FCC look
+                         const s = 1.8;
+                         // Just a dense packing block
+                         for(let x=-1.5; x<=1.5; x+=1) {
+                             for(let y=-1.5; y<=1.5; y+=1) {
+                                 for(let z=-1.5; z<=1.5; z+=1) {
+                                     const mesh = new THREE.Mesh(geoAtomBig, matCu);
+                                     mesh.position.set(x*2, y*2, z*2);
+                                     group.add(mesh);
+                                 }
+                             }
+                         }
+
                     } else if (id === 'CO2') {
-                        // Discrete CO2 molecules
                         for(let x=-2; x<=2; x+=2) {
                             for(let y=-2; y<=2; y+=2) {
                                 for(let z=-2; z<=2; z+=2) {
-                                    // Carbon center
                                     const cMesh = new THREE.Mesh(geoAtomSmall, matC);
                                     cMesh.position.set(x*1.5, y*1.5, z*1.5);
                                     group.add(cMesh);
                                     
-                                    // Oxygen 1
                                     const o1 = new THREE.Mesh(geoAtomSmall, matO);
                                     o1.position.set(x*1.5 + 0.8, y*1.5 + 0.8, z*1.5);
                                     group.add(o1);
                                     
-                                    // Oxygen 2
                                     const o2 = new THREE.Mesh(geoAtomSmall, matO);
                                     o2.position.set(x*1.5 - 0.8, y*1.5 - 0.8, z*1.5);
                                     group.add(o2);
@@ -195,12 +271,47 @@
                                 }
                             }
                         }
+                    } else if (id === 'Ice') {
+                        // Hexagonal Ice structure (Simplified)
+                        // Water molecules arranged in hex rings
+                        const r = 2.5;
+                        for(let layer=0; layer<2; layer++) {
+                            const y = layer * 3;
+                            for(let i=0; i<6; i++) {
+                                const angle = (i/6) * Math.PI * 2;
+                                const x = Math.cos(angle) * r;
+                                const z = Math.sin(angle) * r;
+                                
+                                // Oxygen
+                                const o = new THREE.Mesh(geoAtomSmall, matO);
+                                o.position.set(x, y, z);
+                                group.add(o);
+                                
+                                // Hydrogens (approximate)
+                                const h1 = new THREE.Mesh(geoAtomTiny, matH);
+                                h1.position.set(x, y+0.5, z+0.5);
+                                group.add(h1);
+                                const h2 = new THREE.Mesh(geoAtomTiny, matH);
+                                h2.position.set(x, y-0.5, z+0.5);
+                                group.add(h2);
+                                
+                                createBondVector(group, o.position, h1.position, matBond);
+                                createBondVector(group, o.position, h2.position, matBond);
+                                
+                                // Hydrogen Bonds (visualize as dashed lines or just gap)
+                                if (layer > 0) {
+                                    // Connect to layer below
+                                    const belowPos = new THREE.Vector3(x, y-3, z);
+                                    createBondVector(group, o.position, belowPos, matHBond); 
+                                }
+                            }
+                        }
                     }
 
                     scene.add(group);
                 };
 
-                // Helper: Create Bond between coordinates
+                // Helper Functions
                 const createBond = (parent, x1, y1, z1, x2, y2, z2, mat) => {
                     const start = new THREE.Vector3(x1, y1, z1);
                     const end = new THREE.Vector3(x2, y2, z2);
@@ -210,23 +321,29 @@
                 const createBondVector = (parent, start, end, mat) => {
                     const direction = new THREE.Vector3().subVectors(end, start);
                     const length = direction.length();
-                    
-                    const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, length, 8), mat);
-                    
-                    // Position at midpoint
+                    const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, length, 8), mat);
                     bond.position.copy(start);
                     bond.position.lerp(end, 0.5);
-                    
-                    // Orient
                     bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-                    
                     parent.add(bond);
                 };
 
-                // Initial Build
+                const connectNeighbors = (group, positions, scale, distThreshold, mat) => {
+                    for(let i=0; i<positions.length; i++) {
+                        for(let j=i+1; j<positions.length; j++) {
+                            const p1 = new THREE.Vector3(positions[i][0]*scale, positions[i][1]*scale, positions[i][2]*scale);
+                            const p2 = new THREE.Vector3(positions[j][0]*scale, positions[j][1]*scale, positions[j][2]*scale);
+                            if (p1.distanceTo(p2) < distThreshold) {
+                                createBondVector(group, p1, p2, mat);
+                            }
+                        }
+                    }
+                };
+
+                // Init
                 buildStructure(structureId);
 
-                // 7. Animation Loop
+                // Animation Loop
                 let frameId;
                 const animate = () => {
                     frameId = requestAnimationFrame(animate);
@@ -235,7 +352,7 @@
                 };
                 animate();
 
-                // Handle Resize
+                // Resize
                 const handleResize = () => {
                     if (mountRef.current) {
                         camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
@@ -245,14 +362,12 @@
                 };
                 window.addEventListener('resize', handleResize);
 
-                // Cleanup
                 return () => {
                     cancelAnimationFrame(frameId);
                     window.removeEventListener('resize', handleResize);
                     if (mountRef.current) {
                         mountRef.current.removeChild(renderer.domElement);
                     }
-                    // Dispose resources
                     renderer.dispose();
                 };
             }, [structureId]);
@@ -264,25 +379,25 @@
             const [currentStruct, setCurrentStruct] = useState(Structures[0]);
 
             return (
-                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-7xl">
                     
                     {/* Header */}
-                    <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-slate-700 pb-4 gap-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-blue-400 flex items-center gap-2">
-                                <i data-lucide="box"></i> Advanced 3D Structure Viewer
+                            <h1 className="text-3xl font-bold text-blue-400 flex items-center gap-2">
+                                <i data-lucide="box" size={32}></i> Advanced 3D Structure Viewer
                             </h1>
                             <p className="text-slate-400 text-sm">Powered by Three.js WebGL</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 justify-center">
                             {Structures.map(s => (
                                 <button
                                     key={s.id}
                                     onClick={() => setCurrentStruct(s)}
-                                    className={`px-3 py-1 rounded border text-sm font-bold transition-colors
+                                    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all shadow-md
                                         ${currentStruct.id === s.id 
-                                            ? 'bg-blue-600 text-white border-blue-500' 
-                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}
+                                            ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-400/50 transform scale-105' 
+                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}
                                     `}
                                 >
                                     {s.name}
@@ -294,42 +409,41 @@
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
                         
                         {/* 3D Viewport */}
-                        <div className="w-full lg:w-2/3 h-[500px] lg:h-[600px] bg-slate-800 rounded-3xl border-4 border-slate-700 relative shadow-2xl overflow-hidden">
-                            {/* Pass key to force re-render on change */}
+                        <div className="w-full lg:w-3/4 h-[500px] lg:h-[650px] bg-slate-800 rounded-3xl border-4 border-slate-700 relative shadow-2xl overflow-hidden group">
                             <ThreeScene key={currentStruct.id} structureId={currentStruct.id} />
                             
-                            <div className="absolute bottom-4 left-4 text-xs text-slate-500 bg-black/50 px-2 py-1 rounded pointer-events-none">
-                                左鍵旋轉 (Rotate) | 右鍵平移 (Pan) | 滾輪縮放 (Zoom)
+                            {/* Hint Overlay */}
+                            <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-black/60 px-3 py-2 rounded-lg pointer-events-none border border-slate-600 backdrop-blur-sm">
+                                <span className="flex items-center gap-2"><i data-lucide="move"></i> 左鍵旋轉 (Rotate)</span>
+                                <span className="flex items-center gap-2 mt-1"><i data-lucide="hand"></i> 右鍵平移 (Pan)</span>
+                                <span className="flex items-center gap-2 mt-1"><i data-lucide="zoom-in"></i> 滾輪縮放 (Zoom)</span>
                             </div>
                         </div>
 
                         {/* Info Panel */}
-                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
-                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow">
-                                <div className="mb-4">
-                                    <div className="text-xs text-slate-400 uppercase font-bold mb-1">Structure Type</div>
-                                    <div className="inline-block bg-blue-900/50 text-blue-300 px-2 py-1 rounded text-xs border border-blue-800 mb-2">
+                        <div className="w-full lg:w-1/4 flex flex-col gap-6">
+                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow animate-in slide-in-from-right duration-500">
+                                <div className="mb-6 border-b border-slate-700 pb-4">
+                                    <div className="text-[10px] text-slate-400 uppercase font-bold mb-2 tracking-wider">Structure Type</div>
+                                    <div className={`inline-block ${currentStruct.typeColor || 'bg-blue-600'} text-white px-3 py-1 rounded-full text-sm font-bold mb-3 shadow-sm`}>
                                         {currentStruct.type}
                                     </div>
-                                    <div className="text-2xl font-bold text-white">{currentStruct.name}</div>
+                                    <div className="text-3xl font-bold text-white leading-tight">{currentStruct.name}</div>
                                 </div>
                                 
-                                <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
-                                    <div className="p-4 bg-slate-900/50 rounded-lg border-l-4 border-blue-500">
-                                        <strong className="text-white block mb-2">結構特點 (Characteristics)</strong>
+                                <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
+                                    <div className="p-4 bg-slate-900/50 rounded-xl border-l-4 border-blue-500 shadow-inner">
+                                        <strong className="text-white block mb-2 text-base">結構特點 (Characteristics)</strong>
                                         {currentStruct.desc}
                                     </div>
                                     
-                                    <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-600">
-                                        <strong className="text-white block mb-2 flex items-center gap-2">
-                                            <i data-lucide="help-circle" size={16} /> 觀察指南
+                                    <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-600">
+                                        <strong className="text-white block mb-2 flex items-center gap-2 text-base">
+                                            <i data-lucide="eye" size={18} className="text-yellow-400" /> 觀察指南
                                         </strong>
-                                        <ul className="list-disc list-inside space-y-1 text-xs">
-                                            {currentStruct.id === 'NaCl' && <li>觀察 Na⁺ (小) 和 Cl⁻ (大) 的交替排列。</li>}
-                                            {currentStruct.id === 'Diamond' && <li>旋轉觀察每個碳原子是否都連接了 4 個鄰居。</li>}
-                                            {currentStruct.id === 'Graphite' && <li>嘗試從側面觀察層與層之間的空隙 (Gap)。</li>}
-                                            {currentStruct.id === 'CO2' && <li>注意每個 CO₂ 分子是獨立存在的。</li>}
-                                        </ul>
+                                        <p className="text-xs opacity-90">
+                                            {currentStruct.observe}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
