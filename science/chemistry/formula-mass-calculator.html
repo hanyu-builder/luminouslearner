@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>式量計算機 (Formula Mass Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .key-btn {
+            transition: all 0.1s;
+        }
+        .key-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // DSE Standard Atomic Masses (Simplified List)
+        const AtomicMasses = {
+            H: 1.0, He: 4.0, Li: 6.9, Be: 9.0, B: 10.8, C: 12.0, N: 14.0, O: 16.0, F: 19.0, Ne: 20.2,
+            Na: 23.0, Mg: 24.3, Al: 27.0, Si: 28.1, P: 31.0, S: 32.1, Cl: 35.5, K: 39.1, Ar: 39.9, Ca: 40.1,
+            Fe: 55.8, Cu: 63.5, Zn: 65.4, Br: 79.9, Ag: 107.9, I: 126.9, Ba: 137.3, Pb: 207.2
+        };
+
+        const App = () => {
+            const [input, setInput] = useState('');
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState('');
+            const [breakdown, setBreakdown] = useState([]);
+
+            // Parser Logic
+            const calculateMass = () => {
+                setError('');
+                setResult(null);
+                setBreakdown([]);
+
+                if (!input.trim()) return;
+
+                // Basic parsing regex for Elements and Numbers
+                // This is a simplified parser. It handles:
+                // - Elements (Capital + optional Lowercase): [A-Z][a-z]?
+                // - Numbers: \d+
+                // - Parentheses: ()
+                // - Hydrates: . (dot)
+                
+                try {
+                    // Step 1: Tokenize
+                    // Treat '.' as a separator for hydrates
+                    const parts = input.split('.');
+                    let totalMass = 0;
+                    let fullBreakdown = [];
+
+                    // Process Main Formula
+                    const mainResult = parseFormula(parts[0]);
+                    totalMass += mainResult.mass;
+                    fullBreakdown = [...mainResult.details];
+
+                    // Process Hydrate (if any)
+                    if (parts.length > 1) {
+                        const hydratePart = parts[1];
+                        // Check if it starts with a number (e.g. 5H2O)
+                        const match = hydratePart.match(/^(\d*)(.*)/);
+                        const multiplier = match[1] ? parseInt(match[1]) : 1;
+                        const formula = match[2];
+                        
+                        if(formula) {
+                            const hydrateResult = parseFormula(formula);
+                            const hydrateMass = hydrateResult.mass * multiplier;
+                            totalMass += hydrateMass;
+                            
+                            fullBreakdown.push({
+                                type: 'hydrate',
+                                count: multiplier,
+                                formula: formula,
+                                mass: hydrateMass,
+                                subDetails: hydrateResult.details
+                            });
+                        }
+                    }
+
+                    setResult(totalMass.toFixed(1));
+                    setBreakdown(fullBreakdown);
+
+                } catch (e) {
+                    setError('無效的化學式。請檢查元素符號及括號。');
+                    console.error(e);
+                }
+            };
+
+            const parseFormula = (formulaStr) => {
+                // Helper to parse a clean formula string (no dots)
+                // Using a stack to handle parentheses
+                const stack = [{ atoms: {} }];
+                let i = 0;
+                const len = formulaStr.length;
+
+                while (i < len) {
+                    const char = formulaStr[i];
+
+                    if (char === '(') {
+                        stack.push({ atoms: {} });
+                        i++;
+                    } else if (char === ')') {
+                        if (stack.length === 1) throw new Error("Unmatched brackets");
+                        
+                        const group = stack.pop();
+                        i++;
+                        // Check for number after )
+                        let numStr = '';
+                        while (i < len && /\d/.test(formulaStr[i])) {
+                            numStr += formulaStr[i];
+                            i++;
+                        }
+                        const multiplier = numStr ? parseInt(numStr) : 1;
+                        
+                        // Merge into parent
+                        const parent = stack[stack.length - 1];
+                        for (const [el, count] of Object.entries(group.atoms)) {
+                            parent.atoms[el] = (parent.atoms[el] || 0) + count * multiplier;
+                        }
+
+                    } else if (/[A-Z]/.test(char)) {
+                        // Element
+                        let element = char;
+                        i++;
+                        if (i < len && /[a-z]/.test(formulaStr[i])) {
+                            element += formulaStr[i];
+                            i++;
+                        }
+
+                        // Check number
+                        let numStr = '';
+                        while (i < len && /\d/.test(formulaStr[i])) {
+                            numStr += formulaStr[i];
+                            i++;
+                        }
+                        const count = numStr ? parseInt(numStr) : 1;
+
+                        const current = stack[stack.length - 1];
+                        current.atoms[element] = (current.atoms[element] || 0) + count;
+                    } else {
+                        // Ignore spaces or invalid chars
+                        i++;
+                    }
+                }
+
+                if (stack.length > 1) throw new Error("Unmatched brackets");
+
+                // Calculate Mass
+                const finalAtoms = stack[0].atoms;
+                let mass = 0;
+                const details = [];
+
+                for (const [el, count] of Object.entries(finalAtoms)) {
+                    const atomicMass = AtomicMasses[el];
+                    if (!atomicMass) throw new Error(`Unknown element: ${el}`);
+                    mass += atomicMass * count;
+                    details.push({ element: el, count, atomicMass });
+                }
+
+                return { mass, details };
+            };
+
+            // Keypad Input
+            const addChar = (char) => {
+                setInput(prev => prev + char);
+            };
+            
+            const backspace = () => {
+                setInput(prev => prev.slice(0, -1));
+            };
+            
+            const clear = () => {
+                setInput('');
+                setResult(null);
+                setBreakdown([]);
+                setError('');
+            };
+
+            // Common Examples
+            const loadExample = (ex) => {
+                setInput(ex);
+            };
+
+            // Trigger calc on input change (debounce slightly or just use button)
+            useEffect(() => {
+                // Auto calc if valid format? Maybe better to use button to avoid flashing errors
+            }, [input]);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-4xl">
+                    
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="flask-conical"></i> 式量計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Formula Mass Calculator</p>
+                        </div>
+                        <button onClick={clear} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 清除
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Input & Keypad */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                            
+                            {/* Display Screen */}
+                            <div className="bg-white p-4 rounded-2xl shadow-inner border-2 border-indigo-100 flex flex-col min-h-[120px] relative">
+                                <span className="text-xs text-slate-400 font-bold uppercase mb-1">Chemical Formula</span>
+                                <input 
+                                    type="text" 
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    className="w-full text-3xl font-mono font-bold text-slate-800 bg-transparent outline-none placeholder-slate-300"
+                                    placeholder="e.g. H2SO4"
+                                />
+                                {error && (
+                                    <div className="absolute bottom-2 left-4 text-red-500 text-xs font-bold flex items-center gap-1">
+                                        <i data-lucide="alert-circle" size={12}/> {error}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Quick Examples */}
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                                {['H2O', 'CO2', 'H2SO4', 'CaCO3', 'CuSO4.5H2O'].map(ex => (
+                                    <button 
+                                        key={ex}
+                                        onClick={() => { loadExample(ex); setTimeout(calculateMass, 100); }} // Auto calc on load
+                                        className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-mono rounded hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 whitespace-nowrap"
+                                    >
+                                        {ex}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Keypad */}
+                            <div className="bg-slate-800 p-4 rounded-2xl shadow-lg">
+                                <div className="grid grid-cols-4 gap-2 mb-2">
+                                    {['1','2','3','H', '4','5','6','C', '7','8','9','O', '0','(',')','N'].map(k => (
+                                        <button 
+                                            key={k} 
+                                            onClick={() => addChar(k)}
+                                            className={`key-btn h-12 rounded-lg font-bold text-lg shadow-sm
+                                                ${/[A-Z]/.test(k) ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-slate-600 text-slate-200 hover:bg-slate-500'}
+                                            `}
+                                        >
+                                            {k}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    <button onClick={() => addChar('.')} className="key-btn h-12 bg-slate-600 text-white rounded-lg font-bold hover:bg-slate-500">.</button>
+                                    <button onClick={() => addChar('S')} className="key-btn h-12 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-500">S</button>
+                                    <button onClick={backspace} className="key-btn h-12 bg-red-500 text-white rounded-lg font-bold hover:bg-red-400 flex items-center justify-center"><i data-lucide="delete" size={20}/></button>
+                                    <button onClick={calculateMass} className="key-btn h-12 bg-green-500 text-white rounded-lg font-bold hover:bg-green-400 shadow-[0_4px_0_rgb(21,128,61)] transform translate-y-[-2px] active:translate-y-[0px] active:shadow-none">
+                                        =
+                                    </button>
+                                </div>
+                                <div className="mt-3 text-center text-xs text-slate-400">
+                                    提示：也可以使用鍵盤直接輸入元素符號 (如 Cl, Mg, Fe)
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Right: Result Breakdown */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                            
+                            {result ? (
+                                <div className="animate-in slide-in-from-bottom-4 fade-in duration-500">
+                                    
+                                    {/* Total Result Card */}
+                                    <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 mb-4 flex justify-between items-center">
+                                        <div>
+                                            <div className="text-xs text-indigo-400 font-bold uppercase mb-1">Formula Mass / Molar Mass</div>
+                                            <div className="text-4xl font-mono font-bold text-indigo-700">{result}</div>
+                                        </div>
+                                        <div className="bg-white p-3 rounded-full shadow-sm">
+                                            <i data-lucide="weight" size={32} className="text-indigo-500" />
+                                        </div>
+                                    </div>
+
+                                    {/* Calculation Steps */}
+                                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                                        <div className="bg-slate-50 p-3 border-b border-slate-200 font-bold text-slate-600 text-sm flex items-center gap-2">
+                                            <i data-lucide="list" size={16} /> 計算步驟 (Steps)
+                                        </div>
+                                        <div className="p-4 space-y-3">
+                                            
+                                            {/* Render Atom Breakdown */}
+                                            {breakdown.map((item, idx) => (
+                                                item.type === 'hydrate' ? (
+                                                    <div key={`hyd-${idx}`} className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="font-bold text-blue-700">● {item.count} {item.formula}</span>
+                                                            <span className="font-mono font-bold text-blue-600">
+                                                                + {item.mass.toFixed(1)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-blue-400 pl-4 border-l-2 border-blue-200">
+                                                            {item.count} × ({item.subDetails.map((sub, sIdx) => (
+                                                                <span key={sIdx}>
+                                                                    {sIdx > 0 && ' + '}
+                                                                    {sub.atomicMass}×{sub.count}
+                                                                </span>
+                                                            ))})
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div key={`atom-${idx}`} className="flex justify-between items-center border-b border-slate-100 pb-2 last:border-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600 text-sm">
+                                                                {item.element}
+                                                            </div>
+                                                            <div className="text-sm">
+                                                                <span className="text-slate-400 block text-xs">Atomic Mass: {item.atomicMass}</span>
+                                                                <span className="font-bold text-slate-700">{item.count} atom{item.count > 1 ? 's' : ''}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="font-mono text-slate-600">
+                                                            {item.atomicMass} × {item.count} = <span className="font-bold text-slate-800">{(item.atomicMass * item.count).toFixed(1)}</span>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            ))}
+
+                                            <div className="pt-2 mt-2 border-t-2 border-indigo-100 flex justify-between items-center text-indigo-600">
+                                                <span className="font-bold text-sm">Total</span>
+                                                <span className="font-mono font-bold text-xl">{result}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="flex-grow flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 p-8">
+                                    <i data-lucide="calculator" size={48} className="mb-4 opacity-20" />
+                                    <p className="text-sm text-center">
+                                        請在左側輸入化學式<br/>
+                                        (支援鍵盤輸入)
+                                    </p>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic II
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
