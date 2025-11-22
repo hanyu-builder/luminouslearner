@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相對原子質量計算機 (Relative Atomic Mass Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        .isotope-row {
+            transition: all 0.3s ease;
+        }
+        .isotope-row:hover {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Preset Data for Common Elements
+        const Presets = [
+            { 
+                name: '氯 (Chlorine)', 
+                symbol: 'Cl', 
+                isotopes: [
+                    { mass: 35, abundance: 75.78 },
+                    { mass: 37, abundance: 24.22 }
+                ]
+            },
+            { 
+                name: '銅 (Copper)', 
+                symbol: 'Cu', 
+                isotopes: [
+                    { mass: 63, abundance: 69.17 },
+                    { mass: 65, abundance: 30.83 }
+                ]
+            },
+            { 
+                name: '溴 (Bromine)', 
+                symbol: 'Br', 
+                isotopes: [
+                    { mass: 79, abundance: 50.69 },
+                    { mass: 81, abundance: 49.31 }
+                ]
+            },
+             {
+                name: '硼 (Boron)',
+                symbol: 'B',
+                isotopes: [
+                    { mass: 10, abundance: 19.9 },
+                    { mass: 11, abundance: 80.1 }
+                ]
+            }
+        ];
+
+        const App = () => {
+            const [isotopes, setIsotopes] = useState([
+                { id: 1, mass: '', abundance: '' },
+                { id: 2, mass: '', abundance: '' }
+            ]);
+            const [result, setResult] = useState(null);
+            const [totalAbundance, setTotalAbundance] = useState(0);
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Update total abundance whenever inputs change
+            useEffect(() => {
+                const total = isotopes.reduce((sum, iso) => sum + (parseFloat(iso.abundance) || 0), 0);
+                setTotalAbundance(parseFloat(total.toFixed(2)));
+                calculateRAM();
+            }, [isotopes]);
+
+            // Chart rendering
+            useEffect(() => {
+                if (canvasRef.current) {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+
+                    const validIsotopes = isotopes.filter(iso => iso.mass && iso.abundance);
+                    
+                    if (validIsotopes.length > 0) {
+                        const ctx = canvasRef.current.getContext('2d');
+                        chartInstance.current = new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: validIsotopes.map(iso => `Mass ${iso.mass}`),
+                                datasets: [{
+                                    data: validIsotopes.map(iso => iso.abundance),
+                                    backgroundColor: [
+                                        '#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'
+                                    ],
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'bottom' },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                return `${context.label}: ${context.raw}%`;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+                };
+            }, [isotopes]);
+
+            const handleInputChange = (id, field, value) => {
+                setIsotopes(prev => prev.map(iso => 
+                    iso.id === id ? { ...iso, [field]: value } : iso
+                ));
+            };
+
+            const addIsotope = () => {
+                const newId = isotopes.length > 0 ? Math.max(...isotopes.map(i => i.id)) + 1 : 1;
+                setIsotopes([...isotopes, { id: newId, mass: '', abundance: '' }]);
+            };
+
+            const removeIsotope = (id) => {
+                if (isotopes.length > 1) {
+                    setIsotopes(isotopes.filter(iso => iso.id !== id));
+                }
+            };
+
+            const loadPreset = (preset) => {
+                const newIsotopes = preset.isotopes.map((iso, idx) => ({
+                    id: idx + 1,
+                    mass: iso.mass,
+                    abundance: iso.abundance
+                }));
+                setIsotopes(newIsotopes);
+            };
+
+            const calculateRAM = () => {
+                let weightedSum = 0;
+                let validTotalAbundance = 0;
+                let allValid = true;
+
+                const validIsotopes = isotopes.filter(iso => {
+                    const m = parseFloat(iso.mass);
+                    const a = parseFloat(iso.abundance);
+                    if (!isNaN(m) && !isNaN(a)) {
+                        weightedSum += m * a;
+                        validTotalAbundance += a;
+                        return true;
+                    }
+                    return false;
+                });
+
+                if (validIsotopes.length > 0 && validTotalAbundance > 0) {
+                    // Standardize to 100% if total is not 100 (e.g. relative ratio given)
+                    // But usually formula is sum / 100 if abundance is %.
+                    // If total != 100, we divide by totalAbundance.
+                    
+                    const ram = weightedSum / validTotalAbundance;
+                    setResult(ram.toFixed(3));
+                } else {
+                    setResult(null);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="calculator"></i> 相對原子質量計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Relative Atomic Mass (R.A.M.) Calculator</p>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            <span className="text-sm font-bold text-slate-500 self-center mr-2 hidden md:block">預設例子:</span>
+                            {Presets.map(p => (
+                                <button
+                                    key={p.symbol}
+                                    onClick={() => loadPreset(p)}
+                                    className="px-3 py-1 rounded border border-slate-200 text-sm font-bold text-slate-600 hover:bg-blue-50 hover:border-blue-300 transition-all"
+                                >
+                                    {p.symbol}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Input Area */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-4">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="list-plus"></i> 輸入同位素數據
+                                </h3>
+
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-400 uppercase px-2">
+                                        <div className="col-span-5">質量數 (Mass Number)</div>
+                                        <div className="col-span-5">相對豐度 (Abundance %)</div>
+                                        <div className="col-span-2"></div>
+                                    </div>
+                                    
+                                    {isotopes.map((iso, index) => (
+                                        <div key={iso.id} className="grid grid-cols-12 gap-2 items-center isotope-row p-2 rounded-lg">
+                                            <div className="col-span-5">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 35"
+                                                    value={iso.mass}
+                                                    onChange={(e) => handleInputChange(iso.id, 'mass', e.target.value)}
+                                                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-400 outline-none font-mono"
+                                                />
+                                            </div>
+                                            <div className="col-span-5">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 75"
+                                                    value={iso.abundance}
+                                                    onChange={(e) => handleInputChange(iso.id, 'abundance', e.target.value)}
+                                                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-400 outline-none font-mono"
+                                                />
+                                            </div>
+                                            <div className="col-span-2 flex justify-center">
+                                                {isotopes.length > 1 && (
+                                                    <button 
+                                                        onClick={() => removeIsotope(iso.id)}
+                                                        className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
+                                                    >
+                                                        <i data-lucide="trash-2" size={18} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button 
+                                    onClick={addIsotope}
+                                    className="mt-4 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg hover:border-blue-400 hover:text-blue-500 transition-all font-bold text-sm flex items-center justify-center gap-2"
+                                >
+                                    <i data-lucide="plus" size={16} /> 增加同位素 (Add Isotope)
+                                </button>
+
+                                {/* Total Abundance Check */}
+                                <div className={`mt-4 p-3 rounded-lg text-sm font-bold flex justify-between items-center
+                                    ${Math.abs(totalAbundance - 100) < 0.01 ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}
+                                `}>
+                                    <span>總豐度 (Total Abundance):</span>
+                                    <span>{totalAbundance}%</span>
+                                </div>
+                                {Math.abs(totalAbundance - 100) >= 0.01 && totalAbundance > 0 && (
+                                    <p className="text-xs text-yellow-600 mt-1 px-1">
+                                        注意：總和不是 100%。計算結果將會基於當前總和進行加權平均。
+                                    </p>
+                                )}
+                            </div>
+
+                        </div>
+
+                        {/* Right: Result & Visualization */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                            
+                            {/* Calculation Result */}
+                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg text-white">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">計算結果 (Result)</h3>
+                                <div className="flex items-end gap-3">
+                                    <span className="text-4xl font-mono font-bold text-blue-400">
+                                        {result !== null ? result : '--'}
+                                    </span>
+                                    <span className="text-sm text-slate-400 mb-1">Relative Atomic Mass</span>
+                                </div>
+
+                                {/* Formula Display */}
+                                {result !== null && (
+                                    <div className="mt-4 pt-4 border-t border-slate-700 text-sm font-mono text-slate-300 overflow-x-auto">
+                                        <p className="mb-2 font-sans font-bold text-white">計算過程：</p>
+                                        <div className="whitespace-nowrap">
+                                            R.A.M. = (
+                                            {isotopes.filter(i => i.mass && i.abundance).map((iso, idx) => (
+                                                <span key={iso.id}>
+                                                    {idx > 0 ? ' + ' : ''}
+                                                    ({iso.mass} × {iso.abundance})
+                                                </span>
+                                            ))}
+                                            ) ÷ {totalAbundance}
+                                        </div>
+                                        <div className="mt-2 text-green-400 font-bold">
+                                            = {result}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Chart */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 flex-grow min-h-[300px] flex flex-col">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="pie-chart"></i> 豐度分佈圖
+                                </h3>
+                                <div className="relative flex-grow w-full h-full">
+                                    <canvas ref={canvasRef}></canvas>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic II
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
