@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水分測試模擬器 (Test for Water Simulator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        /* 滴管動畫 */
+        @keyframes drop-fall {
+            0% { top: -20px; opacity: 1; transform: scale(1); }
+            90% { top: 40px; opacity: 1; transform: scale(0.8); }
+            100% { top: 45px; opacity: 0; transform: scale(1.5); }
+        }
+        .anim-drop {
+            animation: drop-fall 1s ease-in forwards;
+        }
+
+        /* 擴散動畫 (試紙變色) */
+        @keyframes spread-pink {
+            0% { width: 0; height: 0; opacity: 0.8; }
+            100% { width: 60px; height: 60px; opacity: 0.9; }
+        }
+        .spot-pink {
+            background: radial-gradient(circle, #f472b6 0%, #fbcfe8 70%, transparent 100%);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: spread-pink 1.5s ease-out forwards;
+        }
+
+        /* 擴散動畫 (粉末變色) */
+        @keyframes spread-blue {
+            0% { transform: scale(0); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .spot-blue {
+            background: radial-gradient(circle, #3b82f6 0%, #93c5fd 80%, transparent 100%);
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: spread-blue 1.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Reagent Data
+        const Reagents = {
+            cobalt: {
+                id: 'cobalt',
+                name: '氯化鈷試紙 (Cobalt Chloride Paper)',
+                desc: '無水時呈藍色，遇水變粉紅色。',
+                baseColor: 'bg-blue-500', // Dry color
+                wetColor: 'bg-pink-400', // Wet color (with water)
+                type: 'paper'
+            },
+            copper: {
+                id: 'copper',
+                name: '無水硫酸銅粉末 (Anhydrous Copper Sulphate)',
+                desc: '無水時呈白色，遇水變藍色。',
+                baseColor: 'bg-slate-100', // Dry color (White/Light Gray)
+                wetColor: 'bg-blue-600', // Wet color (with water)
+                type: 'powder'
+            }
+        };
+
+        // Sample Data
+        const Samples = [
+            { id: 'water', name: '蒸餾水 (Distilled Water)', hasWater: true, color: 'bg-blue-100/50' },
+            { id: 'tap', name: '自來水 (Tap Water)', hasWater: true, color: 'bg-blue-100/50' },
+            { id: 'oil', name: '煮食油 (Cooking Oil)', hasWater: false, color: 'bg-yellow-200/50' },
+            { id: 'ethanol', name: '純乙醇 (Pure Ethanol)', hasWater: false, color: 'bg-slate-100/50' }
+        ];
+
+        const App = () => {
+            const [selectedReagent, setSelectedReagent] = useState(Reagents.cobalt);
+            const [selectedSample, setSelectedSample] = useState(null);
+            const [isDropping, setIsDropping] = useState(false);
+            const [testResult, setTestResult] = useState(null); // 'positive' | 'negative' | null
+            const [history, setHistory] = useState([]);
+
+            const handleTest = () => {
+                if (!selectedSample || isDropping) return;
+                
+                setIsDropping(true);
+                setTestResult(null);
+
+                // Animation delay
+                setTimeout(() => {
+                    if (selectedSample.hasWater) {
+                        setTestResult('positive');
+                    } else {
+                        setTestResult('negative');
+                    }
+                    setIsDropping(false);
+                    
+                    // Add to history
+                    setHistory(prev => [{
+                        reagent: selectedReagent.name,
+                        sample: selectedSample.name,
+                        result: selectedSample.hasWater ? '有水 (Positive)' : '無水 (Negative)'
+                    }, ...prev].slice(0, 5));
+
+                }, 1000);
+            };
+
+            const resetTest = () => {
+                setTestResult(null);
+                setIsDropping(false);
+            };
+
+            const handleReagentChange = (reagent) => {
+                setSelectedReagent(reagent);
+                resetTest();
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="droplets" className="text-blue-500"></i> 水分測試模擬器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Test for Water Simulation</p>
+                        </div>
+                        <button onClick={() => {setHistory([]); resetTest();}} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg flex items-center gap-2 transition-colors text-sm font-bold">
+                            <i data-lucide="rotate-ccw" size={16}></i> 清除記錄
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-6 flex-grow">
+                        
+                        {/* Left: Experiment Area */}
+                        <div className="lg:w-2/3 bg-white rounded-2xl border border-slate-200 shadow-lg p-6 flex flex-col relative min-h-[500px]">
+                            
+                            {/* Step 1: Select Reagent */}
+                            <div className="mb-6">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                                    <span className="bg-slate-200 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
+                                    選擇測試試劑 (Reagent)
+                                </h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {Object.values(Reagents).map((r) => (
+                                        <button
+                                            key={r.id}
+                                            onClick={() => handleReagentChange(r)}
+                                            className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 text-center
+                                                ${selectedReagent.id === r.id ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 hover:border-blue-300'}
+                                            `}
+                                        >
+                                            <div className={`w-12 h-12 rounded-full shadow-inner border ${r.baseColor}`}></div>
+                                            <span className="font-bold text-sm">{r.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="mt-2 text-xs text-slate-500 bg-slate-50 p-2 rounded text-center">
+                                    {selectedReagent.desc}
+                                </div>
+                            </div>
+
+                            {/* Step 2: Experiment Stage */}
+                            <div className="flex-grow bg-slate-100 rounded-xl border border-slate-300 relative flex items-center justify-center overflow-hidden group">
+                                {/* Lab Bench Texture */}
+                                <div className="absolute inset-0 opacity-10 pointer-events-none" 
+                                     style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+
+                                {/* Reagent Visual */}
+                                <div className="relative z-10">
+                                    {selectedReagent.type === 'paper' ? (
+                                        // Cobalt Chloride Paper
+                                        <div className={`w-40 h-16 ${selectedReagent.baseColor} shadow-lg transform -rotate-2 transition-colors duration-500 relative overflow-hidden`}>
+                                            {/* Texture */}
+                                            <div className="absolute inset-0 opacity-20 bg-white mix-blend-overlay"></div>
+                                            {/* Water Spot */}
+                                            {testResult === 'positive' && <div className="spot-pink"></div>}
+                                            {testResult === 'negative' && <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-slate-900/20 rounded-full blur-md fade-in"></div>}
+                                        </div>
+                                    ) : (
+                                        // Copper Sulphate Powder (in a watch glass)
+                                        <div className="w-48 h-48 relative flex items-center justify-center">
+                                            {/* Watch Glass */}
+                                            <div className="absolute bottom-0 w-full h-12 bg-white/40 border-b-4 border-white/60 rounded-[50%] shadow-xl backdrop-blur-sm z-20"></div>
+                                            
+                                            {/* Powder Pile */}
+                                            <div className={`absolute bottom-4 w-32 h-12 ${selectedReagent.baseColor} rounded-[50%] z-10 transform scale-y-75 shadow-inner transition-all duration-700`}>
+                                                {testResult === 'positive' && <div className="spot-blue"></div>}
+                                                {testResult === 'negative' && <div className="absolute inset-0 bg-yellow-900/10 rounded-[50%]"></div>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Dropper Animation */}
+                                {isDropping && (
+                                    <div className="absolute top-10 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
+                                        {/* Dropper Body */}
+                                        <div className="w-4 h-24 bg-slate-200 border border-slate-400 rounded-b-full relative shadow-xl">
+                                            <div className={`absolute bottom-0 w-full h-8 ${selectedSample?.color} rounded-b-full`}></div>
+                                        </div>
+                                        {/* Drop */}
+                                        <div className={`w-3 h-3 ${selectedSample?.color} rounded-full absolute top-24 anim-drop border border-slate-300`}></div>
+                                    </div>
+                                )}
+
+                                {/* Controls Overlay */}
+                                <div className="absolute bottom-4 left-0 w-full flex justify-center gap-2 px-4">
+                                    {Samples.map((sample) => (
+                                        <button
+                                            key={sample.id}
+                                            onClick={() => { setSelectedSample(sample); resetTest(); }}
+                                            disabled={isDropping}
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold shadow-sm transition-all border
+                                                ${selectedSample?.id === sample.id 
+                                                    ? 'bg-slate-800 text-white border-slate-900 transform -translate-y-1' 
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}
+                                            `}
+                                        >
+                                            {sample.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Action Button */}
+                            <div className="mt-6 flex justify-center">
+                                <button 
+                                    onClick={handleTest}
+                                    disabled={!selectedSample || isDropping || testResult !== null}
+                                    className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-full shadow-lg transition-all flex items-center gap-2 text-lg"
+                                >
+                                    {isDropping ? '測試中...' : testResult ? '測試完成 (請重選試劑或樣本)' : '💧 滴加液體 (Test)'}
+                                </button>
+                            </div>
+
+                        </div>
+
+                        {/* Right Column: Theory & History */}
+                        <div className="lg:w-1/3 flex flex-col gap-4">
+                            
+                            {/* Result Card */}
+                            <div className={`p-5 rounded-xl border shadow-sm transition-all duration-500
+                                ${testResult === 'positive' ? 'bg-green-50 border-green-200' : 
+                                  testResult === 'negative' ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-100'}
+                            `}>
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-2">
+                                    <i data-lucide="microscope" className="text-blue-500" /> 觀察結果
+                                </h3>
+                                {testResult === 'positive' ? (
+                                    <div>
+                                        <div className="text-2xl font-bold text-green-700 mb-2">含有水分！ (Positive)</div>
+                                        <p className="text-sm text-slate-600">
+                                            {selectedReagent.id === 'cobalt' 
+                                                ? '氯化鈷試紙由藍色轉變為粉紅色。' 
+                                                : '無水硫酸銅粉末由白色轉變為藍色。'}
+                                        </p>
+                                        <div className="mt-3 p-2 bg-white rounded border border-green-100 font-mono text-xs text-slate-500">
+                                            {selectedReagent.id === 'cobalt' 
+                                                ? <span>CoCl₂ (s) + 6H₂O (l) &rarr; CoCl₂·6H₂O (s)<br/><span className="text-blue-500">Blue</span> &rarr; <span className="text-pink-500">Pink</span></span>
+                                                : <span>CuSO₄ (s) + 5H₂O (l) &rarr; CuSO₄·5H₂O (s)<br/><span className="text-slate-400">White</span> &rarr; <span className="text-blue-600">Blue</span></span>
+                                            }
+                                        </div>
+                                    </div>
+                                ) : testResult === 'negative' ? (
+                                    <div>
+                                        <div className="text-xl font-bold text-slate-500 mb-2">沒有明顯顏色變化 (Negative)</div>
+                                        <p className="text-sm text-slate-600">
+                                            試劑只被液體沾濕，但沒有發生化學顏色變化。證明樣本中不含水（或水量極少）。
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-slate-400">請選擇樣本並點擊測試按鈕。</p>
+                                )}
+                            </div>
+
+                            {/* History */}
+                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex-grow">
+                                <h3 className="font-bold text-slate-700 flex items-center gap-2 mb-4">
+                                    <i data-lucide="clipboard-list" className="text-blue-500" /> 實驗記錄
+                                </h3>
+                                {history.length === 0 ? (
+                                    <div className="text-center text-slate-400 text-sm py-8">暫無記錄</div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {history.map((item, idx) => (
+                                            <div key={idx} className="text-sm border-b border-slate-100 pb-2 last:border-0">
+                                                <div className="flex justify-between font-bold text-slate-700">
+                                                    <span>{item.sample}</span>
+                                                    <span className={item.result.includes('有水') ? 'text-green-600' : 'text-slate-400'}>{item.result}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-400 mt-1">試劑: {item.reagent}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-6">
+                        Luminous Learner Science Tools
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
