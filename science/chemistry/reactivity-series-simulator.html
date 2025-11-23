@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金屬反應性順序模擬器 (Reactivity Series Simulator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        .metal-block {
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+        .metal-block:active { cursor: grabbing; transform: scale(1.05); }
+
+        /* Bubble animation for reaction rate */
+        @keyframes bubbles-fast {
+            0% { opacity: 0; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-30px); }
+            100% { opacity: 0; transform: translateY(-60px); }
+        }
+        @keyframes bubbles-slow {
+            0% { opacity: 0; transform: translateY(0); }
+            50% { opacity: 0.8; transform: translateY(-15px); }
+            100% { opacity: 0; transform: translateY(-30px); }
+        }
+        .bubble-anim {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            animation-iteration-count: infinite;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const Metals = [
+            { symbol: 'Na', name: '鈉', reactivity: 5, color: 'bg-red-400', mass: 23.0 },
+            { symbol: 'Mg', name: '鎂', reactivity: 4, color: 'bg-gray-300', mass: 24.3 },
+            { symbol: 'Zn', name: '鋅', reactivity: 3, color: 'bg-slate-400', mass: 65.4 },
+            { symbol: 'Fe', name: '鐵', reactivity: 2, color: 'bg-amber-700', mass: 55.8 },
+            { symbol: 'Cu', name: '銅', reactivity: 1, color: 'bg-orange-500', mass: 63.5 },
+            { symbol: 'Ag', name: '銀', reactivity: 0, color: 'bg-slate-300', mass: 107.9 }
+        ];
+
+        const Reagents = {
+            COLD_WATER: { name: '冷水 (Cold Water)', color: 'bg-blue-200', req: 5 },
+            DILUTE_ACID: { name: '稀鹽酸 (Dilute HCl)', color: 'bg-yellow-100', req: 3 },
+            COPPER_SULFATE: { name: '硫酸銅 (CuSO₄ aq)', color: 'bg-sky-400', req: 1 },
+            SILVER_NITRATE: { name: '硝酸銀 (AgNO₃ aq)', color: 'bg-slate-100', req: 0 }
+        };
+
+        // UI state for current simulation
+        const InitialReactionState = {
+            COLD_WATER: null, DILUTE_ACID: null, COPPER_SULFATE: null, SILVER_NITRATE: null
+        };
+        
+        const App = () => {
+            const [metalState, setMetalState] = useState(Metals.map(m => ({...m, tests: []})));
+            const [currentDragMetal, setCurrentDragMetal] = useState(null);
+            const [reactionResults, setReactionResults] = useState(InitialReactionState);
+            const [draggedElement, setDraggedElement] = useState(null);
+            const [activeSort, setActiveSort] = useState(false);
+            const [sortOrder, setSortOrder] = useState(Metals.map(m => m.symbol));
+
+            // Logic to get the reaction result message
+            const getReactionMessage = (metal, reagent) => {
+                const r = metal.reactivity;
+                const req = Reagents[reagent].req;
+                
+                if (r >= req) {
+                    if (reagent === 'COLD_WATER') {
+                        if (r === 5) return { text: '劇烈反應，產生火焰 (Reacts violently, produces flame)', rate: 'Fast' };
+                        if (r === 4) return { text: '緩慢反應，有氣泡 (Slow reaction, few bubbles)', rate: 'Slow' };
+                        return { text: '無可見反應', rate: 'None' };
+                    }
+                    if (reagent === 'DILUTE_ACID') {
+                        if (r >= 4) return { text: '快速反應，大量氣泡 (Reacts rapidly, fast bubbling)', rate: 'Fast' };
+                        if (r === 3) return { text: '中等反應 (Moderate reaction)', rate: 'Medium' };
+                        return { text: '緩慢反應 (Slow reaction)', rate: 'Slow' };
+                    }
+                    if (reagent === 'COPPER_SULFATE') {
+                        return { text: '發生置換反應，表面有銅沉積 (Displaced, Copper deposited)', rate: 'Medium', color: 'bg-orange-500' };
+                    }
+                    if (reagent === 'SILVER_NITRATE') {
+                         return { text: '發生置換反應，表面有銀沉積 (Displaced, Silver deposited)', rate: 'Fast', color: 'bg-slate-300' };
+                    }
+                }
+                
+                return { text: '無可見反應', rate: 'None' };
+            };
+            
+            // Handle Dropping Metal into Reagent
+            const handleDrop = (metal, reagentId) => {
+                const metalData = Metals.find(m => m.symbol === metal.symbol);
+                const result = getReactionMessage(metalData, reagentId);
+                
+                setReactionResults(prev => ({...prev, [reagentId]: { metal: metal.symbol, result }}));
+            };
+
+            // Drag Handlers for Malleability (Top bar)
+            const handleDragStart = (e, metal) => {
+                e.dataTransfer.setData("metalSymbol", metal.symbol);
+                setDraggedElement(metal.symbol);
+            };
+
+            // Render Reagent Beaker
+            const renderBeaker = (reagentId, reagentData) => {
+                const currentResult = reactionResults[reagentId];
+                
+                // Determine beaker color and reaction content
+                let bgColor = reagentData.color;
+                let reactionInfo = currentResult ? currentResult.result : { text: '拖曳金屬到此處', rate: 'None' };
+                let messageStyle = reactionInfo.rate === 'None' ? 'text-slate-500' : (reactionInfo.rate === 'Fast' ? 'text-red-600' : 'text-green-600');
+                
+                // Dynamic styling for displacement results
+                let depositColor = reactionInfo.color;
+                
+                return (
+                    <div 
+                        key={reagentId}
+                        className="w-1/4 h-64 bg-white rounded-xl shadow-lg border border-slate-200 p-4 flex flex-col items-center relative"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => handleDrop(Metals.find(m => m.symbol === draggedElement), reagentId)}
+                        onDragEnter={(e) => e.preventDefault()}
+                    >
+                        {/* Beaker Glass */}
+                        <div className="w-20 h-32 border-4 border-slate-300 rounded-b-xl relative overflow-hidden flex flex-col justify-end">
+                            {/* Liquid */}
+                            <div className={`w-full h-full ${bgColor} opacity-60`}></div>
+                            
+                            {/* Deposit / Result Layer */}
+                            {currentResult && depositColor && (
+                                <div className={`absolute bottom-0 w-full h-8 ${depositColor} opacity-70`}></div>
+                            )}
+
+                            {/* Bubbles */}
+                            {currentResult && reactionInfo.rate !== 'None' && (
+                                <div className="absolute inset-0">
+                                    {[...Array(10)].map((_, i) => (
+                                        <div key={i} className="bubble-anim" 
+                                             style={{
+                                                width: Math.random() * 8 + 4, height: Math.random() * 8 + 4,
+                                                left: Math.random() * 80 + 10 + '%',
+                                                animation: `${reactionInfo.rate === 'Fast' ? 'bubbles-fast' : 'bubbles-slow'} ${Math.random() * 1.5 + 1}s linear infinite`,
+                                                animationDelay: `${Math.random() * 1}s`
+                                             }}></div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <span className="mt-2 text-xs font-bold text-slate-600">{reagentData.name}</span>
+                        
+                        {/* Result Message */}
+                        <div className={`mt-2 p-2 rounded-lg text-xs w-full text-center font-bold ${messageStyle}`}>
+                            {reactionInfo.text.split('(')[0]}
+                        </div>
+                    </div>
+                );
+            };
+
+            // Sortable List Logic
+            const handleSortEnd = () => {
+                const isCorrect = Metals.every((m, i) => m.symbol === sortOrder[i]);
+                if (isCorrect) {
+                     alert("恭喜！反應性順序完全正確！");
+                     setActiveSort(false);
+                } else {
+                     alert("排序錯誤，請再試試！");
+                }
+            };
+            
+            const handleSortDragStart = (e, index) => {
+                e.dataTransfer.setData("startIndex", index);
+            };
+
+            const handleSortDrop = (e, endIndex) => {
+                e.preventDefault();
+                const startIndex = parseInt(e.dataTransfer.getData("startIndex"));
+                if (startIndex !== endIndex) {
+                    const newOrder = [...sortOrder];
+                    const [movedItem] = newOrder.splice(startIndex, 1);
+                    newOrder.splice(endIndex, 0, movedItem);
+                    setSortOrder(newOrder);
+                }
+            };
+            
+            // Generate List items for sorting (simplified)
+            const sortList = sortOrder.map((symbol, index) => {
+                const metal = Metals.find(m => m.symbol === symbol);
+                
+                return (
+                    <div 
+                        key={symbol}
+                        draggable 
+                        onDragStart={(e) => handleSortDragStart(e, index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleSortDrop(e, index)}
+                        className={`p-3 bg-white border border-slate-200 rounded-lg shadow-sm flex justify-between items-center text-sm font-bold metal-block ${metal.color} text-slate-900`}
+                    >
+                        <span className="font-mono text-xl w-8 text-center">{symbol}</span>
+                        <span className="text-sm">{metal.name}</span>
+                        <span className="text-xs text-slate-500">{index + 1}</span>
+                    </div>
+                )
+            });
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-orange-500 flex items-center gap-2">
+                                <i data-lucide="zap"></i> 金屬反應性順序模擬器
+                            </h1>
+                            <p className="text-slate-500 text-sm">Reactivity Series Lab (Displacement & Reaction Rate)</p>
+                        </div>
+                        <button onClick={() => setReactionResults(InitialReactionState)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 重置實驗
+                        </button>
+                    </div>
+
+                    {/* Top: Metal Selection & Experiment */}
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 mb-8">
+                        <h2 className="text-xl font-bold text-slate-700 mb-4">步驟一：金屬測試 (Metal Test)</h2>
+                        
+                        {/* Metal Blocks */}
+                        <div className="flex justify-between gap-3 mb-6 p-3 border-b border-slate-200">
+                            {Metals.map(m => (
+                                <div key={m.symbol} 
+                                     draggable 
+                                     onDragStart={(e) => handleDragStart(e, m)}
+                                     className={`p-3 rounded-lg text-center font-bold text-slate-900 shadow-lg border-b-4 border-slate-600/30 metal-block ${m.color}`}
+                                     onDragEnd={() => setDraggedElement(null)}
+                                >
+                                    {m.symbol}
+                                    <div className="text-xs font-normal">{m.name}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Reagent Beakers */}
+                        <div className="flex justify-between gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            {Object.entries(Reagents).map(([id, data]) => renderBeaker(id, data))}
+                        </div>
+                    </div>
+
+                    {/* Bottom: Sorting Challenge */}
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200">
+                         <h2 className="text-xl font-bold text-slate-700 mb-4">步驟二：反應性排序挑戰 (Reactivity Series Challenge)</h2>
+                         
+                         <div className="flex flex-col md:flex-row gap-8 items-start">
+                            {/* Sorting Target */}
+                            <div className="w-full md:w-1/2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                <h3 className="font-bold text-lg text-slate-700 mb-3">請拖曳並排序 (Drag & Drop to Order)</h3>
+                                <div className="space-y-2">
+                                     {sortList}
+                                </div>
+                            </div>
+
+                            {/* Reactivity Table Hint */}
+                            <div className="w-full md:w-1/2 p-4 bg-orange-50 rounded-xl border border-orange-200">
+                                <h3 className="font-bold text-orange-800 mb-2 flex items-center gap-2">
+                                    <i data-lucide="lightbulb" size={20} /> 排序法則 (Rule)
+                                </h3>
+                                <ul className="text-sm text-orange-700 list-disc list-inside space-y-1">
+                                    <li><strong>反應性最高</strong> 的金屬排在最頂部 (Top)。</li>
+                                    <li>反應性越高，與水、酸反應越快。</li>
+                                    <li>反應性高的金屬能**置換 (Displace)** 鹽溶液中反應性較低的金屬。</li>
+                                </ul>
+                                <button onClick={handleSortEnd} className="mt-4 w-full py-2 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-500 transition-colors">
+                                    確認排序 (Confirm Order)
+                                </button>
+                            </div>
+                         </div>
+                    </div>
+
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic III
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
