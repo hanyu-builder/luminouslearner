@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>鐵釘防蝕實驗室 (Corrosion Protection Lab)</title>
+    <title>鐵鏽探究模擬器 (Iron Rusting Investigator)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,60 +12,43 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
         body { font-family: 'Noto Sans HK', sans-serif; }
-        
-        .beaker-base {
-            width: 100px;
-            height: 150px;
-            border: 4px solid #94a3b8;
-            border-top: none;
-            border-radius: 0 0 10px 10px;
-            position: relative;
-            background-color: #e2e8f0; /* Light solution background */
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .nail {
+        .rust-dot {
             position: absolute;
-            bottom: 10px;
-            width: 8px;
-            height: 60px;
-            background-color: #78716c; /* Iron color */
-            border-radius: 0 0 4px 4px;
-            z-index: 10;
-        }
-
-        .protection-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 0 0 6px 6px;
-            opacity: 0.6;
-            z-index: 15;
-            transition: opacity 0.5s;
-        }
-
-        /* Color Indicator Spots */
-        .color-spot {
-            position: absolute;
-            width: 10px;
-            height: 10px;
+            width: 4px;
+            height: 4px;
+            background-color: #8c2f00; /* Darker rust red */
             border-radius: 50%;
-            transition: transform 1s, opacity 1s;
+            opacity: 0;
+            transition: opacity 0.5s ease;
         }
-        .red-spot { background-color: #ef4444; /* Fe2+ detection */ }
-        .blue-spot { background-color: #3b82f6; /* OH- / O2 reduction */ }
 
-        /* Rust Animation */
+        /* Rust Animation Classes */
+        .rusted-1 .rust-dot { opacity: 0.3; }
+        .rusted-2 .rust-dot { opacity: 0.6; }
+        .rusted-3 .rust-dot { opacity: 1; }
+
+        /* Animation for fast forward */
         @keyframes fade-in {
             from { opacity: 0; }
             to { opacity: 1; }
         }
-        .animate-corrosion {
-             animation: fade-in 2s ease-out forwards;
-        }
+        .animate-rust { animation: fade-in 2s ease-out forwards; }
         
+        /* Custom Scrollbar for the beaker container */
+        .beaker-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .beaker-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .beaker-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .beaker-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
@@ -76,170 +59,133 @@
         const { useState, useEffect, useRef } = React;
 
         const TestSetups = [
-            { id: 1, name: '對照組 (Control)', method: 'None', protected: false, failTime: 3, metal: 'Fe', coating: null, sac: null, cathode: false },
-            { id: 2, name: '鍍錫 (Tin-Plating)', method: 'Barrier', protected: false, failTime: 4, metal: 'Fe', coating: 'Sn', sac: null, cathode: false },
-            { id: 3, name: '鍍鋅 (Galvanizing)', method: 'Sacrificial', protected: true, failTime: 8, metal: 'Fe', coating: 'Zn', sac: 'Zn', cathode: false },
-            { id: 4, name: '犧牲 Mg 塊', method: 'Sacrificial', protected: true, failTime: 12, metal: 'Fe', coating: null, sac: 'Mg', cathode: false },
-            { id: 5, name: '陰極保護 (Cathodic)', method: 'Cathodic', protected: true, failTime: 12, metal: 'Fe', coating: null, sac: null, cathode: true }
+            { id: 1, name: '對照組', description: '鐵釘 + 空氣 + 水', conditions: { air: true, water: true, salt: false }, color: 'bg-green-100' },
+            { id: 2, name: '無水', description: '鐵釘 + 空氣 + 乾燥劑', conditions: { air: true, water: false, salt: false }, color: 'bg-yellow-100' },
+            { id: 3, name: '無空氣', description: '鐵釘 + 煮沸水 + 油層', conditions: { air: false, water: true, salt: false }, color: 'bg-blue-100' },
+            { id: 4, name: '加速組', description: '鐵釘 + 鹽水 + 空氣', conditions: { air: true, water: true, salt: true }, color: 'bg-red-100' },
+            { id: 5, name: '防護組', description: '鐵釘 + 油 (隔絕水)', conditions: { air: true, water: false, salt: false }, color: 'bg-slate-200' }
         ];
 
-        const MetalColors = {
-            Fe: '#78716c', Zn: '#94a3b8', Mg: '#fcd34d', Sn: '#cbd5e1', Cu: '#f97316'
+        const RustLevel = {
+            0: '無鏽 (No Rust)',
+            1: '微鏽 (Mild)',
+            2: '中鏽 (Moderate)',
+            3: '嚴重 (Severe)'
         };
 
         const App = () => {
             const [isSimulating, setIsSimulating] = useState(false);
             const [dayCount, setDayCount] = useState(0);
-            const [testState, setTestState] = useState(TestSetups.map(s => ({ ...s, corrosionTime: 0, anode: null, cathode: null })));
-            const [simSpeed, setSimSpeed] = useState(200); // ms per day
+            const [rustState, setRustState] = useState(TestSetups.map(s => ({ id: s.id, rustLevel: 0 })));
 
             // Simulation Effect
             useEffect(() => {
                 let interval;
-                if (isSimulating && dayCount < 15) {
+                if (isSimulating && dayCount < 10) {
                     interval = setInterval(() => {
                         setDayCount(prev => prev + 1);
-                    }, simSpeed); 
-                } else if (dayCount >= 15) {
+                    }, 200); // 200ms per day
+                } else if (dayCount >= 10) {
                     setIsSimulating(false);
                 }
                 return () => clearInterval(interval);
-            }, [isSimulating, dayCount, simSpeed]);
+            }, [isSimulating, dayCount]);
 
-            // Corrosion Logic Effect
+            // Rust Calculation Effect
             useEffect(() => {
                 if (dayCount > 0) {
-                    setTestState(prev => prev.map(setup => {
-                        // Logic to update corrosion based on setup properties and time
-                        // This part needs to be robust to avoid infinite loops or state inconsistencies
-                        // Simplified logic: 
-                        let currentCorrosion = setup.corrosionTime;
-                        
-                        let isCorroding = false;
-                        let newAnode = setup.anode;
-                        let newCathode = setup.cathode;
-                        let speed = 1;
+                    setRustState(TestSetups.map(setup => {
+                        const { air, water, salt } = setup.conditions;
+                        let rustFactor = 0;
 
-                        if (setup.cathode) { // Cathodic Protection
-                             newAnode = 'Current';
-                             newCathode = 'Fe';
-                             isCorroding = false; 
-                        } else if (setup.sac) { // Sacrificial
-                             newAnode = setup.sac;
-                             newCathode = setup.metal;
-                             isCorroding = false; 
-                        } else if (setup.coating === 'Sn') { // Tin Plating
-                             // Simplification: Sn protects until scratched/failed. Here we simulate failure at failTime.
-                             if (dayCount >= setup.failTime) {
-                                 isCorroding = true;
-                                 newAnode = 'Fe';
-                                 newCathode = 'O₂';
-                                 speed = 2; // Accelerated
-                             }
-                        } else if (setup.method === 'None') {
-                             isCorroding = true;
-                             newAnode = 'Fe';
-                             newCathode = 'O₂';
-                        }
-
-                        if (isCorroding) {
-                            currentCorrosion += speed;
+                        // Base condition: Needs Air AND Water
+                        if (air && water) {
+                            rustFactor = 1;
+                            // Salt accelerates rusting significantly
+                            if (salt) rustFactor = 3;
                         }
                         
-                        return { ...setup, corrosionTime: currentCorrosion, anode: newAnode, cathode: newCathode };
+                        // Time factor (rust progresses over time)
+                        let level = 0;
+                        if (rustFactor > 0) {
+                            // Max level is 3 after 10 days
+                            level = Math.min(3, Math.ceil(dayCount * 0.3 * rustFactor)); 
+                        }
+                        
+                        // Special case: Test 5 (Oil protection) should NOT rust even if air/water are theoretically present
+                        if (setup.id === 5) level = 0; 
+
+                        return { id: setup.id, rustLevel: level };
                     }));
                 }
             }, [dayCount]);
 
             const startSimulation = () => {
-                setDayCount(0);
-                setTestState(TestSetups.map(s => ({ ...s, corrosionTime: 0, anode: null, cathode: null })));
-                setIsSimulating(true);
-            };
-
-            const MetalDisplay = ({ setup }) => {
-                const isCorroding = setup.corrosionTime > 0;
-                // Visual representation logic
-                let layerColor = setup.coating ? MetalColors[setup.coating] : 'transparent';
-                
-                // Rust visual intensity
-                const rustOpacity = isCorroding && setup.method !== 'Sacrificial' ? Math.min(1, setup.corrosionTime / 10) : 0;
-
-                // Tin failure visual
-                if (setup.coating === 'Sn' && setup.corrosionTime >= 1) {
-                    layerColor = MetalColors.Fe; // Reveal Iron
+                if (dayCount < 10) {
+                    setIsSimulating(true);
+                } else {
+                    setDayCount(0);
+                    setRustState(TestSetups.map(s => ({ id: s.id, rustLevel: 0 })));
+                    setIsSimulating(true);
                 }
-
-                // Sacrificial metal disappearing visual
-                const sacOpacity = setup.sac ? Math.max(0.1, 1 - (dayCount / 15)) : 1; // Sac metal slowly dissolves
-
-                return (
-                    <div className="relative w-full h-full flex items-center justify-center">
-                        {/* Protective/Sacrificial Layer */}
-                        {setup.sac && (
-                            <div className="absolute w-8 h-8 rounded-full bg-yellow-500 border border-yellow-600" style={{ opacity: sacOpacity, zIndex: 12, top: '20px' }}>
-                                <span className="absolute inset-0 text-center font-bold text-slate-800 text-xs mt-2">{setup.sac}</span>
-                            </div>
-                        )}
-                        
-                        {/* Iron Nail (Base) */}
-                        <div className={`nail bg-slate-700 w-2.5 h-16 rounded-b-full shadow-lg border-b-2 border-slate-600 ${setup.sac ? 'mt-8' : ''}`}>
-                            {/* Corrosion Layer (Red Rust) */}
-                            <div className={`absolute inset-0 bg-red-800/70 rounded-b-full animate-corrosion`} 
-                                 style={{ opacity: rustOpacity, animationDelay: '0s' }}>
-                            </div>
-                        </div>
-
-                        {/* Rust Indicator Spots (Red/Blue) */}
-                        {isCorroding && (
-                             <div className="absolute bottom-1/2 left-1/2 w-full h-full pointer-events-none">
-                                {[...Array(3)].map((_, i) => (
-                                    <div key={i} className="color-spot red-spot" 
-                                         style={{ 
-                                             left: `${10 + Math.random() * 20}px`, 
-                                             top: `${30 + Math.random() * 30}px`, 
-                                             opacity: Math.min(1, setup.corrosionTime * 0.2) 
-                                         }}></div>
-                                ))}
-                                 {[...Array(2)].map((_, i) => (
-                                    <div key={`blue-${i}`} className="color-spot blue-spot" 
-                                         style={{ 
-                                             left: `${-10 + Math.random() * 20}px`, 
-                                             top: `${10 + Math.random() * 20}px`, 
-                                             opacity: Math.min(1, setup.corrosionTime * 0.2) 
-                                         }}></div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                );
             };
 
-            const BeakerVisual = ({ setup }) => {
-                const currentRust = testState.find(r => r.id === setup.id);
-                const corrosionAmount = currentRust?.corrosionTime || 0;
+            const BeakerVisual = ({ setup, rustLevel }) => {
+                const levelClass = `rusted-${rustLevel}`;
                 
-                // Solution color
-                let solnColor = 'bg-sky-100'; 
-                let topLayerColor = setup.id === 3 ? 'bg-yellow-700 h-1/3' : 'transparent'; // Example layer if needed, not used here specifically but kept for structure
+                // Content color and label
+                let contentBg = setup.conditions.water ? setup.conditions.salt ? 'bg-red-200' : 'bg-blue-300' : 'bg-white';
+                let waterLayerHeight = setup.conditions.water ? 'h-1/2' : 'h-1/4';
                 
+                // Oil Layer for setup 3
+                let oilLayer = setup.id === 3 ? 'bg-yellow-600 h-1/4' : 'bg-transparent';
+                // Nail position
+                const nailBottom = setup.conditions.water ? '15%' : '0';
+                
+                // Nail color change for visual effect
+                const nailColor = rustLevel > 0 ? 'bg-red-700/80' : 'bg-slate-400';
+
+                // Rust dots positions
+                const rustDots = Array.from({length: 15}).map((_, i) => ({
+                    x: 35 + (i % 3) * 10 + (Math.random() * 5),
+                    y: 40 + Math.floor(i / 3) * 10 + (Math.random() * 5),
+                    delay: i * 0.1
+                }));
+
                 return (
-                    <div className="flex flex-col items-center w-full p-2">
-                        <div className="relative w-28 h-48 flex flex-col items-center">
-                            {/* Glass Container */}
-                            <div className="beaker-base">
-                                <div className={`absolute bottom-0 w-full h-3/4 ${solnColor} opacity-70`}></div>
+                    <div className="flex flex-col items-center p-2 min-w-[140px]">
+                        <div className="w-24 h-40 border-4 border-slate-300 rounded-b-xl relative overflow-hidden flex flex-col justify-end bg-white">
+                            
+                            {/* Content (Liquid/Air) */}
+                            <div className={`w-full ${contentBg} absolute bottom-0 ${waterLayerHeight} transition-all duration-1000`}></div>
+                            
+                            {/* Top Layer (Oil/Air) */}
+                            <div className={`w-full ${oilLayer} absolute top-0`}></div>
+
+                            {/* Iron Nail */}
+                            <div className={`absolute left-1/2 -translate-x-1/2 w-2 h-14 ${nailColor} rounded-b-full z-10`} 
+                                 style={{ bottom: nailBottom }}>
                                 
-                                <MetalDisplay setup={{...setup, corrosionTime: corrosionAmount}} />
+                                {/* Rust Layer */}
+                                <div className={`absolute inset-0 ${levelClass} animate-rust`} key={dayCount}>
+                                    {rustDots.map(dot => (
+                                        <div key={dot.x} className="rust-dot" style={{ left: `${dot.x}%`, top: `${dot.y}%`, animationDelay: `${dot.delay}s` }}></div>
+                                    ))}
+                                </div>
                             </div>
                             
-                            <div className="mt-2 text-center w-full">
-                                <h4 className="text-sm font-bold text-slate-700">{setup.name}</h4>
-                                <p className="text-xs text-slate-500 italic">{setup.description}</p>
-                                <p className={`mt-1 font-bold text-lg ${corrosionAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    {corrosionAmount > 0 ? `生鏽中 (Level ${Math.min(5, Math.floor(corrosionAmount))})` : '保護成功'}
-                                </p>
-                            </div>
+                            {/* Desiccant/Oil Label */}
+                            {setup.id === 2 && <span className="absolute bottom-0 text-[8px] text-slate-600 w-full text-center bg-white/70">乾燥劑 (Desiccant)</span>}
+                            {setup.id === 3 && <span className="absolute top-0 text-[8px] text-yellow-900 w-full text-center">煮沸水 & Oil</span>}
+                            
+                            {/* Water Line */}
+                            {setup.conditions.water && <div className="absolute w-full h-px border-t border-slate-700" style={{ bottom: waterLayerHeight === 'h-1/2' ? '50%' : '25%' }}></div>}
+                        </div>
+                        
+                        <div className="mt-3 text-center">
+                            <h4 className="text-sm font-bold text-slate-700">{setup.name}</h4>
+                            <p className="text-xs text-slate-500 italic">{setup.description.split('+')[0]}...</p>
+                            <p className={`mt-1 font-bold text-lg ${rustLevel > 0 ? 'text-red-600' : 'text-green-600'}`}>{RustLevel[rustLevel]}</p>
                         </div>
                     </div>
                 );
@@ -251,67 +197,71 @@
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
-                                <i data-lucide="shield"></i> 鐵釘防蝕實驗室
+                            <h1 className="text-2xl font-bold text-red-600 flex items-center gap-2">
+                                <i data-lucide="shield-off"></i> 鐵釘生鏽探究實驗室
                             </h1>
-                            <p className="text-slate-400 text-sm">Corrosion Protection Lab</p>
+                            <p className="text-slate-400 text-sm">Iron Rusting Investigator (Time Lapse)</p>
                         </div>
-                        <button onClick={startSimulation} disabled={isSimulating || dayCount >= 15} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 font-bold text-sm flex items-center gap-2 transition-colors disabled:bg-slate-400">
+                        <button onClick={startSimulation} disabled={isSimulating} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 font-bold text-sm flex items-center gap-2 transition-colors disabled:bg-slate-400">
                             <i data-lucide={isSimulating ? "loader-2" : "play"} size={16} className={isSimulating ? 'animate-spin' : ''}></i>
-                            {isSimulating ? `模擬中... (Day ${dayCount})` : dayCount >= 15 ? '重啟 (Restart)' : '開始模擬 (Start)'}
+                            {isSimulating ? `模擬中... (Day ${dayCount})` : dayCount > 0 ? '重啟模擬 (Restart)' : '開始快轉 (Start Time Lapse)'}
                         </button>
                     </div>
 
-                    {/* Simulation Grid */}
-                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 flex justify-around gap-4 mb-8 flex-wrap">
-                        {testState.map(setup => <BeakerVisual key={setup.id} setup={setup} />)}
+                    {/* Simulation Grid - Forced Horizontal Layout with Scroll */}
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 mb-8 overflow-x-auto beaker-scroll">
+                        <div className="flex flex-nowrap justify-between gap-4 min-w-[800px]">
+                            {TestSetups.map(setup => {
+                                const currentRust = rustState.find(r => r.id === setup.id);
+                                return <BeakerVisual key={setup.id} setup={setup} rustLevel={currentRust ? currentRust.rustLevel : 0} />;
+                            })}
+                        </div>
                     </div>
 
                     {/* Theory and Results Summary */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         
-                        {/* Protection Methods */}
-                        <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                        <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200 lg:col-span-2">
                             <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                <i data-lucide="zap" className="text-orange-500" /> 電化學保護原理 (Electrochemical Protection)
+                                <i data-lucide="flask-conical" className="text-blue-500" /> 實驗結論 (Required Conditions)
                             </h3>
-                            <div className="space-y-4">
-                                
-                                {/* Sacrificial Protection */}
-                                <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
-                                    <strong className="text-yellow-800 block mb-1 text-lg">犧牲性保護 (Sacrificial Protection)</strong>
-                                    <p className="text-sm text-yellow-700">
-                                        將活性<strong>更高</strong>的金屬 (如 Zn 或 Mg) 連接在鐵上。活性更高的金屬充當<strong>陽極 (Anode)</strong>，優先被氧化，保護鐵成為陰極 (Cathode)。
-                                        <br/> 
-                                        *觀察：#3, #4 中，犧牲金屬會慢慢消失，但鐵釘保持完好。*
-                                    </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+                                    <strong className="text-blue-800 block mb-1">鐵生鏽的必要條件</strong>
+                                    <ul className="text-sm text-blue-700 list-disc list-inside">
+                                        <li><strong>氧氣 (Oxygen)</strong> - 氧化劑</li>
+                                        <li><strong>水 (Water)</strong> - 電解質媒介</li>
+                                    </ul>
                                 </div>
-                                
-                                {/* Cathodic Protection */}
-                                <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
-                                    <strong className="text-blue-800 block mb-1 text-lg">陰極保護 (Cathodic Protection)</strong>
-                                    <p className="text-sm text-blue-700">
-                                        通過外部電源提供電子，強制將鐵變成<strong>陰極 (Cathode)</strong>，阻止鐵 (Fe) 失去電子 (Fe &rarr; Fe²⁺ + 2e⁻)。
-                                        <br/>
-                                        *觀察：#5 中，鐵釘永遠不會生鏽。*
-                                    </p>
+                                <div className="p-4 bg-red-50 border-l-4 border-red-400 rounded-lg">
+                                    <strong className="text-red-800 block mb-1">反應加速劑</strong>
+                                    <ul className="text-sm text-red-700 list-disc list-inside">
+                                        <li><strong>鹽分 (Salt / NaCl)</strong> - 增加導電性</li>
+                                        <li><strong>酸 (Acid)</strong> - 降低 pH 值</li>
+                                    </ul>
                                 </div>
                             </div>
+                            
+                            <p className="mt-4 text-sm text-slate-600 bg-slate-100 p-3 rounded">
+                                <strong>觀察總結：</strong> 只有同時提供空氣和水的試管 (#1, #4) 才會生鏽。
+                                試管 #2 (無水)、#3 (無氧)、#5 (防護) 均未生鏽。
+                            </p>
                         </div>
 
-                        {/* Tin Plating Danger */}
+                        {/* Equation Card */}
                         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
                             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                <i data-lucide="alert-triangle" className="text-red-400" /> 警示：鍍錫 (Tin-Plating) 的危險
+                                <i data-lucide="zap" className="text-yellow-400" /> 電化學原理
                             </h3>
                             <div className="text-sm text-slate-300 leading-relaxed space-y-2">
-                                <p className="font-bold text-yellow-400">錫 (Sn) 的活性比鐵 (Fe) 低！</p>
-                                <p>當鍍錫鐵皮（如罐頭）的錫層破損時，鐵會暴露在空氣中，此時：</p>
-                                <p className="font-mono text-red-400">鐵 (Fe) $\rightarrow$ 陽極 (Anode)</p>
-                                <p className="font-mono text-white">錫 (Sn) $\rightarrow$ 陰極 (Cathode)</p>
-                                <p class="text-xs mt-2 text-slate-400">
-                                    結果：鐵會優先腐蝕，且生鏽速度比裸露的鐵更快（因為 Sn 作為陰極加速了反應）。
-                                </p>
+                                <p className="font-bold text-red-400">陽極 (Anode) - 氧化 (Oxidation):</p>
+                                <p className="font-mono text-white break-words">Fe(s) &rarr; Fe²⁺(aq) + 2e⁻</p>
+                                
+                                <p className="font-bold text-blue-400 pt-3 border-t border-slate-700">陰極 (Cathode) - 還原 (Reduction):</p>
+                                <p className="font-mono text-white break-words">O₂(g) + 2H₂O(l) + 4e⁻ &rarr; 4OH⁻(aq)</p>
+                                
+                                <p className="font-bold text-green-400 pt-3 border-t border-slate-700">最終產物 (Final Rust):</p>
+                                <p className="font-mono text-white break-words">Fe³⁺(aq) + H₂O &rarr; Fe₂O₃·xH₂O (Rust)</p>
                             </div>
                         </div>
                     </div>
