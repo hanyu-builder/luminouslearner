@@ -36,21 +36,21 @@
         // Example Categories
         const ExampleCategories = [
             {
-                name: '金屬燃燒',
+                name: '金屬燃燒 (Combustion)',
                 items: [
                     { name: 'Mg + O₂', a: { f: 'Mg', c: 2, m: 10.0 }, b: { f: 'O2', c: 1, m: 5.0 }, p: { f: 'MgO', c: 2 } },
                     { name: 'Fe + S', a: { f: 'Fe', c: 1, m: 5.6 }, b: { f: 'S', c: 1, m: 4.0 }, p: { f: 'FeS', c: 1 } }
                 ]
             },
             {
-                name: '酸與金屬',
+                name: '酸與金屬 (Acid + Metal)',
                 items: [
                     { name: 'Mg + HCl', a: { f: 'Mg', c: 1, m: 2.43 }, b: { f: 'HCl', c: 2, m: 10.0 }, p: { f: 'H2', c: 1 } },
                     { name: 'Zn + HCl', a: { f: 'Zn', c: 1, m: 10.0 }, b: { f: 'HCl', c: 2, m: 5.0 }, p: { f: 'H2', c: 1 } }
                 ]
             },
             {
-                name: '沉澱反應',
+                name: '沉澱反應 (Precipitation)',
                 items: [
                     { name: 'Pb(NO₃)₂ + KI', a: { f: 'Pb(NO3)2', c: 1, m: 33.1 }, b: { f: 'KI', c: 2, m: 16.6 }, p: { f: 'PbI2', c: 1 } }
                 ]
@@ -208,9 +208,6 @@
                 setResult(null);
             };
 
-            const nextCategory = () => setActiveCategory((prev) => (prev + 1) % ExampleCategories.length);
-            const prevCategory = () => setActiveCategory((prev) => (prev - 1 + ExampleCategories.length) % ExampleCategories.length);
-
             return (
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
                     
@@ -232,21 +229,37 @@
                         {/* Left: Input */}
                         <div className="w-full lg:w-5/12 flex flex-col gap-6">
                             
-                            {/* Examples */}
+                            {/* Examples - UI Updated with Dropdown */}
                             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                                 <div className="flex justify-between items-center mb-3">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                        <i data-lucide="zap" size={14} /> 快速載入例子
+                                        <i data-lucide="zap" size={14} /> 快速載入例子 (Quick Load)
                                     </h4>
                                 </div>
-                                <div className="flex items-center justify-between bg-slate-50 rounded-lg p-1 mb-3">
-                                    <button onClick={prevCategory} className="p-2 rounded-md hover:bg-white text-indigo-600 shadow-sm"><i data-lucide="chevron-left" size={20}/></button>
-                                    <span className="text-sm font-bold text-indigo-600">{ExampleCategories[activeCategory].name}</span>
-                                    <button onClick={nextCategory} className="p-2 rounded-md hover:bg-white text-indigo-600 shadow-sm"><i data-lucide="chevron-right" size={20}/></button>
+                                
+                                {/* Category Selection: Dropdown */}
+                                <div className="relative mb-3">
+                                    <select 
+                                        value={activeCategory}
+                                        onChange={(e) => setActiveCategory(Number(e.target.value))}
+                                        className="w-full p-2 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-rose-700 font-bold text-sm appearance-none cursor-pointer focus:ring-2 focus:ring-rose-200 focus:border-rose-400 outline-none transition-all"
+                                    >
+                                        {ExampleCategories.map((cat, idx) => (
+                                            <option key={idx} value={idx}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-rose-500">
+                                        <i data-lucide="chevron-down" size={16} />
+                                    </div>
                                 </div>
+                                
                                 <div className="flex gap-2 flex-wrap">
                                     {ExampleCategories[activeCategory].items.map((item, idx) => (
-                                        <button key={idx} onClick={() => loadExampleData(item)} className="px-3 py-1.5 bg-white text-slate-700 rounded-lg border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-xs font-bold transition-all shadow-sm">
+                                        <button 
+                                            key={idx} 
+                                            onClick={() => loadExampleData(item)}
+                                            className="px-3 py-1.5 bg-white text-slate-700 rounded-lg border border-slate-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 text-xs font-bold transition-all shadow-sm"
+                                        >
                                             {item.name}
                                         </button>
                                     ))}
