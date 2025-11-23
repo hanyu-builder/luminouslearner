@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>產率百分比計算機 (Percentage Yield Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .result-card { transition: all 0.3s ease; }
+        .result-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        /* Progress Bar Animation */
+        @keyframes fill-bar {
+            from { width: 0; }
+            to { width: var(--target-width); }
+        }
+        .progress-bar-fill {
+            animation: fill-bar 1.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AtomicMasses = {
+            H: 1.0, C: 12.0, N: 14.0, O: 16.0, Na: 23.0, Mg: 24.3, S: 32.1, Cl: 35.5, K: 39.1, Cu: 63.5, Fe: 55.8
+        };
+
+        const ExampleCategories = [
+            {
+                name: 'Mg 燃燒',
+                items: [
+                    { name: 'Mg + O₂ → MgO', a: { f: 'Mg', c: 2, m: 2.43 }, p: { f: 'MgO', c: 2 }, actual: 3.5 }
+                ]
+            },
+            {
+                name: '水合物分解',
+                items: [
+                    { name: 'CuSO₄·5H₂O → CuSO₄', a: { f: 'CuSO4.5H2O', c: 1, m: 5.0 }, p: { f: 'CuSO4', c: 1 }, actual: 3.0 }
+                ]
+            },
+            {
+                name: '中和反應',
+                items: [
+                    { name: 'NaOH + HCl → NaCl', a: { f: 'NaOH', c: 1, m: 4.0 }, p: { f: 'NaCl', c: 1 }, actual: 5.2 }
+                ]
+            }
+        ];
+
+        const App = () => {
+            // Inputs
+            const [reactant, setReactant] = useState({ formula: 'Mg', coeff: 2, mass: '' });
+            const [product, setProduct] = useState({ formula: 'MgO', coeff: 2, actualMass: '' });
+            const [activeCategory, setActiveCategory] = useState(0);
+
+            // Results
+            const [theoreticalYield, setTheoreticalYield] = useState(null);
+            const [percentageYield, setPercentageYield] = useState(null);
+            const [error, setError] = useState('');
+            const [steps, setSteps] = useState(null);
+            
+            // Helper function to calculate Molar Mass
+            const calculateMolarMass = (formula) => {
+                if (!formula) return 0;
+                let mass = 0;
+                // Simplified parser that handles dots for hydrates
+                const parts = formula.split('.');
+                
+                const parseSingleFormula = (f) => {
+                    let singleMass = 0;
+                    const stack = [{ atoms: {} }];
+                    let i = 0;
+                    const len = f.length;
+
+                    while (i < len) {
+                        const char = f[i];
+                        if (/[A-Z]/.test(char)) {
+                            let element = char; i++;
+                            if (i < len && /[a-z]/.test(f[i])) { element += f[i]; i++; }
+                            let numStr = '';
+                            while (i < len && /\d/.test(f[i])) { numStr += f[i]; i++; }
+                            const count = numStr ? parseInt(numStr) : 1;
+                            
+                            let elKey = element;
+                            if (!AtomicMasses[elKey]) {
+                                 const match = Object.keys(AtomicMasses).find(k => k.toLowerCase() === element.toLowerCase());
+                                 if (match) elKey = match;
+                            }
+                            if (AtomicMasses[elKey]) {
+                                singleMass += AtomicMasses[elKey] * count;
+                            } else {
+                                throw new Error(`未知元素: ${element}`);
+                            }
+                        } else { i++; } // Skip non-A-Z or numbers
+                    }
+                    return singleMass;
+                };
+
+                try {
+                    let totalMass = 0;
+                    
+                    // Main substance
+                    totalMass += parseSingleFormula(parts[0]);
+                    
+                    // Hydrate
+                    if (parts.length > 1) {
+                         const hydratePart = parts[1];
+                         const match = hydratePart.match(/^(\d*)(.*)/);
+                         const multiplier = match[1] ? parseInt(match[1]) : 1;
+                         const formula = match[2];
+                         if (formula) {
+                             totalMass += parseSingleFormula(formula) * multiplier;
+                         }
+                    }
+
+                    return totalMass;
+                } catch (e) {
+                    throw e;
+                }
+            };
+            
+            // Core Calculation
+            const handleCalculate = () => {
+                setError('');
+                setTheoreticalYield(null);
+                setPercentageYield(null);
+
+                const massA = parseFloat(reactant.mass);
+                const actualP = parseFloat(product.actualMass);
+                const coeffA = parseFloat(reactant.coeff);
+                const coeffP = parseFloat(product.coeff);
+                
+                if (isNaN(massA) || massA <= 0 || isNaN(actualP) || actualP < 0) {
+                    setError('請輸入有效的反應物質量 (Mass A) 和實際產量 (Actual Yield)。');
+                    return;
+                }
+                if (isNaN(coeffA) || coeffA <= 0 || isNaN(coeffP) || coeffP <= 0) {
+                    setError('化學計量係數必須為正數。');
+                    return;
+                }
+
+                try {
+                    const mmA = calculateMolarMass(reactant.formula.trim());
+                    const mmP = calculateMolarMass(product.formula.trim());
+
+                    if (mmA === 0 || mmP === 0) throw new Error('請輸入有效的化學式');
+
+                    // Step 1: Mass A -> Mole A
+                    const moleA = massA / mmA;
+
+                    // Step 2: Mole A -> Theoretical Mole P
+                    const moleP_theo = moleA * (coeffP / coeffA);
+
+                    // Step 3: Theoretical Mole P -> Theoretical Mass P
+                    const massP_theo = moleP_theo * mmP;
+                    
+                    // Step 4: Calculate Percentage Yield
+                    const yieldPercent = (actualP / massP_theo) * 100;
+                    
+                    if (yieldPercent > 100) {
+                        setError('注意：產率超過 100%，可能是因為產物不純 (Impure product) 或數據輸入錯誤。');
+                    }
+
+                    setTheoreticalYield(massP_theo.toFixed(2));
+                    setPercentageYield(yieldPercent.toFixed(1));
+                    setSteps({ massA, mmA, moleP_theo, mmP, massP_theo, actualP, yieldPercent });
+
+                } catch (e) {
+                    setError(`化學式錯誤或數值無效: ${e.message}`);
+                }
+            };
+
+            const loadExampleData = (ex) => {
+                setReactant({ formula: ex.a.f, coeff: ex.a.c, mass: ex.a.m.toString() });
+                setProduct({ formula: ex.p.f, coeff: ex.p.c, actualMass: ex.actual.toString() });
+                setError('');
+                setTheoreticalYield(null);
+                setPercentageYield(null);
+            };
+
+            const nextCategory = () => setActiveCategory((prev) => (prev + 1) % ExampleCategories.length);
+            const prevCategory = () => setActiveCategory((prev) => (prev - 1 + ExampleCategories.length) % ExampleCategories.length);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-teal-600 flex items-center gap-2">
+                                <i data-lucide="percent"></i> 產率百分比計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Percentage Yield Calculator</p>
+                        </div>
+                        <button onClick={() => { setReactant({...reactant, mass: ''}); setProduct({...product, actualMass: ''}); setTheoreticalYield(null); setPercentageYield(null); setError(''); }} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 重置
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Input */}
+                        <div className="w-full lg:w-5/12 flex flex-col gap-6">
+                            
+                            {/* Examples - Dropdown Menu */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                        <i data-lucide="zap" size={14} /> 快速載入例子 (Quick Load)
+                                    </h4>
+                                </div>
+                                
+                                <div className="relative mb-3">
+                                    <select 
+                                        value={activeCategory}
+                                        onChange={(e) => setActiveCategory(Number(e.target.value))}
+                                        className="w-full p-2 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-teal-700 font-bold text-sm appearance-none cursor-pointer focus:ring-2 focus:ring-teal-200 focus:border-teal-400 outline-none transition-all"
+                                    >
+                                        {ExampleCategories.map((cat, idx) => (
+                                            <option key={idx} value={idx}>{cat.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-teal-500">
+                                        <i data-lucide="chevron-down" size={16} />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-2 flex-wrap">
+                                    {ExampleCategories[activeCategory].items.map((item, idx) => (
+                                        <button 
+                                            key={idx} 
+                                            onClick={() => loadExampleData(item)}
+                                            className="px-3 py-1.5 bg-white text-slate-700 rounded-lg border border-slate-200 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 text-xs font-bold transition-all shadow-sm"
+                                        >
+                                            {item.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Input Form */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-teal-100">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="beaker"></i> 輸入實驗數據
+                                </h3>
+
+                                {/* Reactant A (Known) */}
+                                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 mb-4 relative group focus-within:ring-2 focus-within:ring-blue-300 transition-all">
+                                    <div className="absolute -top-2.5 left-3 bg-blue-600 text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase">反應物 (Reactant)</div>
+                                    <div className="grid grid-cols-12 gap-2">
+                                        <div className="col-span-3"><input type="number" value={reactant.coeff} onChange={(e) => setReactant({...reactant, coeff: e.target.value})} className="w-full p-2 rounded text-center font-bold border border-blue-200" placeholder="Coeff"/></div>
+                                        <div className="col-span-9"><input type="text" value={reactant.formula} onChange={(e) => setReactant({...reactant, formula: e.target.value})} className="w-full p-2 rounded border border-blue-200 font-mono" placeholder="Formula"/></div>
+                                        <div className="col-span-12"><input type="number" value={reactant.mass} onChange={(e) => setReactant({...reactant, mass: e.target.value})} className="w-full p-2 rounded border border-blue-200 font-bold" placeholder="Mass (g)"/></div>
+                                    </div>
+                                </div>
+
+                                {/* Product P (Target) */}
+                                <div className="p-3 bg-green-50 rounded-xl border border-green-100 mb-4 relative group focus-within:ring-2 focus-within:ring-green-300 transition-all">
+                                    <div className="absolute -top-2.5 left-3 bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase">生成物 (Product)</div>
+                                    <div className="grid grid-cols-12 gap-2">
+                                        <div className="col-span-3"><input type="number" value={product.coeff} onChange={(e) => setProduct({...product, coeff: e.target.value})} className="w-full p-2 rounded text-center font-bold border border-green-200" placeholder="Coeff"/></div>
+                                        <div className="col-span-9"><input type="text" value={product.formula} onChange={(e) => setProduct({...product, formula: e.target.value})} className="w-full p-2 rounded border border-green-200 font-mono" placeholder="Formula (e.g. MgO)"/></div>
+                                        <div className="col-span-12"><input type="number" value={product.actualMass} onChange={(e) => setProduct({...product, actualMass: e.target.value})} className="w-full p-2 rounded border border-green-200 font-bold" placeholder="Actual Mass (g)"/></div>
+                                    </div>
+                                </div>
+
+                                {error && <div className="text-red-500 text-xs font-bold mb-2">{error}</div>}
+
+                                <button onClick={handleCalculate} className="w-full py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2">
+                                    <i data-lucide="percent" /> 計算產率百分比
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Right: Result */}
+                        <div className="w-full lg:w-7/12 flex flex-col gap-6">
+                            
+                            {theoreticalYield ? (
+                                <div className="animate-in slide-in-from-right duration-500 h-full flex flex-col gap-6">
+                                    
+                                    {/* Yield Card */}
+                                    <div className="bg-slate-800 rounded-2xl p-6 shadow-lg text-white border border-slate-700 relative overflow-hidden">
+                                        <div className="text-xs text-teal-400 font-bold uppercase mb-2">Final Percentage Yield</div>
+                                        <div className="text-6xl font-mono font-black text-white tracking-tighter">
+                                            {percentageYield}%
+                                        </div>
+                                        <div className="mt-4 w-full bg-slate-900/50 rounded-full h-3 overflow-hidden border border-slate-700">
+                                            <div className="progress-bar-fill h-full bg-teal-500" 
+                                                 style={{ '--target-width': `${Math.min(100, parseFloat(percentageYield))}%` }}>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between text-xs text-slate-400 mt-2">
+                                            <span>0%</span>
+                                            <span>100%</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Breakdown */}
+                                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-grow">
+                                        <div className="bg-slate-50 p-4 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
+                                            <i data-lucide="list-ordered" size={18} /> 詳細計算步驟
+                                        </div>
+                                        <div className="p-4 space-y-4">
+                                            {/* Summary Table */}
+                                            <div className="grid grid-cols-3 gap-2 text-center text-sm font-bold bg-slate-100 p-2 rounded-lg">
+                                                <div className="text-blue-600">Actual Mass</div>
+                                                <div className="text-slate-500">Theoretical Yield</div>
+                                                <div className="text-teal-600">Percentage</div>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2 text-center text-lg font-mono font-bold">
+                                                <div className="text-blue-800">{steps.actualP} g</div>
+                                                <div className="text-slate-600">{steps.massP_theo.toFixed(2)} g</div>
+                                                <div className="text-teal-600">{percentageYield}%</div>
+                                            </div>
+                                            
+                                            <hr className="border-slate-100" />
+
+                                            {/* Formula Steps */}
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase">Formula Used:</h4>
+                                            
+                                            <div className="bg-white p-3 rounded-lg border-l-4 border-indigo-400">
+                                                <span className="font-mono text-sm text-slate-700">
+                                                    1. Theoretical Yield ({product.formula}) = ({reactant.actualMass} g &div; {steps.mmA.toFixed(1)} M) &times; ({product.coeff} / {reactant.coeff}) &times; {steps.mmP.toFixed(1)} M
+                                                </span>
+                                            </div>
+                                             <div className="bg-white p-3 rounded-lg border-l-4 border-teal-400">
+                                                <span className="font-mono text-sm text-slate-700">
+                                                    2. Percentage Yield = ({steps.actualP} &div; {steps.massP_theo.toFixed(2)}) &times; 100%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="flex-grow flex flex-col items-center justify-center text-slate-400 border-4 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 p-12 min-h-[400px]">
+                                    <i data-lucide="percent" size={64} className="mb-6 opacity-30" />
+                                    <p className="text-xl text-center font-medium mb-2">等待數據...</p>
+                                    <p className="text-sm text-center opacity-70">輸入反應物和實際產量以開始計算。</p>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic III
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
