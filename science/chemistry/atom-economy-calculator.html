@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原子經濟計算機 (Atom Economy Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        /* Progress Bar Animation */
+        @keyframes fill-bar {
+            from { width: 0; }
+            to { width: var(--target-width); }
+        }
+        .progress-bar-fill {
+            animation: fill-bar 1.5s ease-out forwards;
+        }
+
+        .formula-input {
+            transition: all 0.2s;
+        }
+        .formula-input:focus {
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AtomicMasses = {
+            H: 1.0, C: 12.0, N: 14.0, O: 16.0, Na: 23.0, Mg: 24.3, S: 32.1, Cl: 35.5, K: 39.1, Cu: 63.5, Fe: 55.8,
+            P: 31.0, Br: 79.9, I: 126.9, Ag: 107.9, Ba: 137.3, Pb: 207.2
+        };
+
+        const Presets = [
+            { eq: 'C6H12O6 -> 2C2H5OH + 2CO2', target: 'C2H5OH', name: '乙醇發酵' }, // Ethanol Fermentation
+            { eq: 'C2H4 + H2O -> C2H5OH', target: 'C2H5OH', name: '乙醇水合 (Green)' }, // Ethanol Hydration
+            { eq: 'CH3COOH + C2H5OH -> CH3COOC2H5 + H2O', target: 'CH3COOC2H5', name: '乙酸乙酯合成' }, // Esterification
+            { eq: 'C6H10O4 + HNO3 -> C6H10O4 + N2O + H2O', target: 'C6H10O4', name: '己二酸合成 (Old Way)' } // Adipic Acid (Historical, Low AE)
+        ];
+
+        const App = () => {
+            const [inputEq, setInputEq] = useState(Presets[0].eq);
+            const [targetProduct, setTargetProduct] = useState(Presets[0].target);
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState('');
+            const [activePreset, setActivePreset] = useState(0);
+
+            // Parser function (Handles stoichiometry and molar mass for ALL components)
+            const parseEquation = (equation, targetFormula) => {
+                const parts = equation.split('->');
+                if (parts.length !== 2) throw new Error("方程式格式錯誤 (請使用 A + B -> C + D)");
+                
+                const reactantParts = parts[0].trim().split('+').map(s => s.trim());
+                const productParts = parts[1].trim().split('+').map(s => s.trim());
+
+                let totalReactantMass = 0;
+                let targetMass = 0;
+                let products = [];
+
+                // Helper to extract formula and coefficient
+                const extractComponent = (s) => {
+                    const match = s.match(/(\d*)([A-Za-z0-9\.]+)/);
+                    if (!match) throw new Error(`無法解析組件: ${s}`);
+                    const coeff = parseInt(match[1]) || 1;
+                    const formula = match[2];
+                    return { coeff, formula };
+                };
+
+                // Helper to calculate MM (Simplified, no brackets support for this context)
+                const getMolarMass = (formula) => {
+                    let mass = 0;
+                    const regex = /([A-Z][a-z]*)(\d*)/g;
+                    let match;
+
+                    while ((match = regex.exec(formula)) !== null) {
+                        const element = match[1];
+                        const count = parseInt(match[2] || 1);
+                        
+                        let elKey = element;
+                        if (!AtomicMasses[elKey]) {
+                             const massMatch = Object.keys(AtomicMasses).find(k => k.toLowerCase() === element.toLowerCase());
+                             if (massMatch) elKey = massMatch;
+                        }
+
+                        if (!AtomicMasses[elKey]) throw new Error(`未知元素: ${element}`);
+                        mass += AtomicMasses[elKey] * count;
+                    }
+                    return mass;
+                };
+
+                // 1. Process Reactants
+                for (const r of reactantParts) {
+                    const comp = extractComponent(r);
+                    const mm = getMolarMass(comp.formula);
+                    if (mm === 0) throw new Error(`反應物摩爾質量無效: ${comp.formula}`);
+                    totalReactantMass += comp.coeff * mm;
+                }
+
+                // 2. Process Products and Find Target Mass
+                for (const p of productParts) {
+                    const comp = extractComponent(p);
+                    const mm = getMolarMass(comp.formula);
+                    if (mm === 0) throw new Error(`生成物摩爾質量無效: ${comp.formula}`);
+                    
+                    products.push({ formula: comp.formula, mass: comp.coeff * mm });
+
+                    if (comp.formula === targetFormula) {
+                        targetMass = comp.coeff * mm;
+                    }
+                }
+
+                if (targetMass === 0) throw new Error(`目標產物 (${targetFormula}) 在方程式中找不到！`);
+
+                // 3. Calculate Atom Economy
+                const ae = (targetMass / totalReactantMass) * 100;
+
+                return { ae: ae.toFixed(1), totalReactantMass: totalReactantMass.toFixed(1), targetMass: targetMass.toFixed(1), products };
+
+            };
+
+            const handleCalculate = () => {
+                setError('');
+                setResult(null);
+
+                if (!inputEq.trim() || !targetProduct.trim()) {
+                    setError('請輸入完整的平衡方程式和目標產物。');
+                    return;
+                }
+
+                try {
+                    const res = parseEquation(inputEq, targetProduct);
+                    setResult(res);
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+            
+            const handlePresetLoad = (preset) => {
+                setInputEq(preset.eq);
+                setTargetProduct(preset.target);
+                setActivePreset(Presets.findIndex(p => p.id === preset.id));
+                setResult(null);
+                setError('');
+            };
+            
+            // Auto-calculate on load or preset change
+            useEffect(() => {
+                if (inputEq && targetProduct) {
+                    handleCalculate();
+                }
+            }, [inputEq, targetProduct]);
+
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                                <i data-lucide="leaf"></i> 原子經濟計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Atom Economy Calculator (Green Chemistry)</p>
+                        </div>
+                        <button onClick={() => setInputEq('')} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 重置
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Input & Setup */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                            
+                            {/* Equation Input */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-green-100">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="git-merge"></i> 輸入平衡化學方程式
+                                </h3>
+                                <input 
+                                    type="text" 
+                                    value={inputEq}
+                                    onChange={(e) => setInputEq(e.target.value)}
+                                    className="w-full p-3 border-2 border-green-300 rounded-xl font-mono text-xl text-green-900 placeholder-green-300 formula-input outline-none"
+                                    placeholder="e.g. A + B -> C + D"
+                                />
+                                <p className="text-xs text-slate-400 mt-2">
+                                    請確保方程式已平衡，係數和化學式之間無需空格。
+                                </p>
+                            </div>
+                            
+                            {/* Presets & Target */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-lg font-bold mb-4 text-slate-700 flex items-center gap-2">
+                                    <i data-lucide="target"></i> 設定目標產物
+                                </h3>
+                                
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">目標化學式 (Target Formula)</label>
+                                    <input 
+                                        type="text" 
+                                        value={targetProduct}
+                                        onChange={(e) => setTargetProduct(e.target.value)}
+                                        className="w-full p-2 border border-slate-300 rounded-lg font-mono text-lg placeholder-slate-300"
+                                        placeholder="e.g. C2H5OH"
+                                    />
+                                </div>
+                                
+                                <div className="mb-4 pt-3 border-t border-slate-100">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">或載入範例 (Load Preset)</h4>
+                                    <div className="flex gap-2 flex-wrap">
+                                        {Presets.map((p, idx) => (
+                                            <button 
+                                                key={idx}
+                                                onClick={() => handlePresetLoad(p)}
+                                                className={`px-3 py-1.5 rounded-lg border text-xs font-bold shadow-sm transition-all
+                                                    ${p.eq === inputEq ? 'bg-green-100 border-green-400 text-green-700' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}
+                                                `}
+                                            >
+                                                {p.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={handleCalculate}
+                                    className="w-full py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
+                                >
+                                    <i data-lucide="calculator" /> 計算原子經濟
+                                </button>
+                                
+                                {error && (
+                                    <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm font-bold flex items-center gap-2 animate-pulse">
+                                        <i data-lucide="alert-triangle" size={16} /> {error}
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
+
+                        {/* Right: Result & Breakdown */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                            
+                            {result ? (
+                                <div className="animate-in slide-in-from-right duration-500 h-full flex flex-col gap-6">
+                                    
+                                    {/* Final Result Card */}
+                                    <div className="bg-slate-800 rounded-2xl p-6 shadow-lg text-white border border-slate-700 relative overflow-hidden">
+                                        <div className="text-sm text-green-400 font-bold uppercase mb-2">Final Atom Economy</div>
+                                        <div className="text-6xl font-mono font-black text-white tracking-tighter">
+                                            {result.ae}<span className="text-4xl">%</span>
+                                        </div>
+                                        <div className="mt-4 w-full bg-slate-900/50 rounded-full h-4 overflow-hidden border border-slate-700">
+                                            <div className="progress-bar-fill h-full bg-green-500" 
+                                                 style={{ '--target-width': `${Math.min(100, parseFloat(result.ae))}%` }}>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between text-xs text-slate-400 mt-2">
+                                            <span>0% (Wasteful)</span>
+                                            <span>100% (Efficient)</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Breakdown */}
+                                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-grow">
+                                        <div className="bg-slate-50 p-4 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
+                                            <i data-lucide="list-tree" size={18} /> 計算步驟 (Breakdown)
+                                        </div>
+                                        <div className="p-4 space-y-3">
+                                            <div className="text-xs font-bold text-slate-500 uppercase mb-2">Formula Used:</div>
+                                            
+                                            {/* Formula */}
+                                            <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-sm font-mono text-green-800">
+                                                AE = (Mass of Desired Product / Total Mass of Reactants) &times; 100
+                                            </div>
+                                            
+                                            <div className="pt-3">
+                                                <div className="flex justify-between border-b pb-1">
+                                                    <span className="font-bold text-slate-700">目標產物摩爾質量 (Target Mass)</span>
+                                                    <span className="font-mono text-lg text-green-600">{result.targetMass} g/mol</span>
+                                                </div>
+                                                <div className="flex justify-between border-b pb-1 mt-1">
+                                                    <span className="font-bold text-slate-700">反應物總摩爾質量 (Total Reactant Mass)</span>
+                                                    <span className="font-mono text-lg text-red-600">{result.totalReactantMass} g/mol</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="pt-4 text-center">
+                                                <div className="text-xl font-mono text-slate-700">
+                                                    AE = ({result.targetMass} &div; {result.totalReactantMass}) &times; 100
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="flex-grow flex flex-col items-center justify-center text-slate-400 border-4 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 p-12 min-h-[400px]">
+                                    <i data-lucide="target" size={64} className="mb-6 opacity-30" />
+                                    <p className="text-xl text-center font-medium mb-2">開始計算原子經濟...</p>
+                                    <p className="text-sm text-center opacity-70">輸入平衡方程式並選擇目標產物。</p>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic XIII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
