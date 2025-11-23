@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鐵釘防蝕實驗室 (Corrosion Protection Lab)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        
+        .beaker-base {
+            width: 100px;
+            height: 150px;
+            border: 4px solid #94a3b8;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            position: relative;
+            background-color: #e2e8f0; /* Light solution background */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .nail {
+            position: absolute;
+            bottom: 10px;
+            width: 8px;
+            height: 60px;
+            background-color: #78716c; /* Iron color */
+            border-radius: 0 0 4px 4px;
+            z-index: 10;
+        }
+
+        .protection-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 0 0 6px 6px;
+            opacity: 0.6;
+            z-index: 15;
+            transition: opacity 0.5s;
+        }
+
+        /* Color Indicator Spots */
+        .color-spot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transition: transform 1s, opacity 1s;
+        }
+        .red-spot { background-color: #ef4444; /* Fe2+ detection */ }
+        .blue-spot { background-color: #3b82f6; /* OH- / O2 reduction */ }
+
+        /* Rust Animation */
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-corrosion {
+             animation: fade-in 2s ease-out forwards;
+        }
+        
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const TestSetups = [
+            { id: 1, name: '對照組 (Control)', method: 'None', protected: false, failTime: 3, metal: 'Fe', coating: null, sac: null, cathode: false },
+            { id: 2, name: '鍍錫 (Tin-Plating)', method: 'Barrier', protected: false, failTime: 4, metal: 'Fe', coating: 'Sn', sac: null, cathode: false },
+            { id: 3, name: '鍍鋅 (Galvanizing)', method: 'Sacrificial', protected: true, failTime: 8, metal: 'Fe', coating: 'Zn', sac: 'Zn', cathode: false },
+            { id: 4, name: '犧牲 Mg 塊', method: 'Sacrificial', protected: true, failTime: 12, metal: 'Fe', coating: null, sac: 'Mg', cathode: false },
+            { id: 5, name: '陰極保護 (Cathodic)', method: 'Cathodic', protected: true, failTime: 12, metal: 'Fe', coating: null, sac: null, cathode: true }
+        ];
+
+        const MetalColors = {
+            Fe: '#78716c', Zn: '#94a3b8', Mg: '#fcd34d', Sn: '#cbd5e1', Cu: '#f97316'
+        };
+
+        const App = () => {
+            const [isSimulating, setIsSimulating] = useState(false);
+            const [dayCount, setDayCount] = useState(0);
+            const [testState, setTestState] = useState(TestSetups.map(s => ({ ...s, corrosionTime: 0, anode: null, cathode: null })));
+            const [simSpeed, setSimSpeed] = useState(200); // ms per day
+
+            // Simulation Effect
+            useEffect(() => {
+                let interval;
+                if (isSimulating && dayCount < 15) {
+                    interval = setInterval(() => {
+                        setDayCount(prev => prev + 1);
+                    }, simSpeed); 
+                } else if (dayCount >= 15) {
+                    setIsSimulating(false);
+                }
+                return () => clearInterval(interval);
+            }, [isSimulating, dayCount, simSpeed]);
+
+            // Corrosion Logic Effect
+            useEffect(() => {
+                if (dayCount > 0) {
+                    setTestState(prev => prev.map(setup => {
+                        if (setup.corrosionTime === 0) {
+                            // Calculate corrosion based on setup
+                            let isCorroding = false;
+                            let newAnode = setup.metal;
+                            let newCathode = 'O₂';
+                            let speed = 1;
+
+                            if (setup.cathode) { // Cathodic Protection (Iron is cathode)
+                                newAnode = 'Current';
+                                newCathode = 'Fe';
+                                isCorroding = false; // Iron is protected
+                            } else if (setup.sac) { // Sacrificial Protection (e.g., Zn on Fe)
+                                newAnode = setup.sac;
+                                newCathode = setup.metal;
+                                isCorroding = false; // Sacrifice metal corrodes first
+                            } else if (setup.coating === 'Sn') { // Tin Plating (Fe is anode if Sn is scratched)
+                                // Sn is less reactive than Fe, so Fe corrodes if scratched!
+                                isCorroding = true;
+                                newAnode = 'Fe';
+                                newCathode = 'O₂';
+                                speed = 2; // Accelerated rust
+                            } else if (setup.method === 'None') {
+                                isCorroding = true;
+                                newAnode = 'Fe';
+                                newCathode = 'O₂';
+                            }
+                            
+                            // Start timing if corrosion should happen (and hasn't failed yet)
+                            if (isCorroding) {
+                                return { ...setup, corrosionTime: dayCount * speed, anode: newAnode, cathode: newCathode };
+                            }
+                            return setup;
+                        }
+                        // Continue corrosion (just update time for effect)
+                        return { ...setup, corrosionTime: dayCount };
+                    }));
+                }
+            }, [dayCount]);
+
+            const startSimulation = () => {
+                setDayCount(0);
+                setTestState(TestSetups.map(s => ({ ...s, corrosionTime: 0, anode: null, cathode: null })));
+                setIsSimulating(true);
+            };
+
+            const MetalDisplay = ({ setup }) => {
+                const isCorroding = setup.corrosionTime > 0;
+                let topMetal = setup.metal; // Base metal
+                let layerColor = setup.coating ? MetalColors[setup.coating] : 'transparent';
+                
+                // Show corrosion on the unprotected metal
+                const rustOpacity = isCorroding && setup.method !== 'Sacrificial' ? Math.min(1, setup.corrosionTime / setup.failTime) : 0;
+                
+                // For Tin, rust starts late
+                if (setup.coating === 'Sn' && setup.corrosionTime < 4) {
+                    layerColor = MetalColors.Sn;
+                } else if (setup.coating === 'Sn' && setup.corrosionTime >= 4) {
+                    // Tin fails, iron rusts
+                    layerColor = MetalColors.Fe;
+                }
+
+                // Sacrificial metal disappears over time
+                const sacOpacity = setup.sac ? Math.max(0.1, 1 - setup.corrosionTime / setup.failTime) : 1;
+
+                return (
+                    <div className="relative w-full h-full flex items-center justify-center">
+                        {/* Protective/Sacrificial Layer */}
+                        {setup.sac && (
+                            <div className="absolute w-8 h-8 rounded-full bg-yellow-500 border border-yellow-600" style={{ opacity: sacOpacity, zIndex: 12 }}>
+                                <span className="absolute inset-0 text-center font-bold text-slate-800 text-xs mt-2">{setup.sac}</span>
+                            </div>
+                        )}
+                        
+                        {/* Iron Nail (Base) */}
+                        <div className={`nail bg-slate-700 w-2.5 h-16 rounded-b-full shadow-lg border-b-2 border-slate-600 ${setup.sac ? 'mt-8' : ''}`}>
+                            {/* Corrosion Layer */}
+                            <div className={`absolute inset-0 bg-red-800/70 rounded-b-full animate-corrosion`} 
+                                 style={{ opacity: rustOpacity, animationDelay: '0s' }}>
+                            </div>
+                        </div>
+
+                        {/* Electrolyte Indicator (Rust Spots) */}
+                        {isCorroding && (
+                             <div className="absolute bottom-1/2 left-1/2 w-full h-full">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="color-spot red-spot" style={{ left: `${20+i*10}px`, top: `${20+i*10}px`, opacity: Math.min(1, setup.corrosionTime * 0.3) }}></div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const BeakerVisual = ({ setup }) => {
+                const currentRust = testState.find(r => r.id === setup.id);
+                const corrosionRate = currentRust?.corrosionTime > 0 ? 'Corroding' : 'Protected';
+                
+                // Determine solution color and top layer
+                let solnColor = setup.method !== 'None' ? 'bg-sky-100' : 'bg-white';
+                let topLayerColor = setup.id === 3 ? 'bg-yellow-700 h-1/3' : 'transparent';
+                
+                return (
+                    <div className="flex flex-col items-center w-full p-2">
+                        <div className="relative w-28 h-48 flex flex-col items-center">
+                            {/* Glass Container */}
+                            <div className="beaker-base">
+                                <div className={`absolute bottom-0 w-full h-3/4 ${solnColor} opacity-70`}></div>
+                                {/* Top Layer (Oil) */}
+                                <div className={`w-full ${topLayerColor} absolute top-0`}></div>
+                                
+                                <MetalDisplay setup={setup} />
+                            </div>
+                            
+                            <div className="mt-2 text-center w-full">
+                                <h4 className="text-sm font-bold text-slate-700">{setup.name}</h4>
+                                <p className="text-xs text-slate-500 italic">{setup.description}</p>
+                                <p className={`mt-1 font-bold text-lg ${currentRust?.corrosionTime > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {currentRust?.corrosionTime > 0 ? `生鏽中 (Day ${currentRust.corrosionTime})` : '保護成功'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="shield"></i> 鐵釘防蝕實驗室
+                            </h1>
+                            <p className="text-slate-400 text-sm">Corrosion Protection Lab</p>
+                        </div>
+                        <button onClick={startSimulation} disabled={isSimulating || dayCount >= 15} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 font-bold text-sm flex items-center gap-2 transition-colors disabled:bg-slate-400">
+                            <i data-lucide={isSimulating ? "loader-2" : "play"} size={16} className={isSimulating ? 'animate-spin' : ''}></i>
+                            {isSimulating ? `模擬中... (Day ${dayCount})` : dayCount >= 15 ? '重啟 (Restart)' : '開始模擬 (Start)'}
+                        </button>
+                    </div>
+
+                    {/* Simulation Grid */}
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 flex justify-around gap-4 mb-8 flex-wrap">
+                        {testState.map(setup => <BeakerVisual key={setup.id} setup={setup} />)}
+                    </div>
+
+                    {/* Theory and Results Summary */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        {/* Protection Methods */}
+                        <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                            <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                <i data-lucide="zap" className="text-orange-500" /> 電化學保護原理 (Electrochemical Protection)
+                            </h3>
+                            <div className="space-y-4">
+                                
+                                {/* Sacrificial Protection */}
+                                <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
+                                    <strong className="text-yellow-800 block mb-1 text-lg">犧牲性保護 (Sacrificial Protection)</strong>
+                                    <p className="text-sm text-yellow-700">
+                                        將活性<strong>更高</strong>的金屬 (如 Zn 或 Mg) 連接在鐵上。活性更高的金屬充當<strong>陽極 (Anode)</strong>，優先被氧化，保護鐵成為陰極 (Cathode)。
+                                        <br/> 
+                                        *觀察：#3, #4 中，犧牲金屬會慢慢消失，但鐵釘保持完好。*
+                                    </p>
+                                </div>
+                                
+                                {/* Cathodic Protection */}
+                                <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                                    <strong className="text-blue-800 block mb-1 text-lg">陰極保護 (Cathodic Protection)</strong>
+                                    <p className="text-sm text-blue-700">
+                                        通過外部電源提供電子，強制將鐵變成<strong>陰極 (Cathode)</strong>，阻止鐵 (Fe) 失去電子 (Fe &rarr; Fe²⁺ + 2e⁻)。
+                                        <br/>
+                                        *觀察：#5 中，鐵釘永遠不會生鏽。*
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tin Plating Danger */}
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                <i data-lucide="alert-triangle" className="text-red-400" /> 警示：鍍錫 (Tin-Plating) 的危險
+                            </h3>
+                            <div className="text-sm text-slate-300 leading-relaxed space-y-2">
+                                <p className="font-bold text-yellow-400">錫 (Sn) 的活性比鐵 (Fe) 低！</p>
+                                <p>當鍍錫鐵皮（如罐頭）的錫層破損時，鐵會暴露在空氣中，此時：</p>
+                                <p className="font-mono text-red-400">鐵 (Fe) $\rightarrow$ 陽極 (Anode)</p>
+                                <p className="font-mono text-white">錫 (Sn) $\rightarrow$ 陰極 (Cathode)</p>
+                                <p class="text-xs mt-2 text-slate-400">
+                                    結果：鐵會優先腐蝕，且生鏽速度比裸露的鐵更快（因為 Sn 作為陰極加速了反應）。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic III
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
