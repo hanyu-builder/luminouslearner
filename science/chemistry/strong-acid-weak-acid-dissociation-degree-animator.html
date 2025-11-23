@@ -33,6 +33,15 @@
         .bulb-bright { fill: #facc15; filter: drop-shadow(0 0 25px #facc15); opacity: 1; }
         .bulb-super-bright { fill: #fef08a; filter: drop-shadow(0 0 40px #facc15); opacity: 1; }
         
+        /* Electron Flow Animation */
+        @keyframes flow {
+            0% { stroke-dashoffset: 20; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .wire-active {
+            stroke-dasharray: 5;
+            animation: flow 0.5s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -275,15 +284,14 @@
                                         <p>{currentAcid.desc}</p>
                                         <div className="mt-2 bg-black/30 p-2 rounded font-mono text-xs text-center">
                                             {currentAcid.type === 'strong' 
-                                                ? <span>{currentAcid.formula} &rarr; {currentAcid.basicity}H⁺ + A{currentAcid.basicity > 1 ? '²⁻' : '⁻'}</span>
-                                                : <span>{currentAcid.formula} &rlarr; H⁺ + A⁻</span>}
+                                                ? <span>{currentAcid.formula} → {currentAcid.basicity}H⁺ + A{currentAcid.basicity > 1 ? '²⁻' : '⁻'}</span>
+                                                : <span>{currentAcid.formula} ⇌ H⁺ + A⁻</span>}
                                         </div>
                                     </div>
                                     
                                     {/* Basicity Concept (New) */}
                                     <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-purple-500">
                                         <strong className="text-white block mb-1">2. 鹽基度 (Basicity)</strong>
-                                        <p>
                                             這是指每個酸分子能釋放的 H⁺ 數量。
                                             <br/>
                                             <span className="text-purple-300 font-bold">{currentAcid.formula} 是 {currentAcid.basicity}元酸 (Basicity = {currentAcid.basicity})</span>
