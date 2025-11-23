@@ -16,31 +16,21 @@
         /* Particle Animation */
         @keyframes float {
             0% { transform: translate(0, 0) rotate(0deg); }
-            25% { transform: translate(10px, 10px) rotate(10deg); }
-            50% { transform: translate(0, 20px) rotate(0deg); }
-            75% { transform: translate(-10px, 10px) rotate(-10deg); }
+            25% { transform: translate(5px, 5px) rotate(10deg); }
+            50% { transform: translate(0, 10px) rotate(0deg); }
+            75% { transform: translate(-5px, 5px) rotate(-10deg); }
             100% { transform: translate(0, 0) rotate(0deg); }
         }
         .particle {
             position: absolute;
-            animation: float 6s infinite ease-in-out;
+            animation: float 4s infinite ease-in-out;
             transition: all 0.5s ease;
         }
         
-        /* Bulb Glow Styles */
-        .bulb-off { fill: #374151; filter: none; opacity: 0.5; }
-        .bulb-dim { fill: #facc15; filter: drop-shadow(0 0 5px #facc15); opacity: 0.6; }
-        .bulb-bright { fill: #facc15; filter: drop-shadow(0 0 25px #facc15); opacity: 1; }
-        
-        /* Electron Flow Animation */
-        @keyframes flow {
-            0% { stroke-dashoffset: 20; }
-            100% { stroke-dashoffset: 0; }
-        }
-        .wire-active {
-            stroke-dasharray: 5;
-            animation: flow 0.5s linear infinite;
-        }
+        /* Bulb Glow */
+        .bulb-off { fill: #4b5563; filter: none; }
+        .bulb-dim { fill: #fcd34d; filter: drop-shadow(0 0 5px #fcd34d); opacity: 0.6; }
+        .bulb-bright { fill: #fbbf24; filter: drop-shadow(0 0 20px #fbbf24); opacity: 1; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -57,26 +47,23 @@
                 type: 'strong', 
                 formula: 'HCl',
                 dissociation: 1.0, // 100%
-                ph: '1.0',
-                desc: '強酸：在水中完全解離 (Fully ionized)。不存在完整的 HCl 分子，只有 H⁺ 和 Cl⁻ 離子。'
+                desc: '強酸：完全解離 (Fully ionized)。溶液中全是離子。'
             },
             { 
                 id: 'HF', 
                 name: '氫氟酸 (Hydrofluoric Acid)', 
                 type: 'weak', 
                 formula: 'HF',
-                dissociation: 0.2, // Visual approximation (~20%)
-                ph: '2.1',
-                desc: '弱酸：部分解離 (Partially ionized)。溶液中大部分是 HF 分子，只有少量 H⁺ 和 F⁻。'
+                dissociation: 0.2, // ~20% for visual demo (real is less but need to see ions)
+                desc: '弱酸：部分解離 (Partially ionized)。大部分分子保持完整。'
             },
             { 
                 id: 'CH3COOH', 
                 name: '乙酸 (Ethanoic Acid)', 
                 type: 'weak', 
                 formula: 'CH₃COOH',
-                dissociation: 0.1, // Visual approximation (~10%)
-                ph: '2.9',
-                desc: '弱酸：解離度極低。絕大多數以 CH₃COOH 分子形式存在，導電性弱。'
+                dissociation: 0.1, // ~10% for visual demo
+                desc: '弱酸：解離度極低。溶液中主要是酸分子。'
             }
         ];
 
@@ -88,45 +75,38 @@
             // Generate particles based on acid type
             useEffect(() => {
                 const newParticles = [];
-                const totalUnits = 15; // Total acid units to simulate
+                const totalParticles = 15; // Total acid units
+                const ionizedCount = Math.round(totalParticles * currentAcid.dissociation);
                 
-                // Calculate how many dissociate
-                const ionizedCount = Math.round(totalUnits * currentAcid.dissociation);
-                const molecularCount = totalUnits - ionizedCount;
-
-                // 1. Add Ions (H+ and A-)
+                // Add ionized particles (H+ and A-)
                 for(let i=0; i<ionizedCount; i++) {
-                    // H+ Ion
+                    // H+
                     newParticles.push({ 
-                        id: `h-${i}`, type: 'H+', label: 'H⁺',
-                        x: Math.random() * 80 + 10, 
-                        y: Math.random() * 60 + 20, 
-                        delay: Math.random() * 2 
+                        id: `h-${i}`, type: 'H+', 
+                        x: Math.random()*80+10, y: Math.random()*80+10, 
+                        delay: Math.random() 
                     });
-                    // Anion
-                    let anionLabel = currentAcid.formula === 'HCl' ? 'Cl⁻' : 
-                                     currentAcid.formula === 'HF' ? 'F⁻' : 'CH₃COO⁻';
+                    // A-
                     newParticles.push({ 
-                        id: `a-${i}`, type: 'A-', label: anionLabel,
-                        x: Math.random() * 80 + 10, 
-                        y: Math.random() * 60 + 20, 
-                        delay: Math.random() * 2 
+                        id: `a-${i}`, type: 'A-', 
+                        label: currentAcid.formula === 'HCl' ? 'Cl⁻' : currentAcid.formula === 'HF' ? 'F⁻' : 'CH₃COO⁻', 
+                        x: Math.random()*80+10, y: Math.random()*80+10, 
+                        delay: Math.random() 
                     });
                 }
 
-                // 2. Add Molecules (HA)
-                for(let i=0; i<molecularCount; i++) {
+                // Add molecular particles (HA) - Not ionized
+                for(let i=0; i<(totalParticles - ionizedCount); i++) {
                     newParticles.push({ 
-                        id: `m-${i}`, type: 'HA', label: currentAcid.formula,
-                        x: Math.random() * 80 + 10, 
-                        y: Math.random() * 60 + 20, 
-                        delay: Math.random() * 2 
+                        id: `m-${i}`, type: 'HA', 
+                        label: currentAcid.formula, 
+                        x: Math.random()*80+10, y: Math.random()*80+10, 
+                        delay: Math.random() 
                     });
                 }
                 
                 setParticles(newParticles);
-                // Turn off switch when changing acid to see effect clearly
-                setIsConducting(false); 
+                setIsConducting(false); // Reset switch
             }, [currentAcid]);
 
             const getBulbClass = () => {
@@ -138,12 +118,12 @@
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
                     
                     {/* Header */}
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-slate-700 pb-4 gap-4">
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-green-400 flex items-center gap-2">
                                 <i data-lucide="microscope"></i> 強弱酸顯微鏡
                             </h1>
-                            <p className="text-slate-400 text-sm">Strong vs Weak Acid: Dissociation & Conductivity</p>
+                            <p className="text-slate-400 text-sm">Visualizing Acid Dissociation & Conductivity</p>
                         </div>
                         
                         <div className="flex gap-2">
@@ -151,9 +131,9 @@
                                 <button
                                     key={acid.id}
                                     onClick={() => setCurrentAcid(acid)}
-                                    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all
+                                    className={`px-3 py-1 rounded border text-sm font-bold transition-colors
                                         ${currentAcid.id === acid.id 
-                                            ? 'bg-green-600 text-white border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' 
+                                            ? 'bg-green-600 text-white border-green-500' 
                                             : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}
                                     `}
                                 >
@@ -165,40 +145,35 @@
 
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
                         
-                        {/* Left: Microscope / Beaker View */}
-                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-between min-h-[500px] shadow-2xl overflow-hidden p-0">
+                        {/* Left: Microscope View */}
+                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-center min-h-[500px] shadow-2xl overflow-hidden p-8">
                             
-                            {/* 1. Circuit Overlay (Top) */}
-                            <div className="absolute top-0 w-full h-full pointer-events-none z-20">
-                                {/* Bulb SVG */}
-                                <div className="absolute top-4 left-1/2 -translate-x-1/2">
-                                    <svg width="80" height="80" viewBox="0 0 24 24" className={`transition-all duration-500 ${getBulbClass()}`}>
+                            {/* Circuit Overlay */}
+                            <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-20">
+                                {/* Electrodes */}
+                                <div className="absolute top-[10%] left-[30%] w-4 h-32 bg-gray-400 border-2 border-gray-500"></div>
+                                <div className="absolute top-[10%] right-[30%] w-4 h-32 bg-gray-400 border-2 border-gray-500"></div>
+                                
+                                {/* Wires */}
+                                <div className="absolute top-[10%] left-[31%] w-[20%] h-2 bg-yellow-600 -translate-y-2 border-t border-yellow-700"></div>
+                                <div className="absolute top-[10%] right-[31%] w-[20%] h-2 bg-yellow-600 -translate-y-2 border-t border-yellow-700"></div>
+                                
+                                {/* Bulb */}
+                                <div className="absolute top-[5%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+                                    <svg width="60" height="60" viewBox="0 0 24 24" className={`transition-all duration-500 ${getBulbClass()}`}>
                                         <path d="M9 22h6c.6 0 1-.4 1-1v-2h-8v2c0 .6.4 1 1 1zm2.8-20C7.5 2 4.3 4.9 4.3 9c0 2.5 1.2 4.7 3 6.1V18c0 .6.4 1 1 1h7.3c.6 0 1-.4 1-1v-2.9c1.9-1.4 3-3.6 3-6.1 0-4.1-3.2-7-7.3-7z"/>
                                     </svg>
                                 </div>
-
-                                {/* Electrodes */}
-                                <div className="absolute top-[100px] left-[35%] w-4 h-40 bg-gray-400 border-2 border-gray-500 rounded-b-md"></div>
-                                <div className="absolute top-[100px] right-[35%] w-4 h-40 bg-gray-400 border-2 border-gray-500 rounded-b-md"></div>
-                                
-                                {/* Wires */}
-                                <svg className="absolute top-0 left-0 w-full h-full">
-                                    <path d="M 118 15 L 118 5 L 250 5 L 250 100" fill="none" stroke="#ca8a04" strokeWidth="3" className={isConducting ? "wire-active" : ""} /> {/* Right wire */}
-                                    <path d="M 106 15 L 106 5 L 40 5 L 40 80" fill="none" stroke="#ca8a04" strokeWidth="3" className={isConducting ? "wire-active" : ""} /> {/* Left wire to switch */}
-                                    <path d="M 40 100 L 40 120 L 150 120" fill="none" stroke="#ca8a04" strokeWidth="3" className={isConducting ? "wire-active" : ""} /> {/* Switch to Electrode */}
-                                </svg>
                             </div>
 
-                            {/* 2. Solution View (Bottom) */}
-                            <div className="relative w-full h-[70%] mt-auto bg-blue-900/20 border-t-4 border-blue-500/30 backdrop-blur-sm overflow-hidden">
+                            {/* Solution View (Microscopic) */}
+                            <div className="relative w-full h-80 bg-blue-900/30 rounded-2xl border border-blue-500/30 backdrop-blur-sm overflow-hidden mt-20">
+                                {/* Water background */}
+                                <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIiBmaWxsPSJub25lIiBzdHJva2U9IiM2MGY1ZmEiIHN0cm9rZS13aWR0aD0iMSI+PHBhdGggZD0iTTEgMTBsNC00IDQgNCA0LTQgNCckeIi8+PC9zdmc+')]"></div>
                                 
-                                {/* Water Background */}
-                                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-500/20 to-transparent"></div>
-                                
-                                {/* Particles */}
-                                {particles.map((p) => (
+                                {particles.map((p, i) => (
                                     <div key={p.id} 
-                                         className={`particle flex items-center justify-center font-bold shadow-lg border select-none
+                                         className={`particle flex items-center justify-center font-bold shadow-lg border transition-all duration-1000
                                             ${p.type === 'H+' 
                                                 ? 'w-8 h-8 rounded-full bg-red-500 border-red-400 text-white z-10 text-sm' 
                                                 : p.type === 'A-' 
@@ -211,25 +186,22 @@
                                              top: `${p.y}%`, 
                                              animationDelay: `${p.delay}s`
                                          }}>
-                                        {p.label}
+                                        {p.type === 'H+' ? 'H⁺' : p.label}
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Switch Control */}
-                            <div className="absolute top-[60px] left-[10px] z-30">
+                            {/* Conductivity Control */}
+                            <div className="mt-6 relative z-30">
                                 <button 
                                     onClick={() => setIsConducting(!isConducting)}
-                                    className={`w-16 h-24 rounded-lg border-4 shadow-xl transition-transform active:scale-95 flex flex-col items-center justify-center
-                                        ${isConducting 
-                                            ? 'bg-green-600 border-green-800 translate-y-1' 
-                                            : 'bg-red-600 border-red-800 -translate-y-1'}
+                                    className={`px-8 py-3 rounded-full font-bold text-lg shadow-lg transition-all flex items-center gap-2
+                                        ${isConducting ? 'bg-yellow-500 text-yellow-900 hover:bg-yellow-400' : 'bg-slate-600 text-slate-300 hover:bg-slate-500'}
                                     `}
                                 >
-                                    <div className="text-white font-bold text-xs mb-1">{isConducting ? 'ON' : 'OFF'}</div>
-                                    <div className="w-2 h-8 bg-white/50 rounded-full"></div>
+                                    <i data-lucide={isConducting ? 'power' : 'power-off'} />
+                                    {isConducting ? '電源已接通 (ON)' : '接通電源 (OFF)'}
                                 </button>
-                                <div className="text-center text-xs text-slate-500 mt-1 font-bold">電源開關</div>
                             </div>
 
                         </div>
@@ -237,8 +209,7 @@
                         {/* Right: Info Panel */}
                         <div className="w-full lg:w-1/3 flex flex-col gap-6">
                             
-                            {/* Info Card */}
-                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow animate-in slide-in-from-right">
+                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow">
                                 <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
                                     <i data-lucide="book-open" /> 化學原理
                                 </h3>
@@ -252,36 +223,22 @@
                                 </div>
 
                                 <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
-                                    
-                                    {/* Dissociation Concept */}
-                                    <div className={`p-3 rounded-lg border-l-4 transition-colors ${currentAcid.type === 'strong' ? 'border-red-500 bg-red-900/10' : 'border-yellow-500 bg-yellow-900/10'}`}>
-                                        <strong className="text-white block mb-1">1. 解離度 (Degree of Dissociation)</strong>
-                                        <p>{currentAcid.desc}</p>
-                                        <div className="mt-2 bg-black/30 p-2 rounded font-mono text-xs text-center">
+                                    <div className={`p-3 rounded-lg border-l-4 ${currentAcid.type === 'strong' ? 'border-red-500 bg-red-900/20' : 'border-yellow-500 bg-yellow-900/20'}`}>
+                                        <strong className="text-white block mb-1">1. 解離度 (Dissociation)</strong>
+                                        {currentAcid.desc}
+                                        <br/>
+                                        <span className="text-xs opacity-70 font-mono mt-1 block">
                                             {currentAcid.type === 'strong' 
-                                                ? <span>{currentAcid.formula} &rarr; H⁺ + A⁻</span>
-                                                : <span>{currentAcid.formula} &rlarr; H⁺ + A⁻</span>}
-                                        </div>
+                                                ? `${currentAcid.formula} → H⁺ + A⁻`
+                                                : `${currentAcid.formula} ⇌ H⁺ + A⁻`}
+                                        </span>
                                     </div>
                                     
-                                    {/* Conductivity Concept */}
-                                    <div className={`p-3 rounded-lg border-l-4 border-blue-500 bg-blue-900/10 transition-opacity duration-500 ${isConducting ? 'opacity-100' : 'opacity-50'}`}>
-                                        <strong className="text-white block mb-1">2. 導電性 (Conductivity)</strong>
+                                    <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-blue-500">
+                                        <strong className="text-white block mb-1">2. 離子濃度與導電性</strong>
                                         {currentAcid.type === 'strong' 
-                                            ? '強酸含有大量流動離子 (Mobile Ions)，導電性極高，燈泡明亮。'
+                                            ? '強酸含有大量自由流動的離子 (Mobile Ions)，因此導電性極高，燈泡明亮。'
                                             : '弱酸只有少量離子，大部分以分子形式存在。導電性較低，燈泡較暗。'}
-                                    </div>
-
-                                    {/* pH Concept */}
-                                    <div className="p-3 rounded-lg border-l-4 border-green-500 bg-green-900/10">
-                                        <strong className="text-white block mb-1">3. pH 值比較 (同濃度 0.1M)</strong>
-                                        <div className="flex justify-between items-center mt-1">
-                                            <span>pH Value:</span>
-                                            <span className="text-xl font-bold text-green-400">{currentAcid.ph}</span>
-                                        </div>
-                                        <p className="text-xs text-slate-400 mt-1">
-                                            {currentAcid.type === 'strong' ? '[H⁺] 濃度高' : '[H⁺] 濃度低'}
-                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -290,9 +247,9 @@
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-xs text-slate-400">
                                 <div className="font-bold mb-2 uppercase tracking-wider">圖例 (Legend)</div>
                                 <div className="flex flex-wrap gap-4">
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500 border border-red-400"></div> H⁺ (氫離子)</div>
-                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500 border border-green-400"></div> A⁻ (酸根離子)</div>
-                                    <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-slate-200 border border-slate-300"></div> HA (酸分子)</div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div> H⁺ (氫離子)</div>
+                                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-green-500"></div> A⁻ (酸根離子)</div>
+                                    <div className="flex items-center gap-2"><div className="w-4 h-3 rounded-full bg-slate-200"></div> HA (酸分子)</div>
                                 </div>
                             </div>
 
