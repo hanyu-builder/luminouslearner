@@ -35,12 +35,12 @@
         const { useState, useEffect } = React;
 
         const AtomicMasses = {
-            H: 1.0, C: 12.0, N: 14.0, O: 16.0, Na: 23.0, Mg: 24.3, S: 32.1, Cl: 35.5, K: 39.1, Cu: 63.5, Fe: 55.8
+            H: 1.0, C: 12.0, N: 14.0, O: 16.0, Na: 23.0, Mg: 24.3, S: 32.1, Cl: 35.5, K: 39.1, Cu: 63.5, Fe: 55.8, Ag: 107.9
         };
 
         const ExampleCategories = [
             {
-                name: 'Mg 燃燒',
+                name: 'Mg 燃燒 (基本)',
                 items: [
                     { name: 'Mg + O₂ → MgO', a: { f: 'Mg', c: 2, m: 2.43 }, p: { f: 'MgO', c: 2 }, actual: 3.5 }
                 ]
@@ -55,6 +55,28 @@
                 name: '中和反應',
                 items: [
                     { name: 'NaOH + HCl → NaCl', a: { f: 'NaOH', c: 1, m: 4.0 }, p: { f: 'NaCl', c: 1 }, actual: 5.2 }
+                ]
+            },
+             {
+                name: '金屬與酸',
+                items: [
+                    // Fe + H2SO4 -> FeSO4 + H2
+                    { name: 'Fe + H₂SO₄ → H₂', a: { f: 'Fe', c: 1, m: 10.0 }, p: { f: 'H2', c: 1 }, actual: 0.3 }
+                ]
+            },
+            {
+                name: '有機合成',
+                items: [
+                    // Aspirin Synthesis: C7H6O3 + C4H6O3 -> C9H8O4 + C2H4O2
+                    // Salicylic Acid (138.1) + Acetic Anhydride -> Aspirin (180.2) + Acetic Acid
+                    { name: '阿士匹靈合成', a: { f: 'C7H6O3', c: 1, m: 10.0 }, p: { f: 'C9H8O4', c: 1 }, actual: 11.5 }
+                ]
+            },
+            {
+                name: '沉澱反應',
+                items: [
+                    // AgNO3 + NaCl -> AgCl + NaNO3
+                    { name: 'AgNO₃ + NaCl → AgCl', a: { f: 'AgNO3', c: 1, m: 17.0 }, p: { f: 'AgCl', c: 1 }, actual: 13.5 }
                 ]
             }
         ];
@@ -75,7 +97,6 @@
             const calculateMolarMass = (formula) => {
                 if (!formula) return 0;
                 let mass = 0;
-                // Simplified parser that handles dots for hydrates
                 const parts = formula.split('.');
                 
                 const parseSingleFormula = (f) => {
@@ -103,7 +124,7 @@
                             } else {
                                 throw new Error(`未知元素: ${element}`);
                             }
-                        } else { i++; } // Skip non-A-Z or numbers
+                        } else { i++; }
                     }
                     return singleMass;
                 };
@@ -111,10 +132,8 @@
                 try {
                     let totalMass = 0;
                     
-                    // Main substance
                     totalMass += parseSingleFormula(parts[0]);
                     
-                    // Hydrate
                     if (parts.length > 1) {
                          const hydratePart = parts[1];
                          const match = hydratePart.match(/^(\d*)(.*)/);
@@ -169,8 +188,8 @@
                     // Step 4: Calculate Percentage Yield
                     const yieldPercent = (actualP / massP_theo) * 100;
                     
-                    if (yieldPercent > 100) {
-                        setError('注意：產率超過 100%，可能是因為產物不純 (Impure product) 或數據輸入錯誤。');
+                    if (yieldPercent > 105) { // Warning if over 105%
+                        setError('注意：產率超過 105%，可能是因為產物不純 (Impure product) 或數據輸入錯誤。');
                     }
 
                     setTheoreticalYield(massP_theo.toFixed(2));
