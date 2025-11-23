@@ -102,7 +102,7 @@
             // Generate particles based on acid type
             useEffect(() => {
                 const newParticles = [];
-                const totalUnits = 12; // Base units
+                const totalUnits = 15; // Total acid units to simulate
                 
                 // Calculate how many dissociate
                 const ionizedCount = Math.round(totalUnits * currentAcid.dissociation);
@@ -110,17 +110,14 @@
 
                 // 1. Add Ions (H+ and A-)
                 for(let i=0; i<ionizedCount; i++) {
-                    // Add H+ (Multiply by basicity)
-                    for(let h=0; h<currentAcid.basicity; h++) {
-                        newParticles.push({ 
-                            id: `h-${i}-${h}`, type: 'H+', label: 'H⁺',
-                            x: Math.random() * 80 + 10, 
-                            y: Math.random() * 60 + 20, 
-                            delay: Math.random() * 2 
-                        });
-                    }
-                    
-                    // Add Anion
+                    // H+ Ion
+                    newParticles.push({ 
+                        id: `h-${i}`, type: 'H+', label: 'H⁺',
+                        x: Math.random() * 80 + 10, 
+                        y: Math.random() * 60 + 20, 
+                        delay: Math.random() * 2 
+                    });
+                    // Anion
                     let anionLabel = '';
                     if (currentAcid.id === 'HCl') anionLabel = 'Cl⁻';
                     else if (currentAcid.id === 'H2SO4') anionLabel = 'SO₄²⁻';
@@ -146,6 +143,7 @@
                 }
                 
                 setParticles(newParticles);
+                // Turn off switch when changing acid to see effect clearly
                 setIsConducting(false); 
             }, [currentAcid]);
 
@@ -284,7 +282,7 @@
                                         <p>{currentAcid.desc}</p>
                                         <div className="mt-2 bg-black/30 p-2 rounded font-mono text-xs text-center">
                                             {currentAcid.type === 'strong' 
-                                                ? <span>{currentAcid.formula} → {currentAcid.basicity}H⁺ + A{currentAcid.basicity > 1 ? '²⁻' : '⁻'}</span>
+                                                ? <span>{currentAcid.formula} &rarr; {currentAcid.basicity}H⁺ + A{currentAcid.basicity > 1 ? '²⁻' : '⁻'}</span>
                                                 : <span>{currentAcid.formula} ⇌ H⁺ + A⁻</span>}
                                         </div>
                                     </div>
@@ -292,6 +290,7 @@
                                     {/* Basicity Concept (New) */}
                                     <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-purple-500">
                                         <strong className="text-white block mb-1">2. 鹽基度 (Basicity)</strong>
+                                        <p>
                                             這是指每個酸分子能釋放的 H⁺ 數量。
                                             <br/>
                                             <span className="text-purple-300 font-bold">{currentAcid.formula} 是 {currentAcid.basicity}元酸 (Basicity = {currentAcid.basicity})</span>
