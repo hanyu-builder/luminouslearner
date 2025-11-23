@@ -110,41 +110,43 @@
             useEffect(() => {
                 if (dayCount > 0) {
                     setTestState(prev => prev.map(setup => {
-                        if (setup.corrosionTime === 0) {
-                            // Calculate corrosion based on setup
-                            let isCorroding = false;
-                            let newAnode = setup.metal;
-                            let newCathode = 'O₂';
-                            let speed = 1;
+                        // Logic to update corrosion based on setup properties and time
+                        // This part needs to be robust to avoid infinite loops or state inconsistencies
+                        // Simplified logic: 
+                        let currentCorrosion = setup.corrosionTime;
+                        
+                        let isCorroding = false;
+                        let newAnode = setup.anode;
+                        let newCathode = setup.cathode;
+                        let speed = 1;
 
-                            if (setup.cathode) { // Cathodic Protection (Iron is cathode)
-                                newAnode = 'Current';
-                                newCathode = 'Fe';
-                                isCorroding = false; // Iron is protected
-                            } else if (setup.sac) { // Sacrificial Protection (e.g., Zn on Fe)
-                                newAnode = setup.sac;
-                                newCathode = setup.metal;
-                                isCorroding = false; // Sacrifice metal corrodes first
-                            } else if (setup.coating === 'Sn') { // Tin Plating (Fe is anode if Sn is scratched)
-                                // Sn is less reactive than Fe, so Fe corrodes if scratched!
-                                isCorroding = true;
-                                newAnode = 'Fe';
-                                newCathode = 'O₂';
-                                speed = 2; // Accelerated rust
-                            } else if (setup.method === 'None') {
-                                isCorroding = true;
-                                newAnode = 'Fe';
-                                newCathode = 'O₂';
-                            }
-                            
-                            // Start timing if corrosion should happen (and hasn't failed yet)
-                            if (isCorroding) {
-                                return { ...setup, corrosionTime: dayCount * speed, anode: newAnode, cathode: newCathode };
-                            }
-                            return setup;
+                        if (setup.cathode) { // Cathodic Protection
+                             newAnode = 'Current';
+                             newCathode = 'Fe';
+                             isCorroding = false; 
+                        } else if (setup.sac) { // Sacrificial
+                             newAnode = setup.sac;
+                             newCathode = setup.metal;
+                             isCorroding = false; 
+                        } else if (setup.coating === 'Sn') { // Tin Plating
+                             // Simplification: Sn protects until scratched/failed. Here we simulate failure at failTime.
+                             if (dayCount >= setup.failTime) {
+                                 isCorroding = true;
+                                 newAnode = 'Fe';
+                                 newCathode = 'O₂';
+                                 speed = 2; // Accelerated
+                             }
+                        } else if (setup.method === 'None') {
+                             isCorroding = true;
+                             newAnode = 'Fe';
+                             newCathode = 'O₂';
                         }
-                        // Continue corrosion (just update time for effect)
-                        return { ...setup, corrosionTime: dayCount };
+
+                        if (isCorroding) {
+                            currentCorrosion += speed;
+                        }
+                        
+                        return { ...setup, corrosionTime: currentCorrosion, anode: newAnode, cathode: newCathode };
                     }));
                 }
             }, [dayCount]);
@@ -157,45 +159,55 @@
 
             const MetalDisplay = ({ setup }) => {
                 const isCorroding = setup.corrosionTime > 0;
-                let topMetal = setup.metal; // Base metal
+                // Visual representation logic
                 let layerColor = setup.coating ? MetalColors[setup.coating] : 'transparent';
                 
-                // Show corrosion on the unprotected metal
-                const rustOpacity = isCorroding && setup.method !== 'Sacrificial' ? Math.min(1, setup.corrosionTime / setup.failTime) : 0;
-                
-                // For Tin, rust starts late
-                if (setup.coating === 'Sn' && setup.corrosionTime < 4) {
-                    layerColor = MetalColors.Sn;
-                } else if (setup.coating === 'Sn' && setup.corrosionTime >= 4) {
-                    // Tin fails, iron rusts
-                    layerColor = MetalColors.Fe;
+                // Rust visual intensity
+                const rustOpacity = isCorroding && setup.method !== 'Sacrificial' ? Math.min(1, setup.corrosionTime / 10) : 0;
+
+                // Tin failure visual
+                if (setup.coating === 'Sn' && setup.corrosionTime >= 1) {
+                    layerColor = MetalColors.Fe; // Reveal Iron
                 }
 
-                // Sacrificial metal disappears over time
-                const sacOpacity = setup.sac ? Math.max(0.1, 1 - setup.corrosionTime / setup.failTime) : 1;
+                // Sacrificial metal disappearing visual
+                const sacOpacity = setup.sac ? Math.max(0.1, 1 - (dayCount / 15)) : 1; // Sac metal slowly dissolves
 
                 return (
                     <div className="relative w-full h-full flex items-center justify-center">
                         {/* Protective/Sacrificial Layer */}
                         {setup.sac && (
-                            <div className="absolute w-8 h-8 rounded-full bg-yellow-500 border border-yellow-600" style={{ opacity: sacOpacity, zIndex: 12 }}>
+                            <div className="absolute w-8 h-8 rounded-full bg-yellow-500 border border-yellow-600" style={{ opacity: sacOpacity, zIndex: 12, top: '20px' }}>
                                 <span className="absolute inset-0 text-center font-bold text-slate-800 text-xs mt-2">{setup.sac}</span>
                             </div>
                         )}
                         
                         {/* Iron Nail (Base) */}
                         <div className={`nail bg-slate-700 w-2.5 h-16 rounded-b-full shadow-lg border-b-2 border-slate-600 ${setup.sac ? 'mt-8' : ''}`}>
-                            {/* Corrosion Layer */}
+                            {/* Corrosion Layer (Red Rust) */}
                             <div className={`absolute inset-0 bg-red-800/70 rounded-b-full animate-corrosion`} 
                                  style={{ opacity: rustOpacity, animationDelay: '0s' }}>
                             </div>
                         </div>
 
-                        {/* Electrolyte Indicator (Rust Spots) */}
+                        {/* Rust Indicator Spots (Red/Blue) */}
                         {isCorroding && (
-                             <div className="absolute bottom-1/2 left-1/2 w-full h-full">
+                             <div className="absolute bottom-1/2 left-1/2 w-full h-full pointer-events-none">
                                 {[...Array(3)].map((_, i) => (
-                                    <div key={i} className="color-spot red-spot" style={{ left: `${20+i*10}px`, top: `${20+i*10}px`, opacity: Math.min(1, setup.corrosionTime * 0.3) }}></div>
+                                    <div key={i} className="color-spot red-spot" 
+                                         style={{ 
+                                             left: `${10 + Math.random() * 20}px`, 
+                                             top: `${30 + Math.random() * 30}px`, 
+                                             opacity: Math.min(1, setup.corrosionTime * 0.2) 
+                                         }}></div>
+                                ))}
+                                 {[...Array(2)].map((_, i) => (
+                                    <div key={`blue-${i}`} className="color-spot blue-spot" 
+                                         style={{ 
+                                             left: `${-10 + Math.random() * 20}px`, 
+                                             top: `${10 + Math.random() * 20}px`, 
+                                             opacity: Math.min(1, setup.corrosionTime * 0.2) 
+                                         }}></div>
                                 ))}
                             </div>
                         )}
@@ -205,11 +217,11 @@
 
             const BeakerVisual = ({ setup }) => {
                 const currentRust = testState.find(r => r.id === setup.id);
-                const corrosionRate = currentRust?.corrosionTime > 0 ? 'Corroding' : 'Protected';
+                const corrosionAmount = currentRust?.corrosionTime || 0;
                 
-                // Determine solution color and top layer
-                let solnColor = setup.method !== 'None' ? 'bg-sky-100' : 'bg-white';
-                let topLayerColor = setup.id === 3 ? 'bg-yellow-700 h-1/3' : 'transparent';
+                // Solution color
+                let solnColor = 'bg-sky-100'; 
+                let topLayerColor = setup.id === 3 ? 'bg-yellow-700 h-1/3' : 'transparent'; // Example layer if needed, not used here specifically but kept for structure
                 
                 return (
                     <div className="flex flex-col items-center w-full p-2">
@@ -217,17 +229,15 @@
                             {/* Glass Container */}
                             <div className="beaker-base">
                                 <div className={`absolute bottom-0 w-full h-3/4 ${solnColor} opacity-70`}></div>
-                                {/* Top Layer (Oil) */}
-                                <div className={`w-full ${topLayerColor} absolute top-0`}></div>
                                 
-                                <MetalDisplay setup={setup} />
+                                <MetalDisplay setup={{...setup, corrosionTime: corrosionAmount}} />
                             </div>
                             
                             <div className="mt-2 text-center w-full">
                                 <h4 className="text-sm font-bold text-slate-700">{setup.name}</h4>
                                 <p className="text-xs text-slate-500 italic">{setup.description}</p>
-                                <p className={`mt-1 font-bold text-lg ${currentRust?.corrosionTime > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    {currentRust?.corrosionTime > 0 ? `生鏽中 (Day ${currentRust.corrosionTime})` : '保護成功'}
+                                <p className={`mt-1 font-bold text-lg ${corrosionAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {corrosionAmount > 0 ? `生鏽中 (Level ${Math.min(5, Math.floor(corrosionAmount))})` : '保護成功'}
                                 </p>
                             </div>
                         </div>
