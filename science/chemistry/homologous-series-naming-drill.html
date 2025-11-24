@@ -28,12 +28,11 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- Molecule Data Structure ---
-        // Nodes: { x, y (relative), el (symbol), color (optional class) }
-        // Links: { source, target (indices), type: 'single' | 'double' }
+        // --- Molecule Data Structure (Expanded C1-C6) ---
+        // Using a relative grid system for drawing. Center is roughly (300, 120)
         
         const Database = [
-            // 1. Alkanes
+            // --- ALKANES (C1-C6) ---
             {
                 id: 'alkane-3',
                 type: 'Alkane (烷烴)',
@@ -41,140 +40,100 @@
                 formula: 'CH₃CH₂CH₃',
                 options: ['Ethane', 'Propane', 'Butane', 'Pentane'],
                 nodes: [
-                    { x: -60, y: 0, el: 'C' },
-                    { x: 0, y: 0, el: 'C' },
-                    { x: 60, y: 0, el: 'C' }
+                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' }
                 ],
                 links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
             },
             {
-                id: 'alkane-branch',
-                type: 'Alkane (支鏈)',
+                id: 'alkane-4-iso',
+                type: 'Alkane (支鏈異構體)',
                 correct: '2-methylpropane',
                 formula: 'CH₃CH(CH₃)CH₃',
-                options: ['Butane', '2-methylpropane', 'Pentane', 'Propane'],
+                options: ['Butane', '2-methylpropane', '1-methylpropane', 'Propane'],
                 nodes: [
-                    { x: -60, y: 0, el: 'C' },
-                    { x: 0, y: 0, el: 'C' },
-                    { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: 60, el: 'CH₃' }
+                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
+                    { x: 0, y: 60, el: 'C' } // Branch down
                 ],
                 links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
             },
-            
-            // 2. Alkenes
             {
-                id: 'alkene-2',
-                type: 'Alkene (烯烴)',
-                correct: 'Ethene',
-                formula: 'CH₂=CH₂',
-                options: ['Ethane', 'Ethene', 'Ethyne', 'Propene'],
+                id: 'alkane-5',
+                type: 'Alkane (烷烴)',
+                correct: 'Pentane',
+                formula: 'CH₃(CH₂)₃CH₃',
+                options: ['Butane', 'Pentane', 'Hexane', 'Heptane'],
                 nodes: [
-                    { x: -40, y: 0, el: 'C' },
-                    { x: 40, y: 0, el: 'C' }
+                    { x: -120, y: 0, el: 'C' }, { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, 
+                    { x: 60, y: 0, el: 'C' }, { x: 120, y: 0, el: 'C' }
                 ],
-                links: [{ s: 0, t: 1, type: 'double' }]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }, { s: 3, t: 4 }]
             },
             {
-                id: 'alkene-3',
-                type: 'Alkene (烯烴)',
-                correct: 'Propene',
-                formula: 'CH₃CH=CH₂',
-                options: ['Ethene', 'Propene', 'But-1-ene', 'Propane'],
+                id: 'alkane-6-iso',
+                type: 'Alkane (支鏈異構體)',
+                correct: '2,2-dimethylbutane',
+                formula: 'CH₃C(CH₃)₂CH₂CH₃',
+                options: ['2-ethylbutane', '2,2-dimethylbutane', 'Hexane', '3-methylpentane'],
                 nodes: [
-                    { x: -50, y: 0, el: 'C' },
-                    { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'C' }
+                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' }, { x: 120, y: 0, el: 'C' }, // Main chain 4
+                    { x: 0, y: -60, el: 'C' }, { x: 0, y: 60, el: 'C' } // Two methyls on C2
                 ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }
-                ]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }, { s: 1, t: 4 }, { s: 1, t: 5 }]
             },
 
-            // 3. Haloalkanes
+            // --- ALKENES (Positional Isomers) ---
             {
-                id: 'halo-cl-2',
-                type: 'Haloalkane (鹵代烴)',
-                correct: 'Chloroethane',
-                formula: 'CH₃CH₂Cl',
-                options: ['Chloromethane', 'Chloroethane', '1-chloropropane', 'Dichloroethane'],
+                id: 'alkene-4-1',
+                type: 'Alkene (位置異構體)',
+                correct: 'But-1-ene',
+                formula: 'CH₂=CHCH₂CH₃',
+                options: ['But-1-ene', 'But-2-ene', 'Butene', '1-butene'],
                 nodes: [
-                    { x: -50, y: 0, el: 'C' },
-                    { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'Cl', color: 'bg-green-500 border-green-600' }
+                    { x: -90, y: 0, el: 'C' }, { x: -30, y: 0, el: 'C' }, 
+                    { x: 30, y: 0, el: 'C' }, { x: 90, y: 0, el: 'C' }
                 ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
+                links: [{ s: 0, t: 1, type: 'double' }, { s: 1, t: 2 }, { s: 2, t: 3 }]
             },
             {
-                id: 'halo-br-3',
-                type: 'Haloalkane (鹵代烴)',
-                correct: '2-bromopropane',
-                formula: 'CH₃CH(Br)CH₃',
-                options: ['1-bromopropane', '2-bromopropane', 'Bromobutane', '2,2-dibromopropane'],
+                id: 'alkene-4-2',
+                type: 'Alkene (位置異構體)',
+                correct: 'But-2-ene',
+                formula: 'CH₃CH=CHCH₃',
+                options: ['But-1-ene', 'But-2-ene', 'But-3-ene', '2-butene'],
                 nodes: [
-                    { x: -60, y: 0, el: 'C' },
-                    { x: 0, y: 0, el: 'C' },
-                    { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: 60, el: 'Br', color: 'bg-orange-500 border-orange-600' } // Branch down
+                    { x: -90, y: 0, el: 'C' }, { x: -30, y: 0, el: 'C' }, 
+                    { x: 30, y: 0, el: 'C' }, { x: 90, y: 0, el: 'C' }
                 ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2, type: 'double' }, { s: 2, t: 3 }]
             },
 
-            // 4. Alcohols
+            // --- ALCOHOLS (C1-C4) ---
             {
-                id: 'alcohol-2',
+                id: 'alcohol-3-1',
                 type: 'Alcohol (醇)',
-                correct: 'Ethanol',
-                formula: 'CH₃CH₂OH',
-                options: ['Methanol', 'Ethanol', 'Propanol', 'Ethanoic Acid'],
+                correct: 'Propan-1-ol',
+                formula: 'CH₃CH₂CH₂OH',
+                options: ['Propan-1-ol', 'Propan-2-ol', 'Propanol', 'Propyl alcohol'],
                 nodes: [
-                    { x: -50, y: 0, el: 'C' },
-                    { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
+                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
+                    { x: 120, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
                 ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
-            },
-
-            // 5. Aldehydes & Ketones
-            {
-                id: 'aldehyde-2',
-                type: 'Aldehyde (醛)',
-                correct: 'Ethanal',
-                formula: 'CH₃CHO',
-                options: ['Methanal', 'Ethanal', 'Ethanol', 'Ethanoic Acid'],
-                nodes: [
-                    { x: -40, y: 0, el: 'C' },
-                    { x: 20, y: 0, el: 'C' },
-                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
-                    { x: 70, y: 30, el: 'H', color: 'bg-slate-400 border-slate-500' } // H down-right
-                ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }, 
-                    { s: 1, t: 3 }
-                ]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }]
             },
             {
-                id: 'ketone-3',
-                type: 'Ketone (酮)',
-                correct: 'Propanone',
-                formula: 'CH₃COCH₃',
-                options: ['Propanal', 'Propanone', 'Butanone', 'Propanoic Acid'],
+                id: 'alcohol-3-2',
+                type: 'Alcohol (位置異構體)',
+                correct: 'Propan-2-ol',
+                formula: 'CH₃CH(OH)CH₃',
+                options: ['Propan-1-ol', 'Propan-2-ol', '2-propyl alcohol', 'Isopropanol'],
                 nodes: [
-                    { x: -60, y: 0, el: 'C' },
-                    { x: 0, y: 0, el: 'C' },
-                    { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: -60, el: 'O', color: 'bg-red-500 border-red-600' } // Double O up on middle C
+                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
+                    { x: 0, y: 60, el: 'OH', color: 'bg-red-500 border-red-600' } // OH on middle C
                 ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2 },
-                    { s: 1, t: 3, type: 'double' }
-                ]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
             },
 
-            // 6. Carboxylic Acids
+            // --- CARBOXYLIC ACIDS & ESTERS ---
             {
                 id: 'acid-2',
                 type: 'Carboxylic Acid (羧酸)',
@@ -193,62 +152,57 @@
                     { s: 1, t: 3 }
                 ]
             },
-
-            // 7. Esters
             {
-                id: 'ester-methyl-ethanoate',
+                id: 'ester-ethyl-ethanoate',
                 type: 'Ester (酯)',
-                correct: 'Methyl ethanoate',
-                formula: 'CH₃COOCH₃',
-                options: ['Ethyl methanoate', 'Methyl ethanoate', 'Ethyl ethanoate', 'Propanoic Acid'],
+                correct: 'Ethyl ethanoate',
+                formula: 'CH₃COOCH₂CH₃',
+                options: ['Methyl ethanoate', 'Ethyl ethanoate', 'Propyl methanoate', 'Ethyl propanoate'],
                 nodes: [
-                    { x: -60, y: 0, el: 'C' },
-                    { x: 0, y: 0, el: 'C' },
-                    { x: 0, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
-                    { x: 50, y: 0, el: 'O', color: 'bg-red-500 border-red-600' },  // Single O right
-                    { x: 100, y: 0, el: 'C' }   // Methyl group
+                    { x: -100, y: 0, el: 'C' }, // Acid part C1
+                    { x: -40, y: 0, el: 'C' }, // Acid part C2 (Carbonyl)
+                    { x: -40, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // C=O
+                    { x: 10, y: 0, el: 'O', color: 'bg-red-500 border-red-600' }, // Link O
+                    { x: 60, y: 0, el: 'C' }, // Alcohol part C1
+                    { x: 120, y: 0, el: 'C' } // Alcohol part C2
                 ],
                 links: [
                     { s: 0, t: 1 }, 
                     { s: 1, t: 2, type: 'double' }, 
                     { s: 1, t: 3 },
-                    { s: 3, t: 4 }
+                    { s: 3, t: 4 },
+                    { s: 4, t: 5 }
                 ]
             },
 
-            // 8. Amides
+            // --- HALOALKANES (Multi-substituted) ---
             {
-                id: 'amide-2',
-                type: 'Unsubstituted Amide (酰胺)',
-                correct: 'Ethanamide',
-                formula: 'CH₃CONH₂',
-                options: ['Methanamide', 'Ethanamide', 'Ethanoic Acid', 'Ethylamine'],
+                id: 'halo-mix',
+                type: 'Haloalkane (多鹵代烴)',
+                correct: '1,2-dichloroethane',
+                formula: 'CH₂ClCH₂Cl',
+                options: ['1,1-dichloroethane', '1,2-dichloroethane', 'Chloroethane', 'Dichloromethane'],
                 nodes: [
-                    { x: -40, y: 0, el: 'C' },
-                    { x: 20, y: 0, el: 'C' },
-                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
-                    { x: 70, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }  // NH2 right
+                    { x: -40, y: 0, el: 'C' }, { x: 40, y: 0, el: 'C' },
+                    { x: -40, y: 60, el: 'Cl', color: 'bg-green-500 border-green-600' },
+                    { x: 40, y: -60, el: 'Cl', color: 'bg-green-500 border-green-600' }
                 ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }, 
-                    { s: 1, t: 3 }
-                ]
+                links: [{ s: 0, t: 1 }, { s: 0, t: 2 }, { s: 1, t: 3 }]
             },
 
-            // 9. Amines
+            // --- AMIDES & AMINES ---
             {
-                id: 'amine-2',
-                type: 'Primary Amine (胺)',
-                correct: 'Ethylamine',
-                formula: 'CH₃CH₂NH₂',
-                options: ['Methylamine', 'Ethylamine', 'Propylamine', 'Ethanamide'],
+                id: 'amide-3',
+                type: 'Amide (酰胺)',
+                correct: 'Propanamide',
+                formula: 'CH₃CH₂CONH₂',
+                options: ['Ethanamide', 'Propanamide', 'Butanamide', 'Propylamine'],
                 nodes: [
-                    { x: -50, y: 0, el: 'C' },
-                    { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }
+                    { x: -80, y: 0, el: 'C' }, { x: -20, y: 0, el: 'C' }, { x: 40, y: 0, el: 'C' },
+                    { x: 40, y: -60, el: 'O', color: 'bg-red-500 border-red-600' },
+                    { x: 90, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }
                 ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3, type: 'double' }, { s: 2, t: 4 }]
             }
         ];
 
@@ -264,6 +218,8 @@
 
             const loadNextQuestion = () => {
                 setFeedback(null);
+                // Simple random selection. 
+                // In a real app, we might want to ensure no repeats or progressive difficulty.
                 const randomIdx = Math.floor(Math.random() * Database.length);
                 setCurrentQ(Database[randomIdx]);
             };
@@ -321,7 +277,7 @@
                                 key={i}
                                 className={`absolute flex items-center justify-center font-bold text-sm rounded-full border-2 atom-shadow transform -translate-x-1/2 -translate-y-1/2 transition-transform group-hover:scale-110
                                     ${node.color || (node.el === 'C' ? 'bg-slate-600 border-slate-400 text-white' : 'bg-slate-200 border-slate-400 text-slate-800')}
-                                    ${node.el.length > 1 ? 'w-10 h-10 text-xs' : 'w-9 h-9'}
+                                    ${node.el.length > 2 ? 'w-12 h-12 text-xs' : node.el.length > 1 ? 'w-10 h-10 text-xs' : 'w-9 h-9'}
                                 `}
                                 style={{ left: centerX + node.x, top: centerY + node.y }}
                             >
@@ -339,9 +295,9 @@
                     <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-teal-400 flex items-center gap-2">
-                                <i data-lucide="pencil-ruler"></i> 命名特訓
+                                <i data-lucide="pencil-ruler"></i> 命名特訓 (Pro)
                             </h1>
-                            <p className="text-slate-400 text-sm">IUPAC Naming Drill</p>
+                            <p className="text-slate-400 text-sm">IUPAC Naming Drill (C1-C6)</p>
                         </div>
                         <div className="flex gap-4 font-mono font-bold text-xl">
                             <div className="text-teal-400">Score: {score}</div>
@@ -359,7 +315,7 @@
                                         Identify the Structure
                                     </span>
                                     <span className="text-xs text-teal-400 font-bold">
-                                        {currentQ.type}
+                                        Series: {currentQ.type}
                                     </span>
                                 </div>
                                 
