@@ -1,0 +1,555 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Flame, Thermometer, Info, FlaskConical, Droplets, Car, Plane, Ship, Hammer, FlameKindling, Sparkles, MessageCircle, BrainCircuit, Send, Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+
+const FractionDistillationApp = () => {
+  const [selectedFraction, setSelectedFraction] = useState(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [temperature, setTemperature] = useState(25);
+
+  // AI State
+  const [aiMode, setAiMode] = useState('chat'); // 'chat' or 'quiz'
+  const [chatInput, setChatInput] = useState('');
+  const [chatHistory, setChatHistory] = useState([{ role: 'model', text: '你好！我是你的 AI 化學導師。關於分餾過程或特定的產物，你有什麼問題嗎？' }]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [quizData, setQuizData] = useState(null);
+  const [quizSelectedOption, setQuizSelectedOption] = useState(null);
+  const [quizResult, setQuizResult] = useState(null); // 'correct' or 'incorrect'
+
+  const apiKey = ""; // System provides this
+
+  // Data for fractions
+  const fractions = [
+    {
+      id: 'gas',
+      name: '煉油氣 (Refinery Gases)',
+      tempRange: '< 40°C',
+      carbonCount: 'C1 - C4',
+      uses: '家用煮食燃料、露營氣體',
+      icon: <FlameKindling size={24} />,
+      color: 'bg-blue-100',
+      position: 0,
+      description: '沸點最低，分子最小。在室溫下即為氣體，從塔頂逸出。'
+    },
+    {
+      id: 'petrol',
+      name: '汽油 (Petrol / Gasoline)',
+      tempRange: '40°C - 70°C',
+      carbonCount: 'C5 - C10',
+      uses: '私家車燃料',
+      icon: <Car size={24} />,
+      color: 'bg-yellow-100',
+      position: 1,
+      description: '易揮發的液體，極易燃燒。'
+    },
+    {
+      id: 'naphtha',
+      name: '石腦油 (Naphtha)',
+      tempRange: '70°C - 170°C',
+      carbonCount: 'C8 - C12',
+      uses: '製造化學品、塑膠原料',
+      icon: <FlaskConical size={24} />,
+      color: 'bg-orange-100',
+      position: 2,
+      description: '主要用於石油化工行業，裂解後生產乙烯等。'
+    },
+    {
+      id: 'kerosene',
+      name: '煤油 / 火水 (Kerosene)',
+      tempRange: '170°C - 250°C',
+      carbonCount: 'C10 - C16',
+      uses: '飛機燃料 (Jet Fuel)、取暖',
+      icon: <Plane size={24} />,
+      color: 'bg-orange-200',
+      position: 3,
+      description: '比汽油更黏稠，不易揮發。'
+    },
+    {
+      id: 'diesel',
+      name: '柴油 (Diesel Oil)',
+      tempRange: '250°C - 350°C',
+      carbonCount: 'C14 - C20',
+      uses: '貨車、火車、重型機械燃料',
+      icon: <Car size={24} className="text-gray-700" />,
+      color: 'bg-orange-300',
+      position: 4,
+      description: '黏度較高，能量密度高。'
+    },
+    {
+      id: 'fuel_oil',
+      name: '燃料油 (Fuel Oil)',
+      tempRange: '350°C - 400°C',
+      carbonCount: 'C20 - C70',
+      uses: '大型船隻、發電廠燃料',
+      icon: <Ship size={24} />,
+      color: 'bg-orange-400',
+      position: 5,
+      description: '非常黏稠的液體，難以點燃。'
+    },
+    {
+      id: 'bitumen',
+      name: '瀝青 (Bitumen)',
+      tempRange: '> 400°C',
+      carbonCount: '> C70',
+      uses: '鋪設道路、屋頂防水層',
+      icon: <Hammer size={24} />,
+      color: 'bg-gray-800 text-white',
+      position: 6,
+      description: '沸點最高，分子最大。在塔底以黑色黏稠殘渣形式流出。'
+    }
+  ];
+
+  // Animation Logic
+  useEffect(() => {
+    let interval;
+    if (isSimulating) {
+      setTemperature(25);
+      interval = setInterval(() => {
+        setTemperature((prev) => {
+          if (prev >= 450) {
+            setIsSimulating(false);
+            return 450;
+          }
+          return prev + 2;
+        });
+      }, 20);
+    } else {
+      setTemperature(25);
+    }
+    return () => clearInterval(interval);
+  }, [isSimulating]);
+
+  const getActiveFraction = () => {
+    if (!isSimulating) return null;
+    if (temperature < 40) return 'gas';
+    if (temperature < 100) return 'petrol';
+    if (temperature < 170) return 'naphtha';
+    if (temperature < 250) return 'kerosene';
+    if (temperature < 350) return 'diesel';
+    if (temperature < 400) return 'fuel_oil';
+    return 'bitumen';
+  };
+
+  const activeId = getActiveFraction();
+
+  // --- Gemini API Logic ---
+
+  const callGeminiChat = async () => {
+    if (!chatInput.trim()) return;
+    const userMessage = chatInput;
+    setChatHistory(prev => [...prev, { role: 'user', text: userMessage }]);
+    setChatInput('');
+    setIsAiLoading(true);
+
+    const context = selectedFraction 
+      ? `Current selected fraction: ${selectedFraction.name}. Properties: ${selectedFraction.description}, Uses: ${selectedFraction.uses}, Carbon Count: ${selectedFraction.carbonCount}, Boiling Point Range: ${selectedFraction.tempRange}.`
+      : `User is looking at the general fractional distillation column.`;
+
+    const prompt = `You are a helpful and encouraging high school chemistry tutor. 
+    The student is using an interactive web app about fractional distillation of crude oil.
+    ${context}
+    
+    Please answer the student's question: "${userMessage}"
+    
+    Keep the answer concise (under 3 sentences if possible), accurate for high school level chemistry, and use Traditional Chinese (繁體中文).
+    Explain complex concepts simply using analogies if helpful.`;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+      const data = await response.json();
+      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，我現在無法回答，請稍後再試。";
+      
+      setChatHistory(prev => [...prev, { role: 'model', text: aiText }]);
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      setChatHistory(prev => [...prev, { role: 'model', text: "連線錯誤，請檢查網絡或 API 金鑰。" }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const generateQuiz = async () => {
+    setIsAiLoading(true);
+    setQuizData(null);
+    setQuizSelectedOption(null);
+    setQuizResult(null);
+
+    const context = selectedFraction 
+      ? `Focus the question on: ${selectedFraction.name} (${selectedFraction.carbonCount}).` 
+      : `Focus the question on the general concept of fractional distillation (boiling points, viscosity, molecular size trends).`;
+
+    const prompt = `Generate a single multiple-choice question (MCQ) for a high school chemistry student about fractional distillation of crude oil.
+    ${context}
+    
+    Return ONLY raw JSON with this structure:
+    {
+      "question": "The question text in Traditional Chinese",
+      "options": ["Option A", "Option B", "Option C", "Option D"] (in Traditional Chinese),
+      "correctIndex": 0 (integer 0-3),
+      "explanation": "Brief explanation of why the answer is correct in Traditional Chinese"
+    }`;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      
+      const data = await response.json();
+      const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (jsonText) {
+        const parsedQuiz = JSON.parse(jsonText);
+        setQuizData(parsedQuiz);
+      }
+    } catch (error) {
+      console.error("Quiz Generation Error:", error);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleQuizSelection = (index) => {
+    if (quizResult) return; // Prevent changing answer
+    setQuizSelectedOption(index);
+    if (index === quizData.correctIndex) {
+      setQuizResult('correct');
+    } else {
+      setQuizResult('incorrect');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+      {/* Header */}
+      <header className="bg-blue-900 text-white p-4 shadow-lg">
+        <div className="container mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <FlaskConical /> 原油分餾模擬實驗室
+          </h1>
+          <span className="text-sm bg-blue-800 px-3 py-1 rounded-full hidden sm:block">High School Chemistry Level</span>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-grow container mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
+        
+        {/* Left Column: The Distillation Tower Visualization */}
+        <div className="flex-1 flex flex-col items-center bg-white p-6 rounded-2xl shadow-xl border border-slate-200 relative overflow-hidden">
+          <h2 className="text-xl font-bold mb-4 text-slate-700 w-full text-center">分餾塔 (Fractionating Column)</h2>
+          
+          <div className="relative w-full max-w-md h-[600px] flex flex-col">
+            {/* Tower Gradient Background */}
+            <div className="absolute inset-y-0 left-1/4 right-1/4 rounded-lg bg-gradient-to-b from-blue-50 via-yellow-50 to-red-100 border-x-4 border-slate-400 z-0 opacity-80"></div>
+
+            {/* Temperature Markers (Left Side) */}
+            <div className="absolute left-0 h-full flex flex-col justify-between text-xs font-mono text-slate-500 py-4">
+              <span>25°C (冷)</span>
+              <span>|</span>
+              <span>100°C</span>
+              <span>|</span>
+              <span>200°C</span>
+              <span>|</span>
+              <span>300°C</span>
+              <span>|</span>
+              <span>400°C (熱)</span>
+            </div>
+
+            {/* Fractions Layers */}
+            <div className="z-10 flex flex-col h-full justify-between w-full py-2">
+              {fractions.map((fraction) => (
+                <div 
+                  key={fraction.id}
+                  onClick={() => setSelectedFraction(fraction)}
+                  className={`
+                    relative group cursor-pointer transition-all duration-300
+                    flex items-center
+                    ${selectedFraction?.id === fraction.id ? 'scale-105' : 'hover:scale-105'}
+                  `}
+                >
+                  {/* Pipe Output Visual */}
+                  <div className={`
+                    hidden md:block absolute right-[25%] w-[15%] h-3 bg-slate-300 
+                    border-y border-slate-400
+                    group-hover:bg-blue-200
+                  `}></div>
+
+                  {/* The Fraction Box */}
+                  <div className={`
+                    w-full md:w-1/2 md:mx-auto p-2 md:p-3 rounded-lg border-2 
+                    flex justify-between items-center shadow-sm
+                    ml-[20%] md:ml-auto
+                    ${fraction.color}
+                    ${selectedFraction?.id === fraction.id ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg' : 'border-transparent'}
+                    ${isSimulating && activeId === fraction.id ? 'animate-pulse ring-4 ring-red-400' : ''}
+                  `}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm md:text-base">{fraction.name.split(' ')[0]}</span>
+                    </div>
+                    <span className="text-xs font-mono hidden sm:inline-block">{fraction.carbonCount}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Furnace at bottom */}
+            <div className="absolute bottom-0 left-1/4 right-1/4 h-16 bg-slate-700 rounded-b-lg flex flex-col items-center justify-center text-white z-20">
+              <span className="text-sm font-bold">加熱爐</span>
+              {isSimulating && <Flame className="text-orange-500 animate-bounce" />}
+            </div>
+
+            {/* Incoming Crude Oil Pipe */}
+            <div className="absolute bottom-8 left-0 w-1/4 h-4 bg-black flex items-center">
+              <div className="w-full text-[10px] text-white text-center">原油</div>
+            </div>
+
+            {/* Rising Bubbles Animation (Visual Effect) */}
+            {isSimulating && (
+               <div className="absolute inset-0 left-1/4 right-1/4 pointer-events-none overflow-hidden z-0">
+                 <div className="animate-rise absolute bottom-0 left-1/3 w-4 h-4 bg-yellow-200 rounded-full opacity-50"></div>
+                 <div className="animate-rise absolute bottom-0 left-1/2 w-6 h-6 bg-white rounded-full opacity-40 delay-100"></div>
+                 <div className="animate-rise absolute bottom-0 right-1/3 w-3 h-3 bg-orange-200 rounded-full opacity-50 delay-200"></div>
+               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Info & Controls */}
+        <div className="flex-1 flex flex-col gap-6">
+          
+          {/* Control Panel */}
+          <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Thermometer className="text-red-500" /> 實驗控制
+                </h3>
+                <div className="flex items-center gap-2">
+                   <span className="text-slate-500 text-xs font-semibold uppercase">爐溫</span>
+                   <span className="text-2xl font-mono font-bold text-slate-800">{temperature}°C</span>
+                </div>
+            </div>
+            
+            <button
+            onClick={() => setIsSimulating(!isSimulating)}
+            className={`
+                w-full py-3 px-6 rounded-xl font-bold text-white transition-colors
+                ${isSimulating 
+                ? 'bg-red-500 hover:bg-red-600' 
+                : 'bg-green-500 hover:bg-green-600'}
+            `}
+            >
+            {isSimulating ? '停止加熱 (Stop Heating)' : '開始加熱 / 模擬 (Start Heating)'}
+            </button>
+          </div>
+
+          {/* Detail Card */}
+          {selectedFraction ? (
+            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-800">{selectedFraction.name}</h2>
+                    <p className="text-slate-500 text-sm">碳鏈: {selectedFraction.carbonCount}</p>
+                  </div>
+                  <div className={`p-2 rounded-full ${selectedFraction.color} shadow-inner`}>
+                    {selectedFraction.icon}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="bg-slate-50 p-3 rounded-lg">
+                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">沸點</p>
+                        <p className="font-medium text-sm">{selectedFraction.tempRange}</p>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg">
+                        <p className="text-xs text-slate-400 font-bold uppercase mb-1">用途</p>
+                        <p className="font-medium text-sm truncate">{selectedFraction.uses.split('、')[0]}</p>
+                    </div>
+                </div>
+
+                <p className="text-sm text-slate-600 leading-relaxed border-t pt-3">
+                    {selectedFraction.description}
+                </p>
+            </div>
+           ) : (
+            <div className="bg-slate-100 border-2 border-dashed border-slate-300 p-6 rounded-2xl text-center text-slate-400 flex flex-col items-center justify-center h-48">
+                <FlaskConical size={32} className="mb-2 opacity-50" />
+                <p className="text-sm">點擊左側塔身選擇餾分<br/>查看詳細化學性質</p>
+            </div>
+           )}
+
+          {/* AI Assistant Section */}
+          <div className="bg-indigo-50 rounded-2xl shadow-md border border-indigo-100 overflow-hidden flex flex-col flex-grow min-h-[300px]">
+            {/* AI Header / Tabs */}
+            <div className="bg-indigo-100 p-2 flex gap-2">
+                <button 
+                    onClick={() => setAiMode('chat')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${aiMode === 'chat' ? 'bg-white text-indigo-600 shadow-sm' : 'text-indigo-400 hover:text-indigo-600'}`}
+                >
+                    <MessageCircle size={16} /> AI 導師
+                </button>
+                <button 
+                    onClick={() => setAiMode('quiz')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${aiMode === 'quiz' ? 'bg-white text-indigo-600 shadow-sm' : 'text-indigo-400 hover:text-indigo-600'}`}
+                >
+                    <BrainCircuit size={16} /> ✨ 智能測驗
+                </button>
+            </div>
+
+            {/* AI Content Area */}
+            <div className="flex-grow p-4 flex flex-col bg-white/50">
+                
+                {/* Chat Interface */}
+                {aiMode === 'chat' && (
+                    <>
+                        <div className="flex-grow overflow-y-auto space-y-3 mb-3 max-h-[200px] md:max-h-[300px] p-2 custom-scrollbar">
+                            {chatHistory.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-indigo-100 text-slate-700 rounded-bl-none shadow-sm'}`}>
+                                        {msg.text}
+                                    </div>
+                                </div>
+                            ))}
+                            {isAiLoading && (
+                                <div className="flex justify-start">
+                                    <div className="bg-white border border-indigo-100 p-3 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2 text-indigo-500 text-sm">
+                                        <Loader2 size={14} className="animate-spin" /> 正在思考中...
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="relative mt-auto">
+                            <input 
+                                type="text" 
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && callGeminiChat()}
+                                placeholder={selectedFraction ? `問問關於 ${selectedFraction.name.split(' ')[0]} 的問題...` : "問問關於分餾的問題..."}
+                                className="w-full pl-4 pr-12 py-3 rounded-xl border border-indigo-200 focus:ring-2 focus:ring-indigo-300 focus:border-transparent outline-none text-sm"
+                            />
+                            <button 
+                                onClick={callGeminiChat}
+                                disabled={isAiLoading || !chatInput.trim()}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 transition-colors"
+                            >
+                                <Send size={16} />
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {/* Quiz Interface */}
+                {aiMode === 'quiz' && (
+                    <div className="flex flex-col h-full">
+                        {!quizData ? (
+                            <div className="flex-grow flex flex-col items-center justify-center text-center p-4 space-y-4">
+                                <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-500 mb-2">
+                                    <Sparkles size={32} />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-700">生成化學測驗</h4>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {selectedFraction 
+                                            ? `AI 將會根據「${selectedFraction.name.split(' ')[0]}」生成題目`
+                                            : "AI 將會根據一般分餾原理生成題目"}
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={generateQuiz}
+                                    disabled={isAiLoading}
+                                    className="bg-indigo-600 text-white py-2 px-6 rounded-full font-bold text-sm hover:bg-indigo-700 transition-transform active:scale-95 disabled:bg-slate-300 flex items-center gap-2"
+                                >
+                                    {isAiLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                                    {isAiLoading ? '生成中...' : '立即生成題目'}
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex-col h-full animate-in fade-in zoom-in-95 duration-300">
+                                <div className="mb-4">
+                                    <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded mb-2 inline-block">✨ AI Generated Question</span>
+                                    <h4 className="font-bold text-slate-800 text-lg leading-snug">{quizData.question}</h4>
+                                </div>
+                                
+                                <div className="space-y-2 mb-4 flex-grow">
+                                    {quizData.options.map((option, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => handleQuizSelection(idx)}
+                                            disabled={quizResult !== null}
+                                            className={`w-full text-left p-3 rounded-xl border text-sm transition-all relative
+                                                ${quizSelectedOption === idx 
+                                                    ? (quizResult === 'correct' ? 'bg-green-50 border-green-500 text-green-800' : quizResult === 'incorrect' ? 'bg-red-50 border-red-500 text-red-800' : 'bg-indigo-50 border-indigo-500')
+                                                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                                                }
+                                                ${quizResult !== null && idx === quizData.correctIndex ? 'ring-2 ring-green-400 bg-green-50' : ''}
+                                            `}
+                                        >
+                                            <span className="font-bold mr-2">{String.fromCharCode(65 + idx)}.</span> {option}
+                                            
+                                            {/* Icons for result */}
+                                            {quizSelectedOption === idx && quizResult === 'correct' && <CheckCircle size={16} className="absolute right-3 top-3 text-green-600" />}
+                                            {quizSelectedOption === idx && quizResult === 'incorrect' && <XCircle size={16} className="absolute right-3 top-3 text-red-600" />}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {quizResult && (
+                                    <div className={`p-3 rounded-lg text-sm mb-3 ${quizResult === 'correct' ? 'bg-green-100 text-green-800' : 'bg-red-50 text-red-800'}`}>
+                                        <p className="font-bold flex items-center gap-2 mb-1">
+                                            {quizResult === 'correct' ? '答對了！🎉' : '再接再厲！'}
+                                        </p>
+                                        <p className="opacity-90">{quizData.explanation}</p>
+                                    </div>
+                                )}
+
+                                <button 
+                                    onClick={generateQuiz}
+                                    className="w-full py-2 bg-slate-100 text-slate-600 font-bold rounded-lg text-sm hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <RefreshCw size={14} /> 下一題
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <style>{`
+        @keyframes rise {
+          0% { transform: translateY(0) scale(1); opacity: 0.5; }
+          100% { transform: translateY(-500px) scale(1.5); opacity: 0; }
+        }
+        .animate-rise {
+          animation: rise 3s infinite linear;
+        }
+        /* Custom Scrollbar for Chat */
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #c7c7c7;
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #a0a0a0;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default FractionDistillationApp;
