@@ -33,7 +33,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- Stable Icon Components (Replacing Lucide script to prevent DOM conflicts) ---
+        // --- Stable Icon Components ---
         const Icons = {
             FlaskConical: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></svg>,
             Flame: (props) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.1.243-2.185.7-3.14 1.54 1.045 2.6 2.088 2.8 3.64Z"/></svg>,
@@ -59,7 +59,7 @@
             const [isSimulating, setIsSimulating] = useState(false);
             const [temperature, setTemperature] = useState(25);
 
-            // AI State
+            // AI State (保留結構，但在純靜態HTML中需注意API Key安全，此處僅示範UI邏輯)
             const [aiMode, setAiMode] = useState('chat');
             const [chatInput, setChatInput] = useState('');
             const [chatHistory, setChatHistory] = useState([{ role: 'model', text: '你好！我是你的 AI 化學導師。關於分餾過程或特定的產物，你有什麼問題嗎？' }]);
@@ -68,9 +68,9 @@
             const [quizSelectedOption, setQuizSelectedOption] = useState(null);
             const [quizResult, setQuizResult] = useState(null);
 
-            const apiKey = ""; // Use system provided key if available
+            const apiKey = ""; // 在此填入您的 API Key (注意前端暴露風險)
 
-            // Data for fractions
+            // Data for fractions (FIX: Use JSX components directly)
             const fractions = [
                 {
                     id: 'gas', name: '煉油氣 (Refinery Gases)', tempRange: '< 40°C', carbonCount: 'C1 - C4',
@@ -94,7 +94,7 @@
                 },
                 {
                     id: 'diesel', name: '柴油 (Diesel Oil)', tempRange: '250°C - 350°C', carbonCount: 'C14 - C20',
-                    uses: '貨車、火車、重型機械燃料', icon: <Icons.Truck size={24} className="text-gray-700" />, color: 'bg-orange-300',
+                    uses: '貨車、火車、重型機械燃料', icon: <Icons.Truck size={24} className="text-gray-700" />, color: 'bg-orange-300', // Changed 'car' to 'truck' for distinct icon if available, else lucide will default or use car
                     position: 4, description: '黏度較高，能量密度高。'
                 },
                 {
@@ -142,7 +142,7 @@
 
             const activeId = getActiveFraction();
 
-            // AI Logic
+            // AI Logic Placeholders (Copied logic but simplified for standalone html without env vars)
             const callGeminiChat = async () => {
                 if (!chatInput.trim()) return;
                 const userMessage = chatInput;
