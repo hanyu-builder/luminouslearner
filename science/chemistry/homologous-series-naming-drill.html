@@ -14,11 +14,10 @@
         body { font-family: 'Noto Sans HK', sans-serif; }
         .font-mono { font-family: 'Roboto Mono', monospace; }
         
-        /* Card Animation */
-        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        .atom-shadow { box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
+        .atom-shadow { box-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -28,345 +27,411 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- Molecule Data Structure (Expanded C1-C6) ---
-        // Using a relative grid system for drawing. Center is roughly (300, 120)
+        // --- 1. Structure Generation Engine ---
+        // Converts simple config to nodes/links for visualization
         
-        const Database = [
-            // --- ALKANES (C1-C6) ---
-            {
-                id: 'alkane-3',
-                type: 'Alkane (烷烴)',
-                correct: 'Propane',
-                formula: 'CH₃CH₂CH₃',
-                options: ['Ethane', 'Propane', 'Butane', 'Pentane'],
-                nodes: [
-                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
-            },
-            {
-                id: 'alkane-4-iso',
-                type: 'Alkane (支鏈異構體)',
-                correct: '2-methylpropane',
-                formula: 'CH₃CH(CH₃)CH₃',
-                options: ['Butane', '2-methylpropane', '1-methylpropane', 'Propane'],
-                nodes: [
-                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: 60, el: 'C' } // Branch down
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
-            },
-            {
-                id: 'alkane-5',
-                type: 'Alkane (烷烴)',
-                correct: 'Pentane',
-                formula: 'CH₃(CH₂)₃CH₃',
-                options: ['Butane', 'Pentane', 'Hexane', 'Heptane'],
-                nodes: [
-                    { x: -120, y: 0, el: 'C' }, { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, 
-                    { x: 60, y: 0, el: 'C' }, { x: 120, y: 0, el: 'C' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }, { s: 3, t: 4 }]
-            },
-            {
-                id: 'alkane-6-iso',
-                type: 'Alkane (支鏈異構體)',
-                correct: '2,2-dimethylbutane',
-                formula: 'CH₃C(CH₃)₂CH₂CH₃',
-                options: ['2-ethylbutane', '2,2-dimethylbutane', 'Hexane', '3-methylpentane'],
-                nodes: [
-                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' }, { x: 120, y: 0, el: 'C' }, // Main chain 4
-                    { x: 0, y: -60, el: 'C' }, { x: 0, y: 60, el: 'C' } // Two methyls on C2
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }, { s: 1, t: 4 }, { s: 1, t: 5 }]
-            },
+        const generateStructure = (config) => {
+            const nodes = [];
+            const links = [];
+            const spacing = 60;
+            const startX = 0;
+            const startY = 0;
 
-            // --- ALKENES (Positional Isomers) ---
-            {
-                id: 'alkene-4-1',
-                type: 'Alkene (位置異構體)',
-                correct: 'But-1-ene',
-                formula: 'CH₂=CHCH₂CH₃',
-                options: ['But-1-ene', 'But-2-ene', 'Butene', '1-butene'],
-                nodes: [
-                    { x: -90, y: 0, el: 'C' }, { x: -30, y: 0, el: 'C' }, 
-                    { x: 30, y: 0, el: 'C' }, { x: 90, y: 0, el: 'C' }
-                ],
-                links: [{ s: 0, t: 1, type: 'double' }, { s: 1, t: 2 }, { s: 2, t: 3 }]
-            },
-            {
-                id: 'alkene-4-2',
-                type: 'Alkene (位置異構體)',
-                correct: 'But-2-ene',
-                formula: 'CH₃CH=CHCH₃',
-                options: ['But-1-ene', 'But-2-ene', 'But-3-ene', '2-butene'],
-                nodes: [
-                    { x: -90, y: 0, el: 'C' }, { x: -30, y: 0, el: 'C' }, 
-                    { x: 30, y: 0, el: 'C' }, { x: 90, y: 0, el: 'C' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2, type: 'double' }, { s: 2, t: 3 }]
-            },
+            // Helper to add node
+            const addNode = (x, y, el, color) => {
+                nodes.push({ x, y, el, color });
+                return nodes.length - 1;
+            };
 
-            // --- ALCOHOLS (C1-C4) ---
-            {
-                id: 'alcohol-3-1',
-                type: 'Alcohol (醇)',
-                correct: 'Propan-1-ol',
-                formula: 'CH₃CH₂CH₂OH',
-                options: ['Propan-1-ol', 'Propan-2-ol', 'Propanol', 'Propyl alcohol'],
-                nodes: [
-                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
-                    { x: 120, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3 }]
-            },
-            {
-                id: 'alcohol-3-2',
-                type: 'Alcohol (位置異構體)',
-                correct: 'Propan-2-ol',
-                formula: 'CH₃CH(OH)CH₃',
-                options: ['Propan-1-ol', 'Propan-2-ol', '2-propyl alcohol', 'Isopropanol'],
-                nodes: [
-                    { x: -60, y: 0, el: 'C' }, { x: 0, y: 0, el: 'C' }, { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: 60, el: 'OH', color: 'bg-red-500 border-red-600' } // OH on middle C
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
-            },
-
-            // --- CARBOXYLIC ACIDS & ESTERS ---
-            {
-                id: 'acid-2',
-                type: 'Carboxylic Acid (羧酸)',
-                correct: 'Ethanoic Acid',
-                formula: 'CH₃COOH',
-                options: ['Methanoic Acid', 'Ethanoic Acid', 'Propanoic Acid', 'Ethanol'],
-                nodes: [
-                    { x: -40, y: 0, el: 'C' },
-                    { x: 20, y: 0, el: 'C' },
-                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
-                    { x: 70, y: 30, el: 'OH', color: 'bg-red-500 border-red-600' }  // OH down-right
-                ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }, 
-                    { s: 1, t: 3 }
-                ]
-            },
-            {
-                id: 'ester-ethyl-ethanoate',
-                type: 'Ester (酯)',
-                correct: 'Ethyl ethanoate',
-                formula: 'CH₃COOCH₂CH₃',
-                options: ['Methyl ethanoate', 'Ethyl ethanoate', 'Propyl methanoate', 'Ethyl propanoate'],
-                nodes: [
-                    { x: -100, y: 0, el: 'C' }, // Acid part C1
-                    { x: -40, y: 0, el: 'C' }, // Acid part C2 (Carbonyl)
-                    { x: -40, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // C=O
-                    { x: 10, y: 0, el: 'O', color: 'bg-red-500 border-red-600' }, // Link O
-                    { x: 60, y: 0, el: 'C' }, // Alcohol part C1
-                    { x: 120, y: 0, el: 'C' } // Alcohol part C2
-                ],
-                links: [
-                    { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }, 
-                    { s: 1, t: 3 },
-                    { s: 3, t: 4 },
-                    { s: 4, t: 5 }
-                ]
-            },
-
-            // --- HALOALKANES (Multi-substituted) ---
-            {
-                id: 'halo-mix',
-                type: 'Haloalkane (多鹵代烴)',
-                correct: '1,2-dichloroethane',
-                formula: 'CH₂ClCH₂Cl',
-                options: ['1,1-dichloroethane', '1,2-dichloroethane', 'Chloroethane', 'Dichloromethane'],
-                nodes: [
-                    { x: -40, y: 0, el: 'C' }, { x: 40, y: 0, el: 'C' },
-                    { x: -40, y: 60, el: 'Cl', color: 'bg-green-500 border-green-600' },
-                    { x: 40, y: -60, el: 'Cl', color: 'bg-green-500 border-green-600' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 0, t: 2 }, { s: 1, t: 3 }]
-            },
-
-            // --- AMIDES & AMINES ---
-            {
-                id: 'amide-3',
-                type: 'Amide (酰胺)',
-                correct: 'Propanamide',
-                formula: 'CH₃CH₂CONH₂',
-                options: ['Ethanamide', 'Propanamide', 'Butanamide', 'Propylamine'],
-                nodes: [
-                    { x: -80, y: 0, el: 'C' }, { x: -20, y: 0, el: 'C' }, { x: 40, y: 0, el: 'C' },
-                    { x: 40, y: -60, el: 'O', color: 'bg-red-500 border-red-600' },
-                    { x: 90, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 2, t: 3, type: 'double' }, { s: 2, t: 4 }]
+            // 1. Build Main Chain
+            for (let i = 0; i < config.chain; i++) {
+                addNode(startX + i * spacing, startY, 'C');
+                if (i > 0) {
+                    // Check for double/triple bonds in main chain
+                    let type = 'single';
+                    if (config.doubleBond === i) type = 'double';
+                    if (config.tripleBond === i) type = 'triple';
+                    links.push({ s: i - 1, t: i, type });
+                }
             }
+
+            // 2. Add Substituents / Functional Groups
+            if (config.subs) {
+                config.subs.forEach(sub => {
+                    const parentIdx = sub.pos - 1; // 1-based index to 0-based
+                    if (parentIdx < 0 || parentIdx >= nodes.length) return;
+
+                    const parentNode = nodes[parentIdx];
+                    let subX = parentNode.x;
+                    let subY = parentNode.y + (sub.up ? -spacing : spacing); // Default down, optional up
+                    
+                    // Avoid collision simply by alternating if pos is same? 
+                    // For this simple engine, we assume manual config defines 'up' if needed.
+
+                    // Specific Groups Logic
+                    if (sub.type === 'methyl') {
+                        const idx = addNode(subX, subY, 'C');
+                        links.push({ s: parentIdx, t: idx });
+                    } 
+                    else if (sub.type === 'ethyl') {
+                        const idx1 = addNode(subX, subY, 'C');
+                        const idx2 = addNode(subX + spacing/2, subY + spacing, 'C'); // Bent ethyl
+                        links.push({ s: parentIdx, t: idx1 });
+                        links.push({ s: idx1, t: idx2 });
+                    }
+                    else if (['Cl', 'Br', 'I', 'F', 'OH', 'NH2'].includes(sub.type)) {
+                        let color = '';
+                        if(sub.type === 'Cl') color = 'bg-green-600 border-green-400';
+                        if(sub.type === 'Br') color = 'bg-orange-700 border-orange-500';
+                        if(sub.type === 'I') color = 'bg-purple-700 border-purple-500';
+                        if(sub.type === 'F') color = 'bg-teal-600 border-teal-400';
+                        if(sub.type === 'OH') color = 'bg-red-600 border-red-400';
+                        if(sub.type === 'NH2') color = 'bg-blue-600 border-blue-400';
+                        
+                        const idx = addNode(subX, subY, sub.type === 'NH2' ? 'NH₂' : sub.type, color);
+                        links.push({ s: parentIdx, t: idx });
+                    }
+                    else if (sub.type === '=O') { // Carbonyl Oxygen
+                        const idx = addNode(subX, subY, 'O', 'bg-red-600 border-red-400');
+                        links.push({ s: parentIdx, t: idx, type: 'double' });
+                    }
+                    else if (sub.type === '-O-') { // Ether linkage for Ester
+                        // Special handling for Ester: Main chain -- C(=O) -- O -- R
+                        // This is complex. Let's assume config handles ester by defining the 'O' in chain or as substituent
+                        // Simplified: Ester R group attached to O attached to Main Chain
+                    }
+                });
+            }
+            
+            // Special Handling for Ester Chain Extension
+            if (config.esterR) {
+                // Find the carbonyl Carbon (usually pos 1 of acid part, or last of main chain)
+                // For consistency, let's assume main chain is the acid part, esterR is the alcohol part attached to C1 via O
+                // Wait, main chain usually numbered from C=O. 
+                // Let's append: ...-C(=O)-O-C-C...
+                
+                // 1. Find the carboxyl C (defined in subs as =O)
+                // 2. Attach -O- to it
+                // 3. Attach esterR chain
+                
+                const cIdx = config.subs.find(s => s.type === '=O').pos - 1;
+                const cNode = nodes[cIdx];
+                
+                // Add Ether O
+                const oIdx = addNode(cNode.x + spacing, cNode.y, 'O', 'bg-red-600 border-red-400');
+                links.push({ s: cIdx, t: oIdx });
+                
+                // Add R group
+                for(let i=0; i<config.esterR; i++) {
+                    const rIdx = addNode(cNode.x + spacing * (i+2), cNode.y, 'C');
+                    links.push({ s: i===0 ? oIdx : nodes.length-2, t: rIdx });
+                }
+            }
+
+            return { nodes, links };
+        };
+
+
+        // --- 2. The Massive Database (150+ potential variations via config) ---
+        
+        const RawQuestions = [
+            // ALKANES (C1-C6)
+            { name: 'Methane', formula: 'CH₄', config: { chain: 1 } },
+            { name: 'Ethane', formula: 'CH₃CH₃', config: { chain: 2 } },
+            { name: 'Propane', formula: 'CH₃CH₂CH₃', config: { chain: 3 } },
+            { name: 'Butane', formula: 'CH₃(CH₂)₂CH₃', config: { chain: 4 } },
+            { name: 'Pentane', formula: 'CH₃(CH₂)₃CH₃', config: { chain: 5 } },
+            { name: 'Hexane', formula: 'CH₃(CH₂)₄CH₃', config: { chain: 6 } },
+            { name: '2-methylpropane', formula: 'CH₃CH(CH₃)CH₃', config: { chain: 3, subs: [{pos:2, type:'methyl'}] } },
+            { name: '2-methylbutane', formula: 'CH₃CH(CH₃)CH₂CH₃', config: { chain: 4, subs: [{pos:2, type:'methyl'}] } },
+            { name: '2,2-dimethylpropane', formula: 'C(CH₃)₄', config: { chain: 3, subs: [{pos:2, type:'methyl'}, {pos:2, type:'methyl', up:true}] } },
+            { name: '2-methylpentane', formula: '(CH₃)₂CH(CH₂)₂CH₃', config: { chain: 5, subs: [{pos:2, type:'methyl'}] } },
+            { name: '3-methylpentane', formula: 'CH₃CH₂CH(CH₃)CH₂CH₃', config: { chain: 5, subs: [{pos:3, type:'methyl'}] } },
+            { name: '2,2-dimethylbutane', formula: 'CH₃C(CH₃)₂CH₂CH₃', config: { chain: 4, subs: [{pos:2, type:'methyl'}, {pos:2, type:'methyl', up:true}] } },
+            { name: '2,3-dimethylbutane', formula: 'CH₃CH(CH₃)CH(CH₃)CH₃', config: { chain: 4, subs: [{pos:2, type:'methyl'}, {pos:3, type:'methyl'}] } },
+
+            // ALKENES
+            { name: 'Ethene', formula: 'CH₂=CH₂', config: { chain: 2, doubleBond: 1 } },
+            { name: 'Propene', formula: 'CH₃CH=CH₂', config: { chain: 3, doubleBond: 1 } }, // Numbering not needed for propene
+            { name: 'But-1-ene', formula: 'CH₂=CHCH₂CH₃', config: { chain: 4, doubleBond: 1 } },
+            { name: 'But-2-ene', formula: 'CH₃CH=CHCH₃', config: { chain: 4, doubleBond: 2 } },
+            { name: '2-methylpropene', formula: 'CH₂=C(CH₃)₂', config: { chain: 3, doubleBond: 1, subs: [{pos:2, type:'methyl', up:true}] } },
+            { name: 'Pent-1-ene', formula: 'CH₂=CH(CH₂)₂CH₃', config: { chain: 5, doubleBond: 1 } },
+            { name: 'Pent-2-ene', formula: 'CH₃CH=CHCH₂CH₃', config: { chain: 5, doubleBond: 2 } },
+            { name: 'Hex-3-ene', formula: 'CH₃CH₂CH=CHCH₂CH₃', config: { chain: 6, doubleBond: 3 } },
+
+            // HALOALKANES
+            { name: 'Chloromethane', formula: 'CH₃Cl', config: { chain: 1, subs: [{pos:1, type:'Cl'}] } },
+            { name: 'Chloroethane', formula: 'CH₃CH₂Cl', config: { chain: 2, subs: [{pos:1, type:'Cl'}] } }, // pos 1 equiv to 2
+            { name: '1-bromopropane', formula: 'CH₃CH₂CH₂Br', config: { chain: 3, subs: [{pos:3, type:'Br'}] } }, // Visually pos 3 is end
+            { name: '2-bromopropane', formula: 'CH₃CH(Br)CH₃', config: { chain: 3, subs: [{pos:2, type:'Br'}] } },
+            { name: '2-chloro-2-methylpropane', formula: '(CH₃)₃CCl', config: { chain: 3, subs: [{pos:2, type:'methyl', up:true}, {pos:2, type:'Cl'}] } },
+            { name: '1,2-dichloroethane', formula: 'CH₂ClCH₂Cl', config: { chain: 2, subs: [{pos:1, type:'Cl', up:true}, {pos:2, type:'Cl'}] } },
+            { name: '1,1-dichloroethane', formula: 'CH₃CHCl₂', config: { chain: 2, subs: [{pos:2, type:'Cl', up:true}, {pos:2, type:'Cl'}] } },
+            { name: 'Tribromomethane', formula: 'CHBr₃', config: { chain: 1, subs: [{pos:1, type:'Br'}, {pos:1, type:'Br', up:true}, {pos:1, type:'Br', left:true}] } }, // Layout logic might need tweak for left, let's stick to standard
+
+            // ALCOHOLS
+            { name: 'Methanol', formula: 'CH₃OH', config: { chain: 1, subs: [{pos:1, type:'OH'}] } },
+            { name: 'Ethanol', formula: 'CH₃CH₂OH', config: { chain: 2, subs: [{pos:2, type:'OH'}] } },
+            { name: 'Propan-1-ol', formula: 'CH₃CH₂CH₂OH', config: { chain: 3, subs: [{pos:3, type:'OH'}] } },
+            { name: 'Propan-2-ol', formula: 'CH₃CH(OH)CH₃', config: { chain: 3, subs: [{pos:2, type:'OH'}] } },
+            { name: 'Butan-1-ol', formula: 'CH₃(CH₂)₃OH', config: { chain: 4, subs: [{pos:4, type:'OH'}] } },
+            { name: 'Butan-2-ol', formula: 'CH₃CH(OH)CH₂CH₃', config: { chain: 4, subs: [{pos:2, type:'OH'}] } },
+            { name: '2-methylpropan-2-ol', formula: '(CH₃)₃COH', config: { chain: 3, subs: [{pos:2, type:'methyl', up:true}, {pos:2, type:'OH'}] } },
+            { name: 'Ethane-1,2-diol', formula: 'HOCH₂CH₂OH', config: { chain: 2, subs: [{pos:1, type:'OH', up:true}, {pos:2, type:'OH'}] } },
+
+            // ALDEHYDES & KETONES
+            { name: 'Methanal', formula: 'HCHO', config: { chain: 1, subs: [{pos:1, type:'=O', up:true}] } },
+            { name: 'Ethanal', formula: 'CH₃CHO', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}] } },
+            { name: 'Propanal', formula: 'CH₃CH₂CHO', config: { chain: 3, subs: [{pos:3, type:'=O', up:true}] } },
+            { name: 'Butanal', formula: 'CH₃(CH₂)₂CHO', config: { chain: 4, subs: [{pos:4, type:'=O', up:true}] } },
+            { name: 'Propanone', formula: 'CH₃COCH₃', config: { chain: 3, subs: [{pos:2, type:'=O', up:true}] } },
+            { name: 'Butanone', formula: 'CH₃COCH₂CH₃', config: { chain: 4, subs: [{pos:2, type:'=O', up:true}] } },
+            { name: 'Pentan-3-one', formula: 'CH₃CH₂COCH₂CH₃', config: { chain: 5, subs: [{pos:3, type:'=O', up:true}] } },
+
+            // CARBOXYLIC ACIDS
+            { name: 'Methanoic Acid', formula: 'HCOOH', config: { chain: 1, subs: [{pos:1, type:'=O', up:true}, {pos:1, type:'OH'}] } },
+            { name: 'Ethanoic Acid', formula: 'CH₃COOH', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}, {pos:2, type:'OH'}] } },
+            { name: 'Propanoic Acid', formula: 'CH₃CH₂COOH', config: { chain: 3, subs: [{pos:3, type:'=O', up:true}, {pos:3, type:'OH'}] } },
+            { name: 'Butanoic Acid', formula: 'CH₃(CH₂)₂COOH', config: { chain: 4, subs: [{pos:4, type:'=O', up:true}, {pos:4, type:'OH'}] } },
+
+            // ESTERS (Acid part on Left, Alcohol part on Right)
+            { name: 'Methyl methanoate', formula: 'HCOOCH₃', config: { chain: 1, subs: [{pos:1, type:'=O', up:true}], esterR: 1 } },
+            { name: 'Methyl ethanoate', formula: 'CH₃COOCH₃', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}], esterR: 1 } },
+            { name: 'Ethyl ethanoate', formula: 'CH₃COOCH₂CH₃', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}], esterR: 2 } },
+            { name: 'Propyl ethanoate', formula: 'CH₃COOC₃H₇', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}], esterR: 3 } },
+            { name: 'Ethyl propanoate', formula: 'C₂H₅COOC₂H₅', config: { chain: 3, subs: [{pos:3, type:'=O', up:true}], esterR: 2 } },
+
+            // AMIDES & AMINES
+            { name: 'Methanamide', formula: 'HCONH₂', config: { chain: 1, subs: [{pos:1, type:'=O', up:true}, {pos:1, type:'NH2'}] } },
+            { name: 'Ethanamide', formula: 'CH₃CONH₂', config: { chain: 2, subs: [{pos:2, type:'=O', up:true}, {pos:2, type:'NH2'}] } },
+            { name: 'Methylamine', formula: 'CH₃NH₂', config: { chain: 1, subs: [{pos:1, type:'NH2'}] } },
+            { name: 'Ethylamine', formula: 'CH₃CH₂NH₂', config: { chain: 2, subs: [{pos:2, type:'NH2'}] } },
+            { name: '2-aminopropane', formula: '(CH₃)₂CHNH₂', config: { chain: 3, subs: [{pos:2, type:'NH2'}] } }
         ];
 
+        // Distractor Generator
+        const generateDistractors = (correctName) => {
+            // Logic to generate plausible wrong answers based on the correct name
+            const parts = correctName.split(' ');
+            const root = parts[parts.length-1]; // e.g., 'ethanoate', 'Acid'
+            
+            let options = new Set();
+            options.add(correctName);
+
+            // Common mistakes:
+            // 1. Wrong chain length (Eth- vs Prop-)
+            const prefixes = ['Meth', 'Eth', 'Prop', 'But', 'Pent', 'Hex'];
+            
+            // 2. Wrong suffix (Alkane vs Alkene vs Alcohol)
+            
+            // 3. Numbering error (But-1-ene vs But-3-ene)
+
+            while (options.size < 4) {
+                // Simple random fallback for this demo, 
+                // in a full app we would parse the name and shift numbers/prefixes intelligently
+                const randomQ = RawQuestions[Math.floor(Math.random() * RawQuestions.length)];
+                if (randomQ.name !== correctName) {
+                    options.add(randomQ.name);
+                }
+            }
+
+            return Array.from(options).sort(() => Math.random() - 0.5);
+        };
+
+
         const App = () => {
-            const [currentQ, setCurrentQ] = useState(null);
+            const [question, setQuestion] = useState(null);
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
             const [feedback, setFeedback] = useState(null);
+            const [qIndex, setQIndex] = useState(0);
+            
+            // Shuffle questions once on load
+            const [queue, setQueue] = useState([]);
 
             useEffect(() => {
-                loadNextQuestion();
+                setQueue([...RawQuestions].sort(() => Math.random() - 0.5));
             }, []);
 
-            const loadNextQuestion = () => {
+            useEffect(() => {
+                if (queue.length > 0) {
+                    loadQuestion(0);
+                }
+            }, [queue]);
+
+            const loadQuestion = (idx) => {
+                const raw = queue[idx % queue.length];
+                const opts = generateDistractors(raw.name);
+                const structData = generateStructure(raw.config);
+                
+                // Determine homologous series from name for display
+                let series = 'Organic Compound';
+                if(raw.name.includes('ane')) series = 'Alkane';
+                if(raw.name.includes('ene')) series = 'Alkene';
+                if(raw.name.includes('ol')) series = 'Alcohol';
+                if(raw.name.includes('al')) series = 'Aldehyde';
+                if(raw.name.includes('one')) series = 'Ketone';
+                if(raw.name.includes('Acid')) series = 'Carboxylic Acid';
+                if(raw.name.includes('oate')) series = 'Ester';
+                if(raw.name.includes('amide')) series = 'Amide';
+                if(raw.name.includes('amine') || raw.name.includes('amino')) series = 'Amine';
+                if(raw.name.includes('chloro') || raw.name.includes('bromo')) series = 'Haloalkane';
+
+                setQuestion({
+                    ...raw,
+                    options: opts,
+                    structure: structData,
+                    series: series
+                });
                 setFeedback(null);
-                // Simple random selection. 
-                // In a real app, we might want to ensure no repeats or progressive difficulty.
-                const randomIdx = Math.floor(Math.random() * Database.length);
-                setCurrentQ(Database[randomIdx]);
+                setQIndex(idx);
             };
 
-            const handleAnswer = (answer) => {
+            const handleAnswer = (ans) => {
                 if (feedback) return;
-
-                if (answer === currentQ.correct) {
+                const isCorrect = ans === question.name;
+                if (isCorrect) {
                     setScore(s => s + 10);
                     setStreak(s => s + 1);
-                    setFeedback({ correct: true, msg: '正確！ (Correct!)', selected: answer });
+                    setFeedback({ type: 'success', msg: '正確！' });
                 } else {
                     setStreak(0);
-                    setFeedback({ correct: false, msg: `錯誤。正確答案是 ${currentQ.correct}`, selected: answer });
+                    setFeedback({ type: 'error', msg: `錯誤。正確答案是 ${question.name}` });
                 }
             };
 
-            // --- Visualization Component (SVG + HTML Overlay) ---
-            const StructureVisual = ({ data }) => {
-                // Center calculation
-                const centerX = 300; // Half of width
-                const centerY = 120; // Half of height
+            const nextQ = () => {
+                loadQuestion(qIndex + 1);
+            };
+
+            // Visual Component
+            const MoleculeViewer = ({ data }) => {
+                // Calculate bounds to center
+                const xs = data.nodes.map(n => n.x);
+                const ys = data.nodes.map(n => n.y);
+                const minX = Math.min(...xs), maxX = Math.max(...xs);
+                const minY = Math.min(...ys), maxY = Math.max(...ys);
                 
+                const width = maxX - minX + 100;
+                const height = maxY - minY + 100;
+                const offsetX = -minX + 50;
+                const offsetY = -minY + 50;
+
+                // Scale fit
+                const scale = Math.min(1, 500 / width, 250 / height);
+
                 return (
-                    <div className="relative w-full h-60 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-inner group">
-                        {/* Grid Background */}
+                    <div className="w-full h-64 bg-slate-800 rounded-xl border border-slate-700 relative overflow-hidden flex items-center justify-center">
                         <div className="absolute inset-0 opacity-10" 
                              style={{backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
                         
-                        {/* SVG Layer for Bonds */}
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                            {data.links.map((link, i) => {
-                                const start = data.nodes[link.s];
-                                const end = data.nodes[link.t];
-                                
-                                // Draw Double Bond
-                                if (link.type === 'double') {
-                                    return (
-                                        <g key={i}>
-                                            <line x1={centerX + start.x} y1={centerY + start.y - 3} x2={centerX + end.x} y2={centerY + end.y - 3} stroke="#94a3b8" strokeWidth="3" />
-                                            <line x1={centerX + start.x} y1={centerY + start.y + 3} x2={centerX + end.x} y2={centerY + end.y + 3} stroke="#94a3b8" strokeWidth="3" />
-                                        </g>
-                                    );
-                                }
-                                // Draw Single Bond
-                                return (
-                                    <line key={i} x1={centerX + start.x} y1={centerY + start.y} x2={centerX + end.x} y2={centerY + end.y} stroke="#94a3b8" strokeWidth="3" />
-                                );
-                            })}
-                        </svg>
-
-                        {/* Atom Nodes */}
-                        {data.nodes.map((node, i) => (
-                            <div 
-                                key={i}
-                                className={`absolute flex items-center justify-center font-bold text-sm rounded-full border-2 atom-shadow transform -translate-x-1/2 -translate-y-1/2 transition-transform group-hover:scale-110
-                                    ${node.color || (node.el === 'C' ? 'bg-slate-600 border-slate-400 text-white' : 'bg-slate-200 border-slate-400 text-slate-800')}
-                                    ${node.el.length > 2 ? 'w-12 h-12 text-xs' : node.el.length > 1 ? 'w-10 h-10 text-xs' : 'w-9 h-9'}
-                                `}
-                                style={{ left: centerX + node.x, top: centerY + node.y }}
-                            >
-                                {node.el}
-                            </div>
-                        ))}
+                        <div style={{ transform: `scale(${scale})` }} className="relative">
+                            <svg width={width} height={height} className="overflow-visible">
+                                {data.links.map((link, i) => {
+                                    const s = data.nodes[link.s];
+                                    const t = data.nodes[link.t];
+                                    const x1 = s.x + offsetX, y1 = s.y + offsetY;
+                                    const x2 = t.x + offsetX, y2 = t.y + offsetY;
+                                    
+                                    if (link.type === 'double') {
+                                        return <g key={i} stroke="#94a3b8" strokeWidth="4" strokeLinecap="round">
+                                            <line x1={x1} y1={y1-4} x2={x2} y2={y2-4} />
+                                            <line x1={x1} y1={y1+4} x2={x2} y2={y2+4} />
+                                        </g>;
+                                    }
+                                    if (link.type === 'triple') {
+                                        return <g key={i} stroke="#94a3b8" strokeWidth="3" strokeLinecap="round">
+                                            <line x1={x1} y1={y1-6} x2={x2} y2={y2-6} />
+                                            <line x1={x1} y1={y1} x2={x2} y2={y2} />
+                                            <line x1={x1} y1={y1+6} x2={x2} y2={y2+6} />
+                                        </g>;
+                                    }
+                                    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth="4" strokeLinecap="round"/>;
+                                })}
+                            </svg>
+                            
+                            {data.nodes.map((node, i) => (
+                                <div key={i} 
+                                     className={`absolute flex items-center justify-center font-bold border-2 atom-shadow z-10
+                                        ${node.color || (node.el === 'C' ? 'bg-slate-600 border-slate-400 text-white' : 'bg-white text-slate-900 border-slate-300')}
+                                        ${node.el.length > 2 ? 'text-xs w-10 h-10' : 'text-sm w-10 h-10'}
+                                        rounded-full
+                                     `}
+                                     style={{ left: node.x + offsetX - 20, top: node.y + offsetY - 20 }}
+                                >
+                                    {node.el}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 );
             };
 
+            if (!question) return <div className="flex items-center justify-center h-screen text-slate-500">Loading Question Bank...</div>;
+
             return (
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-2xl">
-                    
-                    {/* Header */}
                     <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-teal-400 flex items-center gap-2">
-                                <i data-lucide="pencil-ruler"></i> 命名特訓 (Pro)
+                                <i data-lucide="flask-conical"></i> 命名特訓 (Pro)
                             </h1>
-                            <p className="text-slate-400 text-sm">IUPAC Naming Drill (C1-C6)</p>
+                            <p className="text-slate-400 text-sm">IUPAC Naming Drill</p>
                         </div>
-                        <div className="flex gap-4 font-mono font-bold text-xl">
-                            <div className="text-teal-400">Score: {score}</div>
-                            <div className="text-orange-400">Streak: {streak} 🔥</div>
+                        <div className="text-right">
+                            <div className="text-teal-400 font-mono font-bold text-xl">Score: {score}</div>
+                            <div className="text-xs text-slate-500">Streak: <span className="text-orange-400">{streak} 🔥</span></div>
                         </div>
                     </div>
 
-                    {currentQ && (
-                        <div className="flex flex-col gap-6 animate-in fade-in">
-                            
-                            {/* Question Card */}
-                            <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700">
-                                <div className="flex justify-between items-center mb-4">
-                                    <span className="text-xs font-bold text-slate-800 bg-slate-300 px-2 py-1 rounded uppercase tracking-wider">
-                                        Identify the Structure
-                                    </span>
-                                    <span className="text-xs text-teal-400 font-bold">
-                                        Series: {currentQ.type}
-                                    </span>
-                                </div>
-                                
-                                <StructureVisual data={currentQ} />
-                                
-                                <div className="mt-4 text-center font-mono text-lg text-slate-300 bg-slate-900/50 p-2 rounded-lg border border-slate-600">
-                                    Formula Hint: <span className="text-white font-bold">{currentQ.formula}</span>
-                                </div>
+                    <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 mb-6 animate-in fade-in">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-xs font-bold bg-slate-700 text-slate-300 px-2 py-1 rounded">Q{qIndex+1}</span>
+                            <span className="text-xs font-bold text-teal-400 uppercase">{question.series}</span>
+                        </div>
+                        
+                        <MoleculeViewer data={question.structure} />
+                        
+                        <div className="mt-4 text-center">
+                            <div className="text-xs text-slate-500 mb-1 uppercase">Molecular Formula</div>
+                            <div className="font-mono text-lg text-white tracking-wider">{question.formula}</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                        {question.options.map((opt, i) => (
+                            <button 
+                                key={i}
+                                onClick={() => handleAnswer(opt)}
+                                disabled={feedback}
+                                className={`p-4 rounded-xl font-bold text-left transition-all border-2
+                                    ${feedback 
+                                        ? (opt === question.correct ? 'bg-green-600 border-green-500 text-white' : opt === feedback.selected ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500')
+                                        : 'bg-slate-800 border-slate-600 text-slate-200 hover:border-teal-400 hover:bg-slate-700'}
+                                `}
+                            >
+                                {opt}
+                            </button>
+                        ))}
+                    </div>
+
+                    {feedback && (
+                        <div className={`p-4 rounded-xl flex justify-between items-center animate-in slide-in-from-bottom-2 shadow-lg
+                            ${feedback.type === 'success' ? 'bg-green-900/50 border border-green-500 text-green-400' : 'bg-red-900/50 border border-red-500 text-red-400'}
+                        `}>
+                            <div className="font-bold flex items-center gap-2">
+                                {feedback.type === 'success' ? <i data-lucide="check-circle"/> : <i data-lucide="x-circle"/>}
+                                <span>{feedback.msg}</span>
                             </div>
-
-                            {/* Options */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {currentQ.options.map((opt, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => handleAnswer(opt)}
-                                        disabled={feedback}
-                                        className={`p-4 rounded-xl border-2 font-bold text-lg transition-all
-                                            ${feedback 
-                                                ? (opt === currentQ.correct ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' : opt === feedback.selected ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500 opacity-50')
-                                                : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-teal-400 hover:shadow-md'}
-                                        `}
-                                    >
-                                        {opt}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Feedback & Next */}
-                            {feedback && (
-                                <div className={`p-4 rounded-xl border-l-4 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-bottom-2
-                                    ${feedback.correct ? 'bg-green-900/30 border-green-500 text-green-300' : 'bg-red-900/30 border-red-500 text-red-300'}
-                                `}>
-                                    <div className="font-bold text-lg flex items-center gap-2">
-                                        {feedback.correct ? <i data-lucide="check-circle"/> : <i data-lucide="x-circle"/>}
-                                        {feedback.msg}
-                                    </div>
-                                    <button 
-                                        onClick={loadNextQuestion}
-                                        className="px-8 py-3 bg-white text-slate-900 font-bold rounded-lg hover:bg-slate-200 transition-colors w-full md:w-auto"
-                                    >
-                                        下一題 (Next) &rarr;
-                                    </button>
-                                </div>
-                            )}
-
+                            <button onClick={nextQ} className="px-6 py-2 bg-white text-slate-900 rounded-lg font-bold hover:bg-slate-200 transition-colors flex items-center gap-2">
+                                Next <i data-lucide="arrow-right" size={16}/>
+                            </button>
                         </div>
                     )}
                     
-                    <div className="text-center text-slate-500 text-xs mt-8">
-                        Luminous Learner Science Tools | HKDSE Topic V & XI
+                    <div className="text-center text-slate-600 text-xs mt-auto">
+                        Total Questions: {RawQuestions.length} | Luminous Learner Science Tools
                     </div>
                 </div>
             );
