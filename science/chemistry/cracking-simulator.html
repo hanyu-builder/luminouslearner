@@ -10,8 +10,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
         body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
         
         .molecule { transition: all 1s ease-in-out; }
         
@@ -31,10 +32,7 @@
         }
 
         /* Bromine Test Animation */
-        .bromine-liquid {
-            transition: background-color 2s ease;
-        }
-        
+        .bromine-liquid { transition: background-color 2s ease; }
         .fade-in { animation: fade-in 0.5s ease-out forwards; }
         @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -46,16 +44,32 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // IUPAC Naming Helper
+        const getAlkaneName = (n) => {
+            const names = ["Methane", "Ethane", "Propane", "Butane", "Pentane", "Hexane", "Heptane", "Octane", "Nonane", "Decane"];
+            const chinese = ["甲烷", "乙烷", "丙烷", "丁烷", "戊烷", "己烷", "庚烷", "辛烷", "壬烷", "癸烷"];
+            if (n >= 1 && n <= 10) return { en: names[n-1], zh: chinese[n-1], formula: `C${n}H${2*n+2}` };
+            return { en: `C${n}-Alkane`, zh: `${n}碳烷烴`, formula: `C${n}H${2*n+2}` };
+        };
+
+        const getAlkeneName = (n) => {
+            const names = ["Methene", "Ethene", "Propene", "Butene", "Pentene", "Hexene", "Heptene", "Octene", "Nonene", "Decene"];
+            const chinese = ["(不存在)", "乙烯", "丙烯", "丁烯", "戊烯", "己烯", "庚烯", "辛烯", "壬烯", "癸烯"];
+            if (n >= 2 && n <= 10) return { en: names[n-1], zh: chinese[n-1], formula: `C${n}H${2*n}` };
+            return { en: `C${n}-Alkene`, zh: `${n}碳烯烴`, formula: `C${n}H${2*n}` };
+        };
+
         const App = () => {
             const [isHeating, setIsHeating] = useState(false);
             const [cracked, setCracked] = useState(false);
             const [tested, setTested] = useState(false);
-            const [bromineColor, setBromineColor] = useState('bg-orange-500'); // Orange to start
+            const [bromineColor, setBromineColor] = useState('bg-orange-500'); 
             const [products, setProducts] = useState([]);
 
-            // Initial Long Chain Molecule (e.g., C10H22)
-            // Visualized as a chain of balls
-            const longChain = Array.from({ length: 10 }).map((_, i) => ({ id: i, type: 'C' }));
+            // Initial Long Chain Molecule: Decane (C10H22)
+            const initialCarbonCount = 10;
+            const longChain = Array.from({ length: initialCarbonCount }).map((_, i) => ({ id: i, type: 'C' }));
+            const initialInfo = getAlkaneName(initialCarbonCount);
 
             const startCracking = () => {
                 if (isHeating) return;
@@ -65,36 +79,47 @@
                 setBromineColor('bg-orange-500');
                 
                 setTimeout(() => {
-                    // Perform Cracking Logic (Random Split)
-                    // Example: C10 -> C8 (Alkane) + C2 (Alkene) OR C6 + C4
-                    // For visuals, let's split into two groups
-                    const splitPoint = 4 + Math.floor(Math.random() * 3); // Split at 4, 5, or 6
+                    // LOGIC FIX: Random split, but names must match the split!
+                    // Scenario: C10 -> C8 (Alkane) + C2 (Alkene) is the most common textbook example
+                    // Let's prioritize 8+2 split, but allow others for variety if needed.
+                    // For clarity, let's stick to 8 + 2 as it matches the "Octane" expectation.
                     
+                    const splitAt = 8; // Splits into 8 and 2
+                    
+                    const count1 = splitAt; // 8
+                    const count2 = initialCarbonCount - splitAt; // 2
+
+                    const info1 = getAlkaneName(count1); // Octane
+                    const info2 = getAlkeneName(count2); // Ethene
+
                     const prod1 = { 
-                        name: `Octane (C8H18) 等長鏈烷烴`, 
+                        name: info1.en,
+                        nameZh: info1.zh,
+                        formula: info1.formula,
                         type: 'alkane', 
-                        atoms: longChain.slice(0, splitPoint),
-                        x: -100, y: -50 
+                        atoms: longChain.slice(0, count1),
+                        desc: '較短鏈烷烴 (Shorter Alkane)',
+                        isUnsaturated: false
                     };
                     const prod2 = { 
-                        name: `Ethene (C2H4) 等短鏈烯烴`, 
+                        name: info2.en,
+                        nameZh: info2.zh,
+                        formula: info2.formula,
                         type: 'alkene', 
-                        atoms: longChain.slice(splitPoint),
-                        x: 100, y: 50,
+                        atoms: longChain.slice(count1), // The remaining 2
+                        desc: '烯烴 (Alkene)',
                         isUnsaturated: true
                     };
                     
                     setProducts([prod1, prod2]);
                     setCracked(true);
                     setIsHeating(false);
-                }, 3000); // 3s heating
+                }, 2500);
             };
 
             const testBromine = () => {
                 if (!cracked || tested) return;
                 setTested(true);
-                
-                // Simulate Bromine Decolourization
                 setTimeout(() => {
                     setBromineColor('bg-slate-200/30'); // Colorless
                 }, 1000);
@@ -108,17 +133,20 @@
                 setProducts([]);
             };
 
-            const MoleculeVisual = ({ atoms, className }) => (
-                <div className={`flex items-center justify-center ${className}`}>
+            const MoleculeVisual = ({ atoms, className, type }) => (
+                <div className={`flex items-center justify-center p-2 ${className}`}>
                     {atoms.map((atom, i) => (
                         <React.Fragment key={i}>
-                            <div className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-600 flex items-center justify-center relative shadow-lg z-10">
-                                <span className="text-xs font-bold text-slate-400">C</span>
-                                {/* Hydrogens (simplified visual) */}
-                                <div className="absolute -top-2 w-2 h-2 bg-white rounded-full opacity-50"></div>
-                                <div className="absolute -bottom-2 w-2 h-2 bg-white rounded-full opacity-50"></div>
+                            <div className="w-8 h-8 rounded-full bg-slate-700 border-2 border-slate-500 flex items-center justify-center relative shadow-md z-10">
+                                <span className="text-xs font-bold text-slate-300">C</span>
+                                {/* Hydrogens */}
+                                <div className="absolute -top-1 w-1.5 h-1.5 bg-white rounded-full opacity-60"></div>
+                                <div className="absolute -bottom-1 w-1.5 h-1.5 bg-white rounded-full opacity-60"></div>
                             </div>
-                            {i < atoms.length - 1 && <div className="w-4 h-1 bg-slate-500"></div>}
+                            {/* Bond */}
+                            {i < atoms.length - 1 && (
+                                <div className={`h-1.5 bg-slate-400 ${type === 'alkene' && i === atoms.length-2 ? 'w-4 border-y-2 border-slate-400 h-2 bg-transparent' : 'w-4'}`}></div>
+                            )}
                         </React.Fragment>
                     ))}
                 </div>
@@ -133,7 +161,7 @@
                             <h1 className="text-2xl font-bold text-orange-500 flex items-center gap-2">
                                 <i data-lucide="flame"></i> 裂解模擬器
                             </h1>
-                            <p className="text-slate-400 text-sm">Cracking Simulator: Long to Short Chains</p>
+                            <p className="text-slate-400 text-sm">Cracking Simulator: {initialInfo.en} &rarr; Alkanes + Alkenes</p>
                         </div>
                         <button onClick={reset} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors border border-slate-600">
                             <i data-lucide="rotate-ccw" size={16}></i> 重置
@@ -160,32 +188,33 @@
                                     <div className="heat-wave bottom-20 left-1/2 animation-delay-500"></div>
                                     <div className="heat-wave bottom-10 right-1/4 animation-delay-1000"></div>
                                     <div className="absolute top-10 text-red-400 font-bold animate-pulse flex items-center gap-2">
-                                        <i data-lucide="thermometer" /> High Temp & Pressure
+                                        <i data-lucide="thermometer" /> Temperature > 400°C
                                     </div>
                                 </>
                             )}
 
                             {/* Molecules Container */}
-                            <div className="relative z-10 w-full h-64 flex items-center justify-center">
+                            <div className="relative z-10 w-full flex flex-col items-center justify-center gap-4">
                                 {!cracked ? (
                                     <div className={`molecule ${isHeating ? 'animate-bounce' : ''}`}>
-                                        <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-600 backdrop-blur-sm mb-4 text-center">
-                                            <div className="text-xs text-slate-400 uppercase font-bold mb-2">重油 / 燃料油 (Heavy Oil)</div>
+                                        <div className="bg-slate-900/80 p-6 rounded-2xl border border-slate-600 backdrop-blur-sm text-center shadow-xl">
+                                            <div className="text-xs text-slate-400 uppercase font-bold mb-2">長鏈烷烴 (Long Chain Alkane)</div>
                                             <MoleculeVisual atoms={longChain} />
-                                            <div className="text-slate-300 text-sm mt-2 font-mono">C₁₀H₂₂ (Decane)</div>
+                                            <div className="text-white font-bold text-xl mt-2">{initialInfo.en} <span className="text-slate-400 text-sm">({initialInfo.formula})</span></div>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-8 w-full">
+                                    <div className="flex flex-col gap-6 w-full max-w-md">
                                         {products.map((prod, idx) => (
-                                            <div key={idx} className={`molecule flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border ${prod.type === 'alkene' ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-blue-500/50'} backdrop-blur-sm fade-in`}>
-                                                <div>
-                                                    <div className={`text-xs uppercase font-bold mb-1 ${prod.type === 'alkene' ? 'text-yellow-400' : 'text-blue-400'}`}>
-                                                        {prod.type === 'alkene' ? 'Useful Alkene (烯烴)' : 'Shorter Alkane (烷烴)'}
+                                            <div key={idx} className={`molecule flex items-center justify-between bg-slate-900/90 p-4 rounded-2xl border ${prod.type === 'alkene' ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'border-blue-500/50'} backdrop-blur-sm fade-in`}>
+                                                <div className="text-left">
+                                                    <div className={`text-[10px] uppercase font-bold mb-1 ${prod.type === 'alkene' ? 'text-yellow-400' : 'text-blue-400'}`}>
+                                                        {prod.desc}
                                                     </div>
-                                                    <div className="text-white font-bold text-lg">{prod.name.split(' ')[0]}</div>
+                                                    <div className="text-white font-bold text-lg leading-tight">{prod.name}</div>
+                                                    <div className="text-slate-400 font-mono text-sm">{prod.formula}</div>
                                                 </div>
-                                                <MoleculeVisual atoms={prod.atoms} />
+                                                <MoleculeVisual atoms={prod.atoms} type={prod.type} />
                                             </div>
                                         ))}
                                     </div>
@@ -199,10 +228,10 @@
                                         onClick={startCracking}
                                         disabled={isHeating}
                                         className={`px-8 py-3 rounded-full font-bold text-lg shadow-lg transition-all flex items-center gap-2
-                                            ${isHeating ? 'bg-red-500 text-white cursor-wait' : 'bg-orange-500 hover:bg-orange-600 text-white'}
+                                            ${isHeating ? 'bg-red-500 text-white cursor-wait' : 'bg-orange-500 hover:bg-orange-600 text-white hover:scale-105'}
                                         `}
                                     >
-                                        <i data-lucide="zap" /> {isHeating ? '裂解進行中...' : '開始裂解 (Start Cracking)'}
+                                        <i data-lucide="zap" /> {isHeating ? '正在加熱裂解...' : '開始裂解 (Start Cracking)'}
                                     </button>
                                 </div>
                             )}
@@ -213,17 +242,17 @@
                         <div className="w-full lg:w-1/3 flex flex-col gap-6">
                             
                             {/* Bromine Water Test */}
-                            <div className={`bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg transition-opacity duration-500 ${cracked ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                            <div className={`bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg transition-all duration-500 ${cracked ? 'opacity-100' : 'opacity-50 grayscale pointer-events-none'}`}>
                                 <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
-                                    <i data-lucide="flask-conical" className="text-yellow-500" /> 產物測試
+                                    <i data-lucide="flask-conical" className="text-yellow-500" /> 產物測試 (Test)
                                 </h3>
                                 <p className="text-sm text-slate-400 mb-4">
-                                    如何證明產物中含有不飽和烴 (Unsaturated Hydrocarbon / Alkene)？
+                                    利用溴水測試產物中是否含有 <strong>C=C 雙鍵</strong> (烯烴)。
                                 </p>
                                 
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="relative w-16 h-24 border-2 border-slate-500 rounded-b-lg bg-white/10 overflow-hidden">
-                                        <div className={`absolute bottom-0 w-full h-3/4 ${bromineColor} bromine-liquid`}></div>
+                                <div className="flex items-center gap-4 mb-4 bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                                    <div className="relative w-12 h-20 border-2 border-slate-500 rounded-b-md bg-white/5 overflow-hidden flex-shrink-0">
+                                        <div className={`absolute bottom-0 w-full h-2/3 ${bromineColor} bromine-liquid`}></div>
                                     </div>
                                     <div className="flex-1">
                                         <div className="text-xs text-slate-500 font-bold uppercase mb-1">Reagent</div>
@@ -231,20 +260,21 @@
                                         <button 
                                             onClick={testBromine}
                                             disabled={tested}
-                                            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-slate-600 disabled:text-slate-400 text-white text-sm font-bold rounded-lg transition-colors w-full"
+                                            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:bg-slate-600 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition-colors w-full shadow-md"
                                         >
-                                            加入產物測試
+                                            {tested ? '測試已完成' : '加入測試'}
                                         </button>
                                     </div>
                                 </div>
 
                                 {tested && (
-                                    <div className="bg-green-900/30 border border-green-500/50 p-3 rounded-lg animate-in fade-in">
-                                        <div className="flex items-center gap-2 text-green-400 font-bold mb-1">
-                                            <i data-lucide="check-circle" size={16} /> 陽性反應 (Positive)
+                                    <div className="bg-green-900/20 border border-green-500/30 p-3 rounded-lg animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="flex items-center gap-2 text-green-400 font-bold mb-1 text-sm">
+                                            <i data-lucide="check-circle" size={14} /> 陽性反應 (Positive)
                                         </div>
                                         <p className="text-xs text-slate-300">
-                                            溴水由<strong>橙色褪至無色 (Decolourized)</strong>。證明產物中含有 C=C 雙鍵 (烯烴)。
+                                            溴水褪色 (Decolourized)。<br/>
+                                            證明裂解產生了<strong>烯烴 (Ethene)</strong>。
                                         </p>
                                     </div>
                                 )}
@@ -257,16 +287,18 @@
                                 </h3>
                                 <div className="space-y-4 text-sm text-slate-300">
                                     <div>
-                                        <strong className="text-orange-400 block mb-1">為什麼要裂解 (Cracking)？</strong>
-                                        <p>原油中含有過多需求量低的長鏈重油。裂解能將其轉化為：</p>
-                                        <ul className="list-disc list-inside mt-1 pl-2 text-xs text-slate-400">
-                                            <li>需求量大的短鏈汽油 (Petrol)</li>
-                                            <li>工業原料烯烴 (Alkenes for plastics)</li>
-                                        </ul>
+                                        <strong className="text-orange-400 block mb-1 text-xs uppercase">Definition</strong>
+                                        <p>裂解 (Cracking) 是將大分子的重油分解成小分子（汽油 + 烯烴）的過程。</p>
                                     </div>
-                                    <div className="border-t border-slate-700 pt-4">
-                                        <strong className="text-blue-400 block mb-1">反應條件</strong>
-                                        <p>需要<strong>高溫</strong>及<strong>催化劑</strong> (如氧化鋁/矽膠碎)。這是一個熱分解 (Thermal Decomposition) 過程。</p>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg font-mono text-xs text-blue-300 border border-slate-600">
+                                        C₁₀H₂₂ &rarr; C₈H₁₈ + C₂H₄
+                                    </div>
+                                    <div>
+                                        <strong className="text-blue-400 block mb-1 text-xs uppercase">Importance</strong>
+                                        <ul className="list-disc list-inside pl-1 text-slate-400 space-y-1">
+                                            <li>增加<strong>汽油</strong>產量 (Extra Petrol)。</li>
+                                            <li>生產<strong>烯烴</strong> (Alkenes)，用於製造塑膠 (Polymers)。</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
