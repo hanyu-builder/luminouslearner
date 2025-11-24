@@ -33,6 +33,7 @@
         // Links: { source, target (indices), type: 'single' | 'double' }
         
         const Database = [
+            // 1. Alkanes
             {
                 id: 'alkane-3',
                 type: 'Alkane (烷烴)',
@@ -47,6 +48,22 @@
                 links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
             },
             {
+                id: 'alkane-branch',
+                type: 'Alkane (支鏈)',
+                correct: '2-methylpropane',
+                formula: 'CH₃CH(CH₃)CH₃',
+                options: ['Butane', '2-methylpropane', 'Pentane', 'Propane'],
+                nodes: [
+                    { x: -60, y: 0, el: 'C' },
+                    { x: 0, y: 0, el: 'C' },
+                    { x: 60, y: 0, el: 'C' },
+                    { x: 0, y: 60, el: 'CH₃' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
+            },
+            
+            // 2. Alkenes
+            {
                 id: 'alkene-2',
                 type: 'Alkene (烯烴)',
                 correct: 'Ethene',
@@ -59,36 +76,23 @@
                 links: [{ s: 0, t: 1, type: 'double' }]
             },
             {
-                id: 'alcohol-2',
-                type: 'Alcohol (醇)',
-                correct: 'Ethanol',
-                formula: 'CH₃CH₂OH',
-                options: ['Methanol', 'Ethanol', 'Propanol', 'Ethanoic Acid'],
+                id: 'alkene-3',
+                type: 'Alkene (烯烴)',
+                correct: 'Propene',
+                formula: 'CH₃CH=CH₂',
+                options: ['Ethene', 'Propene', 'But-1-ene', 'Propane'],
                 nodes: [
                     { x: -50, y: 0, el: 'C' },
                     { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
-            },
-            {
-                id: 'acid-2',
-                type: 'Carboxylic Acid (羧酸)',
-                correct: 'Ethanoic Acid',
-                formula: 'CH₃COOH',
-                options: ['Methanoic Acid', 'Ethanoic Acid', 'Propanoic Acid', 'Ethanol'],
-                nodes: [
-                    { x: -40, y: 0, el: 'C' },
-                    { x: 20, y: 0, el: 'C' },
-                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double bond O up
-                    { x: 70, y: 30, el: 'OH', color: 'bg-red-500 border-red-600' }  // OH down-right
+                    { x: 70, y: 0, el: 'C' }
                 ],
                 links: [
                     { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }, 
-                    { s: 1, t: 3 }
+                    { s: 1, t: 2, type: 'double' }
                 ]
             },
+
+            // 3. Haloalkanes
             {
                 id: 'halo-cl-2',
                 type: 'Haloalkane (鹵代烴)',
@@ -116,35 +120,135 @@
                 ],
                 links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
             },
+
+            // 4. Alcohols
             {
-                id: 'alkane-branch',
-                type: 'Alkane (支鏈)',
-                correct: '2-methylpropane',
-                formula: 'CH₃CH(CH₃)CH₃',
-                options: ['Butane', '2-methylpropane', 'Pentane', 'Propane'],
+                id: 'alcohol-2',
+                type: 'Alcohol (醇)',
+                correct: 'Ethanol',
+                formula: 'CH₃CH₂OH',
+                options: ['Methanol', 'Ethanol', 'Propanol', 'Ethanoic Acid'],
+                nodes: [
+                    { x: -50, y: 0, el: 'C' },
+                    { x: 10, y: 0, el: 'C' },
+                    { x: 70, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
+            },
+
+            // 5. Aldehydes & Ketones
+            {
+                id: 'aldehyde-2',
+                type: 'Aldehyde (醛)',
+                correct: 'Ethanal',
+                formula: 'CH₃CHO',
+                options: ['Methanal', 'Ethanal', 'Ethanol', 'Ethanoic Acid'],
+                nodes: [
+                    { x: -40, y: 0, el: 'C' },
+                    { x: 20, y: 0, el: 'C' },
+                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
+                    { x: 70, y: 30, el: 'H', color: 'bg-slate-400 border-slate-500' } // H down-right
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }, 
+                    { s: 1, t: 3 }
+                ]
+            },
+            {
+                id: 'ketone-3',
+                type: 'Ketone (酮)',
+                correct: 'Propanone',
+                formula: 'CH₃COCH₃',
+                options: ['Propanal', 'Propanone', 'Butanone', 'Propanoic Acid'],
                 nodes: [
                     { x: -60, y: 0, el: 'C' },
                     { x: 0, y: 0, el: 'C' },
                     { x: 60, y: 0, el: 'C' },
-                    { x: 0, y: 60, el: 'CH₃' }
-                ],
-                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
-            },
-            {
-                id: 'alkene-3',
-                type: 'Alkene (烯烴)',
-                correct: 'Propene',
-                formula: 'CH₃CH=CH₂',
-                options: ['Ethene', 'Propene', 'But-1-ene', 'Propane'],
-                nodes: [
-                    { x: -50, y: 0, el: 'C' },
-                    { x: 10, y: 0, el: 'C' },
-                    { x: 70, y: 0, el: 'C' }
+                    { x: 0, y: -60, el: 'O', color: 'bg-red-500 border-red-600' } // Double O up on middle C
                 ],
                 links: [
                     { s: 0, t: 1 }, 
-                    { s: 1, t: 2, type: 'double' }
+                    { s: 1, t: 2 },
+                    { s: 1, t: 3, type: 'double' }
                 ]
+            },
+
+            // 6. Carboxylic Acids
+            {
+                id: 'acid-2',
+                type: 'Carboxylic Acid (羧酸)',
+                correct: 'Ethanoic Acid',
+                formula: 'CH₃COOH',
+                options: ['Methanoic Acid', 'Ethanoic Acid', 'Propanoic Acid', 'Ethanol'],
+                nodes: [
+                    { x: -40, y: 0, el: 'C' },
+                    { x: 20, y: 0, el: 'C' },
+                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
+                    { x: 70, y: 30, el: 'OH', color: 'bg-red-500 border-red-600' }  // OH down-right
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }, 
+                    { s: 1, t: 3 }
+                ]
+            },
+
+            // 7. Esters
+            {
+                id: 'ester-methyl-ethanoate',
+                type: 'Ester (酯)',
+                correct: 'Methyl ethanoate',
+                formula: 'CH₃COOCH₃',
+                options: ['Ethyl methanoate', 'Methyl ethanoate', 'Ethyl ethanoate', 'Propanoic Acid'],
+                nodes: [
+                    { x: -60, y: 0, el: 'C' },
+                    { x: 0, y: 0, el: 'C' },
+                    { x: 0, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
+                    { x: 50, y: 0, el: 'O', color: 'bg-red-500 border-red-600' },  // Single O right
+                    { x: 100, y: 0, el: 'C' }   // Methyl group
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }, 
+                    { s: 1, t: 3 },
+                    { s: 3, t: 4 }
+                ]
+            },
+
+            // 8. Amides
+            {
+                id: 'amide-2',
+                type: 'Unsubstituted Amide (酰胺)',
+                correct: 'Ethanamide',
+                formula: 'CH₃CONH₂',
+                options: ['Methanamide', 'Ethanamide', 'Ethanoic Acid', 'Ethylamine'],
+                nodes: [
+                    { x: -40, y: 0, el: 'C' },
+                    { x: 20, y: 0, el: 'C' },
+                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double O up
+                    { x: 70, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }  // NH2 right
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }, 
+                    { s: 1, t: 3 }
+                ]
+            },
+
+            // 9. Amines
+            {
+                id: 'amine-2',
+                type: 'Primary Amine (胺)',
+                correct: 'Ethylamine',
+                formula: 'CH₃CH₂NH₂',
+                options: ['Methylamine', 'Ethylamine', 'Propylamine', 'Ethanamide'],
+                nodes: [
+                    { x: -50, y: 0, el: 'C' },
+                    { x: 10, y: 0, el: 'C' },
+                    { x: 70, y: 0, el: 'NH₂', color: 'bg-blue-500 border-blue-600' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
             }
         ];
 
