@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>碳同素異形體館 (Allotrope Gallery)</title>
+    <title>碳同素異形體博物館 (Carbon Allotrope Gallery)</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -24,6 +24,22 @@
             background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
         }
         canvas { outline: none; }
+        
+        .btn-active {
+            background-color: #7c3aed; /* Violet-600 */
+            border-color: #6d28d9;
+            color: white;
+            box-shadow: 0 0 15px rgba(124, 58, 237, 0.5);
+        }
+        .btn-inactive {
+            background-color: #1e293b; /* Slate-800 */
+            border-color: #334155;
+            color: #94a3b8;
+        }
+        .btn-inactive:hover {
+            background-color: #334155;
+            color: white;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -35,28 +51,39 @@
 
         const Structures = [
             { 
-                id: 'C60', 
-                name: '富勒烯 (Buckminsterfullerene, C60)', 
-                type: 'Simple Molecular', 
-                typeColor: 'bg-purple-600',
-                desc: '由 60 個碳原子組成的球狀分子，形狀像足球 (Buckyball)。由 20 個六邊形和 12 個五邊形組成。每個碳原子與 3 個其他碳原子鍵合。',
-                observe: '注意球體表面的五邊形和六邊形排列。它是一個獨立的分子，不是巨型結構。'
+                id: 'Diamond', 
+                name: '金剛石 (Diamond)', 
+                category: '3D Giant Covalent', 
+                desc: '每個碳原子與 4 個其他碳原子以強共價鍵結合成四面體結構。這使得金剛石具有極高的硬度和高熔點，且不導電。',
+                keyFeature: '3D 網狀結構 (3D Network)'
             },
             { 
-                id: 'Nanotube', 
-                name: '碳納米管 (Carbon Nanotube)', 
-                type: 'Giant Covalent (Sort of)', 
-                typeColor: 'bg-blue-600',
-                desc: '可以想像成捲起來的石墨烯層。具有極高的拉伸強度 (Tensile Strength) 和優異的導電性。',
-                observe: '觀察其管狀結構，這是一種圓柱形的納米結構。'
+                id: 'Graphite', 
+                name: '石墨 (Graphite)', 
+                category: '2D Layered Giant Covalent', 
+                desc: '碳原子呈六邊形排列成平面層。層內有強共價鍵，層間只有微弱的范德華力。含有離域電子，可導電。',
+                keyFeature: '層狀結構 (Layered)'
             },
             { 
                 id: 'Graphene', 
                 name: '石墨烯 (Graphene)', 
-                type: 'Giant Covalent', 
-                typeColor: 'bg-green-600',
-                desc: '單層的石墨。碳原子呈蜂窩狀 (Honeycomb) 排列的二維平面結構。是目前已知最薄、最強韌、導電性最好的材料之一。',
-                observe: '這就是單層的石墨，厚度只有一個原子！'
+                category: '2D Giant Covalent', 
+                desc: '單層的石墨。厚度僅一個原子，呈蜂窩狀 (Honeycomb) 排列。具有極高的拉伸強度、導熱性和導電性。',
+                keyFeature: '單原子層 (Single Layer)'
+            },
+            { 
+                id: 'Nanotube', 
+                name: '碳納米管 (Nanotube)', 
+                category: '1D Nanostructure', 
+                desc: '捲曲成管狀的石墨烯。直徑為納米級，長度可達微米級。具有極高的強度重量比。',
+                keyFeature: '管狀結構 (Tubular)'
+            },
+            { 
+                id: 'C60', 
+                name: '富勒烯 (Buckyball C60)', 
+                category: '0D Simple Molecular', 
+                desc: '由 60 個碳原子組成的球狀分子，結構類似足球（截角二十面體）。由 12 個五邊形和 20 個六邊形組成。',
+                keyFeature: '球狀分子 (Spherical)'
             }
         ];
 
@@ -67,285 +94,231 @@
             const rendererRef = useRef(null);
 
             useEffect(() => {
-                // 1. Setup Scene
+                // Setup
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x1e293b); // Slate-800
-                scene.fog = new THREE.Fog(0x1e293b, 10, 50);
+                scene.background = new THREE.Color(0x0f172a); 
+                scene.fog = new THREE.Fog(0x0f172a, 10, 60);
                 sceneRef.current = scene;
 
-                // 2. Setup Camera
-                const camera = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
-                camera.position.z = 15;
+                const camera = new THREE.PerspectiveCamera(60, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
+                camera.position.z = 18;
 
-                // 3. Setup Renderer
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-                renderer.shadowMap.enabled = true;
+                renderer.setPixelRatio(window.devicePixelRatio);
                 mountRef.current.appendChild(renderer.domElement);
                 rendererRef.current = renderer;
 
-                // 4. Add Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                 scene.add(ambientLight);
-                
                 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                dirLight.position.set(10, 20, 10);
+                dirLight.position.set(10, 10, 10);
                 scene.add(dirLight);
-                
-                const pointLight = new THREE.PointLight(0x60a5fa, 0.5);
-                pointLight.position.set(-10, -10, 10);
+                const pointLight = new THREE.PointLight(0x8b5cf6, 0.8); // Violet tint
+                pointLight.position.set(-10, -5, 5);
                 scene.add(pointLight);
 
-                // 5. Add Controls
+                // Controls
                 const controls = new THREE.OrbitControls(camera, renderer.domElement);
                 controls.enableDamping = true;
                 controls.dampingFactor = 0.05;
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 0.8;
                 controlsRef.current = controls;
 
-                // 6. Build Structure Function
+                // Build Logic
                 const buildStructure = (id) => {
-                    while(scene.children.length > 0){ 
-                        scene.remove(scene.children[0]); 
-                    }
-                    scene.add(ambientLight);
-                    scene.add(dirLight);
-                    scene.add(pointLight);
+                    while(scene.children.length > 0){ scene.remove(scene.children[0]); }
+                    scene.add(ambientLight); scene.add(dirLight); scene.add(pointLight);
 
                     const group = new THREE.Group();
+                    const matC = new THREE.MeshPhongMaterial({ color: 0x334155, shininess: 90, specular: 0x666666 }); 
+                    const matBond = new THREE.MeshPhongMaterial({ color: 0x94a3b8 });
+                    const geoAtom = new THREE.SphereGeometry(0.4, 24, 24);
 
-                    // Materials
-                    const matC = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 80, specular: 0x555555 }); // Dark Grey Carbon
-                    const matBond = new THREE.MeshPhongMaterial({ color: 0x94a3b8 }); // Bond Grey
-
-                    // Geometries
-                    const geoAtomSmall = new THREE.SphereGeometry(0.4, 32, 32);
-
-                    // Helper: Create Bond
-                    const createBondVector = (parent, start, end, mat, radius = 0.1) => {
-                        const direction = new THREE.Vector3().subVectors(end, start);
-                        const length = direction.length();
-                        const bond = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 8), mat);
-                        bond.position.copy(start);
-                        bond.position.lerp(end, 0.5);
-                        bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-                        parent.add(bond);
+                    const addAtom = (x, y, z) => {
+                        const mesh = new THREE.Mesh(geoAtom, matC);
+                        mesh.position.set(x, y, z);
+                        group.add(mesh);
+                        return mesh.position;
                     };
 
-                    if (id === 'C60') {
-                        // C60 Geodesic Sphere approximation (Icosahedron based)
-                        // Real C60 coordinates are complex, using a high-res sphere to place atoms
-                        // A Truncated Icosahedron has 60 vertices.
-                        
-                        // Let's use standard Icosahedron geometry and truncate it manually or use an approximation
-                        // Easier: Use a pre-defined set of vertices for C60 or a mathematical generation
-                        
-                        // Golden ratio
-                        const phi = (1 + Math.sqrt(5)) / 2;
-                        
-                        // Vertices of a truncated icosahedron (normalized)
-                        // Cyclic permutations of:
-                        // (0, ±1, ±3phi)
-                        // (±2, ±(1+2phi), ±phi)
-                        // (±1, ±(2+phi), ±2phi)
-                        
-                        // Simplified: Let's just place atoms on a sphere surface using a fibonacci sphere for distribution? No, structure matters.
-                        // Let's build a proper C60 structure using Icosahedron subdivision logic or hardcoded approximation.
-                        
-                        // Hardcoded approximation for visual (60 points) - This is tricky without a library.
-                        // Alternative: Build a geodesic sphere and filter points? No.
-                        
-                        // Let's use a simplified model: Truncated Icosahedron has 60 vertices.
-                        // We can generate it from an Icosahedron by cutting corners.
-                        
-                        const icosahedron = new THREE.IcosahedronGeometry(5, 0);
-                        const positions = icosahedron.attributes.position;
-                        const vertices = [];
-                        
-                        // For each face of icosahedron (triangle), we can find points that form the C60 vertices?
-                        // Actually, let's use a simpler approach for the "Gallery" feel.
-                        // We will use a wireframe of a sphere to represent the C60 shape generally if exact coords are hard.
-                        // Better: Use a mathematical trick.
-                        
-                        // C60 coordinates (truncated icosahedron)
-                        // Using a simplified set of points that look like a ball
-                        
-                        const r = 5;
-                        const t = 1.61803399; 
-                        
-                        // Vertices from a standard set (normalized)
-                        // (0, 1, 3phi) etc...
-                        // Let's use a helper to generate a "Buckyball" look
-                        // Since hardcoding 60 vec3 is too long, let's generate a geodesic sphere level 1, which has 42 vertices... not 60.
-                        
-                        // Let's try to generate points on a sphere that are roughly equidistant and connect neighbors.
-                        // Fibonacci Sphere Algorithm for N=60
-                        
-                        const points = [];
-                        const numPoints = 60;
-                        const goldenRatio = (1 + Math.sqrt(5)) / 2;
-                        
-                        for (let i = 0; i < numPoints; i++) {
-                            const y = 1 - (i / (numPoints - 1)) * 2;
-                            const radius = Math.sqrt(1 - y * y);
-                            const theta = goldenRatio * i * 2 * Math.PI; // Golden angle increment
-                            
-                            const x = Math.cos(theta) * radius;
-                            const z = Math.sin(theta) * radius;
-                            
-                            points.push(new THREE.Vector3(x * r, y * r, z * r));
+                    const addBond = (p1, p2) => {
+                        const distance = p1.distanceTo(p2);
+                        const cylinder = new THREE.CylinderGeometry(0.1, 0.1, distance, 8);
+                        const mesh = new THREE.Mesh(cylinder, matBond);
+                        mesh.position.copy(p1).lerp(p2, 0.5);
+                        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3().subVectors(p2, p1).normalize());
+                        group.add(mesh);
+                    };
+
+                    if (id === 'Diamond') {
+                        const points = [
+                            [0,0,0], [1,1,1], [-1,-1,1], [-1,1,-1], [1,-1,-1],
+                            [2,2,0], [2,0,2], [0,2,2], [-2,-2,0], [-2,0,-2], [0,-2,-2]
+                        ];
+                        const atomPos = points.map(p => addAtom(p[0]*1.5, p[1]*1.5, p[2]*1.5));
+                        // Connect neighbors
+                        for(let i=0; i<atomPos.length; i++) {
+                            for(let j=i+1; j<atomPos.length; j++) {
+                                if(atomPos[i].distanceTo(atomPos[j]) < 3.0) addBond(atomPos[i], atomPos[j]);
+                            }
                         }
-                        
-                        // This gives a sphere distribution but not C60 structure.
-                        // For a chemistry app, accurate structure is better.
-                        // Let's stick to a pre-calculated C60 approximate structure or use a "Soccer Ball" geometry if Three.js had one.
-                        // It doesn't.
-                        
-                        // Let's use an IcosahedronGeometry(radius, 1) -> lots of vertices.
-                        // Actually, for the sake of this demo being a "Gallery", let's use a "DodecahedronGeometry" (20 vertices) as a base
-                        // and place 3 atoms on each face? Or just show a Dodecahedron for now? No, C60 is iconic.
-                        
-                        // OK, let's build a Nanotube and Graphene first, they are easier (grids).
-                        // And for C60, we use a visual approximation: a sphere with atoms, connected to nearest 3 neighbors.
-                        
-                        points.forEach(p => {
-                             const mesh = new THREE.Mesh(geoAtomSmall, matC);
-                             mesh.position.copy(p);
-                             group.add(mesh);
+
+                    } else if (id === 'Graphite') {
+                        // Two layers
+                        [-2, 2].forEach(y => {
+                            // Create hex grid
+                            for(let r=-1; r<=1; r++) {
+                                for(let c=-1; c<=1; c++) {
+                                    const cx = c * 2.5 + (r%2)*1.25;
+                                    const cz = r * 2.2;
+                                    // Hexagon points
+                                    for(let k=0; k<6; k++) {
+                                        const ang = k * Math.PI/3;
+                                        const px = cx + Math.cos(ang)*0.8;
+                                        const pz = cz + Math.sin(ang)*0.8;
+                                        
+                                        // Simple check to avoid duplicates visually for this demo
+                                        // (Real graphite gen needs more logic, simplified here for visual "patch")
+                                        const p = new THREE.Vector3(px*1.5, y, pz*1.5);
+                                        
+                                        // Check existing
+                                        let exists = false;
+                                        group.children.forEach(child => {
+                                            if (child.geometry === geoAtom && child.position.distanceTo(p) < 0.5) exists = true;
+                                        });
+                                        
+                                        if (!exists) {
+                                            const mesh = new THREE.Mesh(geoAtom, matC);
+                                            mesh.position.copy(p);
+                                            group.add(mesh);
+                                        }
+                                    }
+                                }
+                            }
                         });
                         
-                        // Connect nearest 3 neighbors
-                        for(let i=0; i<points.length; i++) {
-                            // Find 3 closest
-                            const dists = points.map((p, idx) => ({ idx, d: p.distanceTo(points[i]) }));
-                            dists.sort((a, b) => a.d - b.d);
-                            // 0 is self. 1, 2, 3 are closest.
-                            // Connect if distance is reasonable (approx bond length)
-                            for(let k=1; k<=3; k++) {
-                                if (dists[k].d < 2.5) { // Heuristic threshold
-                                    // Check if bond already exists to avoid double draw? (Optional)
-                                     createBondVector(group, points[i], points[dists[k].idx], matBond);
+                        // Connect bonds within layer
+                         const atoms = group.children.filter(c => c.geometry === geoAtom);
+                         for(let i=0; i<atoms.length; i++) {
+                            for(let j=i+1; j<atoms.length; j++) {
+                                const d = atoms[i].position.distanceTo(atoms[j].position);
+                                // Intra-layer bond
+                                if (d > 0.5 && d < 1.8) addBond(atoms[i].position, atoms[j].position);
+                                // Van der Waals (dashed line equivalent, simplified as long thin bond for visual)
+                                if (Math.abs(atoms[i].position.y - atoms[j].position.y) > 2 && d < 4.1 && d > 3.9) {
+                                    // Optional: show weak force
                                 }
                             }
                         }
 
+                    } else if (id === 'Graphene') {
+                        // Single Layer of Graphite logic
+                         for(let r=-2; r<=2; r++) {
+                            for(let c=-2; c<=2; c++) {
+                                const cx = c * 2.5 + (r%2)*1.25;
+                                const cz = r * 2.2;
+                                for(let k=0; k<6; k++) {
+                                    const ang = k * Math.PI/3;
+                                    const px = (cx + Math.cos(ang)*0.8) * 1.8;
+                                    const pz = (cz + Math.sin(ang)*0.8) * 1.8;
+                                    
+                                    let exists = false;
+                                    group.children.forEach(child => {
+                                        if (child.geometry === geoAtom && child.position.distanceTo(new THREE.Vector3(px,0,pz)) < 0.5) exists = true;
+                                    });
+                                    
+                                    if (!exists) addAtom(px, 0, pz);
+                                }
+                            }
+                        }
+                         const atoms = group.children.filter(c => c.geometry === geoAtom);
+                         for(let i=0; i<atoms.length; i++) {
+                            for(let j=i+1; j<atoms.length; j++) {
+                                const d = atoms[i].position.distanceTo(atoms[j].position);
+                                if (d > 0.5 && d < 1.8) addBond(atoms[i].position, atoms[j].position);
+                            }
+                        }
+                        // Rotate for better view
+                        group.rotation.x = Math.PI / 6;
 
                     } else if (id === 'Nanotube') {
-                        // Rolled Graphene
-                        const radius = 3;
-                        const height = 12;
-                        const segments = 20;
-                        const layers = 10;
+                        const r = 3.5;
+                        const h = 14;
+                        const segs = 16;
+                        const stacks = 8;
                         
                         const atoms = [];
-                        
-                        for(let y=0; y<layers; y++) {
-                            for(let i=0; i<segments; i++) {
-                                // Staggered rows for honeycomb pattern
-                                const offset = (y % 2) * (Math.PI / segments); 
-                                const angle = (i / segments) * Math.PI * 2 + offset;
-                                
-                                const px = Math.cos(angle) * radius;
-                                const pz = Math.sin(angle) * radius;
-                                const py = (y - layers/2) * 1.2; // Height spacing
-                                
-                                const p = new THREE.Vector3(px, py, pz);
-                                atoms.push(p);
-                                
-                                const mesh = new THREE.Mesh(geoAtomSmall, matC);
-                                mesh.position.copy(p);
-                                group.add(mesh);
+                        for(let y=0; y<stacks; y++) {
+                            for(let i=0; i<segs; i++) {
+                                const angle = (i/segs) * Math.PI * 2 + (y%2 ? Math.PI/segs : 0);
+                                const px = Math.cos(angle) * r;
+                                const pz = Math.sin(angle) * r;
+                                const py = (y - stacks/2) * 1.2;
+                                atoms.push(addAtom(px, py, pz));
                             }
                         }
                         
-                        // Connect neighbors
                         for(let i=0; i<atoms.length; i++) {
                             for(let j=i+1; j<atoms.length; j++) {
                                 const d = atoms[i].distanceTo(atoms[j]);
-                                if (d > 0.1 && d < 2.0) { // Bond length approx
-                                    createBondVector(group, atoms[i], atoms[j], matBond);
-                                }
+                                if (d < 1.8) addBond(atoms[i], atoms[j]);
                             }
                         }
-                        
-                    } else if (id === 'Graphene') {
-                        // Flat Hexagonal Grid
-                        const rows = 8;
-                        const cols = 8;
-                        const spacing = 2.0;
-                        const atoms = [];
-                        
-                        for(let r=0; r<rows; r++) {
-                            for(let c=0; c<cols; c++) {
-                                // Shift every other row
-                                const xOffset = (r % 2) * (spacing * Math.sin(Math.PI/3));
-                                const x = c * spacing * Math.sin(Math.PI/3) * 2 + xOffset - 8;
-                                const z = r * spacing * 1.5 * 0.5 - 4; // Hex height factor
-                                
-                                // Skip some to make it look like a hex grid? 
-                                // Hex grid logic:
-                                // In a hex grid, not every grid point is occupied if treating as rect grid.
-                                // Let's just build hex rings.
-                                
-                            }
-                        }
-                        
-                        // Better Graphene Generator: Build rings
-                         for(let r=0; r<5; r++) {
-                             for(let c=0; c<5; c++) {
-                                 const centerX = (c - 2) * 4.2;
-                                 const centerZ = (r - 2) * 2.4;
-                                 const stagger = (r % 2) * 2.1;
-                                 
-                                 // Generate a hexagon at this center
-                                 for(let k=0; k<6; k++) {
-                                     // Only add if not already close to another atom (shared vertices)
-                                     const angle = k * Math.PI / 3;
-                                     const px = centerX + stagger + Math.cos(angle) * 1.4;
-                                     const pz = centerZ + Math.sin(angle) * 1.4;
-                                     const p = new THREE.Vector3(px, 0, pz);
-                                     
-                                     let exists = false;
-                                     for(let a of atoms) {
-                                         if(a.distanceTo(p) < 0.5) exists = true;
-                                     }
-                                     
-                                     if(!exists) {
-                                         atoms.push(p);
-                                         const mesh = new THREE.Mesh(geoAtomSmall, matC);
-                                         mesh.position.copy(p);
-                                         group.add(mesh);
-                                     }
-                                 }
-                             }
+                    } else if (id === 'C60') {
+                         // Fibonacci Sphere Distribution for visual approximation of Buckyball
+                         // (True C60 coords are complex, this gives the "Ball of Atoms" look)
+                         const phi = (1 + Math.sqrt(5)) / 2;
+                         const count = 60;
+                         const radius = 4.5;
+                         
+                         const atoms = [];
+                         for (let i = 0; i < count; i++) {
+                             const y = 1 - (i / (count - 1)) * 2;
+                             const r = Math.sqrt(1 - y * y);
+                             const theta = phi * i * 2 * Math.PI;
+                             
+                             const x = Math.cos(theta) * r;
+                             const z = Math.sin(theta) * r;
+                             
+                             const p = new THREE.Vector3(x * radius, y * radius, z * radius);
+                             atoms.push(p);
+                             addAtom(p.x, p.y, p.z);
                          }
                          
-                         // Bonds
-                        for(let i=0; i<atoms.length; i++) {
-                            for(let j=i+1; j<atoms.length; j++) {
-                                const d = atoms[i].distanceTo(atoms[j]);
-                                if (d > 0.1 && d < 1.6) { // C-C bond length
-                                    createBondVector(group, atoms[i], atoms[j], matBond);
-                                }
-                            }
-                        }
+                         // Connect nearest neighbors
+                         for(let i=0; i<atoms.length; i++) {
+                             // Find 3 nearest
+                             const neighbors = atoms
+                                 .map((p, idx) => ({ idx, d: p.distanceTo(atoms[i]) }))
+                                 .sort((a,b) => a.d - b.d)
+                                 .slice(1, 4); // Self is 0
+                                 
+                             neighbors.forEach(n => {
+                                 if(n.d < 2.5) {
+                                     // Avoid duplicate bonds? ThreeJS handles intersecting geometries fine visually
+                                     addBond(atoms[i], atoms[n.idx]);
+                                 }
+                             });
+                         }
                     }
 
                     scene.add(group);
                 };
 
-                // Initial Build
                 buildStructure(structureId);
 
-                // 7. Animation Loop
-                let frameId;
+                // Animation
                 const animate = () => {
-                    frameId = requestAnimationFrame(animate);
+                    requestAnimationFrame(animate);
                     controls.update();
                     renderer.render(scene, camera);
                 };
                 animate();
 
-                // Handle Resize
+                // Resize
                 const handleResize = () => {
                     if (mountRef.current) {
                         camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
@@ -355,18 +328,16 @@
                 };
                 window.addEventListener('resize', handleResize);
 
-                // Cleanup
                 return () => {
-                    cancelAnimationFrame(frameId);
                     window.removeEventListener('resize', handleResize);
                     if (mountRef.current && rendererRef.current) {
-                         mountRef.current.removeChild(rendererRef.current.domElement);
-                         rendererRef.current.dispose();
+                        mountRef.current.removeChild(rendererRef.current.domElement);
+                        rendererRef.current.dispose();
                     }
                 };
             }, [structureId]);
 
-            return <div id="canvas-container" ref={mountRef} className="w-full h-full bg-slate-900 rounded-xl shadow-inner cursor-move"></div>;
+            return <div id="canvas-container" ref={mountRef} />;
         };
 
         const App = () => {
@@ -379,65 +350,64 @@
                     <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-slate-700 pb-4 gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-purple-400 flex items-center gap-2">
-                                <i data-lucide="hexagon" size={32}></i> 碳同素異形體館
+                                <i data-lucide="hexagon" size={32}></i> 碳同素異形體博物館
                             </h1>
-                            <p className="text-slate-400 text-sm">Allotrope Gallery: C60, Nanotubes & Graphene</p>
+                            <p className="text-slate-400 text-sm">Carbon Allotrope Gallery: The Many Faces of Carbon</p>
                         </div>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {Structures.map(s => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => setCurrentStruct(s)}
-                                    className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all shadow-md
-                                        ${currentStruct.id === s.id 
-                                            ? 'bg-purple-600 text-white border-purple-500 ring-2 ring-purple-400/50 transform scale-105' 
-                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}
-                                    `}
-                                >
-                                    {s.name.split(' ')[0]}
-                                </button>
-                            ))}
-                        </div>
+                    </div>
+
+                    {/* Navigation Buttons */}
+                    <div className="flex flex-wrap justify-center gap-2 mb-6">
+                        {Structures.map(s => (
+                            <button
+                                key={s.id}
+                                onClick={() => setCurrentStruct(s)}
+                                className={`px-4 py-2 rounded-lg border text-sm font-bold transition-all shadow-md
+                                    ${currentStruct.id === s.id ? 'btn-active' : 'btn-inactive'}
+                                `}
+                            >
+                                {s.name.split(' ')[0]}
+                            </button>
+                        ))}
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
                         
                         {/* 3D Viewport */}
-                        <div className="w-full lg:w-3/4 h-[500px] lg:h-[650px] bg-slate-800 rounded-3xl border-4 border-slate-700 relative shadow-2xl overflow-hidden group">
-                            <ThreeScene key={currentStruct.id} structureId={currentStruct.id} />
+                        <div className="w-full lg:w-2/3 h-[500px] lg:h-[600px] bg-slate-800 rounded-3xl border-4 border-slate-700 relative shadow-2xl overflow-hidden group">
+                            <ThreeScene structureId={currentStruct.id} />
                             
                             {/* Hint Overlay */}
                             <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-black/60 px-3 py-2 rounded-lg pointer-events-none border border-slate-600 backdrop-blur-sm">
                                 <span className="flex items-center gap-2"><i data-lucide="move"></i> 左鍵旋轉 (Rotate)</span>
-                                <span className="flex items-center gap-2 mt-1"><i data-lucide="hand"></i> 右鍵平移 (Pan)</span>
                                 <span className="flex items-center gap-2 mt-1"><i data-lucide="zoom-in"></i> 滾輪縮放 (Zoom)</span>
                             </div>
                         </div>
 
                         {/* Info Panel */}
-                        <div className="w-full lg:w-1/4 flex flex-col gap-6">
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
                             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow animate-in slide-in-from-right duration-500">
                                 <div className="mb-6 border-b border-slate-700 pb-4">
-                                    <div className="text-sm text-slate-400 uppercase font-bold mb-2 tracking-wider">Allotrope Type</div>
-                                    <div className={`inline-block ${currentStruct.typeColor || 'bg-purple-600'} text-white px-3 py-1 rounded-full text-sm font-bold mb-3 shadow-sm`}>
-                                        {currentStruct.type}
+                                    <div className="text-xs text-slate-400 uppercase font-bold mb-2 tracking-wider">Structure Type</div>
+                                    <div className="inline-block bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full text-xs border border-purple-700 mb-3 shadow-sm font-mono">
+                                        {currentStruct.category}
                                     </div>
                                     <div className="text-3xl font-bold text-white leading-tight">{currentStruct.name.split(' ')[0]}</div>
-                                    <div className="text-xs text-slate-500 font-mono mt-1">{currentStruct.name.split('(')[1].replace(')', '')}</div>
+                                    <div className="text-xs text-slate-500 font-mono mt-1">{currentStruct.name.split('(')[1]?.replace(')', '')}</div>
                                 </div>
                                 
-                                <div className="space-y-6 text-base text-slate-300 leading-relaxed">
+                                <div className="space-y-6 text-sm text-slate-300 leading-relaxed">
                                     <div className="p-4 bg-slate-900/50 rounded-xl border-l-4 border-purple-500 shadow-inner">
-                                        <strong className="text-white block mb-2 text-lg">結構特點 (Characteristics)</strong>
+                                        <strong className="text-white block mb-2 text-base">結構特點 (Characteristics)</strong>
                                         {currentStruct.desc}
                                     </div>
                                     
                                     <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-600">
-                                        <strong className="text-white block mb-2 flex items-center gap-2 text-lg">
-                                            <i data-lucide="eye" size={20} className="text-yellow-400" /> 觀察指南
+                                        <strong className="text-white block mb-2 flex items-center gap-2 text-base">
+                                            <i data-lucide="eye" size={18} className="text-yellow-400" /> 重點觀察
                                         </strong>
-                                        <p className="opacity-90">
-                                            {currentStruct.observe}
+                                        <p className="text-xs opacity-90">
+                                            {currentStruct.keyFeature}
                                         </p>
                                     </div>
                                 </div>
