@@ -27,16 +27,30 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- VSEPR Data Logic ---
+        // --- VSEPR Data Logic (Updated with Full List) ---
         const VSEPR_DATA = {
+            // 2 Domains
             '2-0': { shape: 'Linear (直線型)', angle: '180°', example: 'CO₂, BeCl₂', geom: 'linear' },
+            
+            // 3 Domains
             '3-0': { shape: 'Trigonal Planar (平面三角形)', angle: '120°', example: 'BF₃, BCl₃', geom: 'trigonal_planar' },
             '2-1': { shape: 'V-shaped / Bent (V型)', angle: '< 120° (~117°)', example: 'SO₂, O₃', geom: 'bent_120' },
+            
+            // 4 Domains
             '4-0': { shape: 'Tetrahedral (四面體)', angle: '109.5°', example: 'CH₄, CCl₄', geom: 'tetrahedral' },
             '3-1': { shape: 'Trigonal Pyramidal (三角錐體)', angle: '< 109.5° (~107°)', example: 'NH₃, PCl₃', geom: 'trigonal_pyramidal' },
             '2-2': { shape: 'V-shaped / Bent (V型)', angle: '< 109.5° (~104.5°)', example: 'H₂O, H₂S', geom: 'bent_109' },
+            
+            // 5 Domains (Trigonal Bipyramidal Base)
             '5-0': { shape: 'Trigonal Bipyramidal (三角雙錐)', angle: '90°, 120°', example: 'PCl₅', geom: 'trigonal_bipyramidal' },
-            '6-0': { shape: 'Octahedral (八面體)', angle: '90°', example: 'SF₆', geom: 'octahedral' }
+            '4-1': { shape: 'Seesaw (蹺蹺板型)', angle: '< 90°, < 120°', example: 'SF₄', geom: 'seesaw' },
+            '3-2': { shape: 'T-shaped (T型)', angle: '< 90°', example: 'ClF₃', geom: 't_shaped' },
+            '2-3': { shape: 'Linear (直線型)', angle: '180°', example: 'XeF₂, I₃⁻', geom: 'linear_5' },
+            
+            // 6 Domains (Octahedral Base)
+            '6-0': { shape: 'Octahedral (八面體)', angle: '90°', example: 'SF₆', geom: 'octahedral' },
+            '5-1': { shape: 'Square Pyramidal (四角錐體)', angle: '< 90°', example: 'BrF₅, IF₅', geom: 'square_pyramidal' },
+            '4-2': { shape: 'Square Planar (平面四方形)', angle: '90°', example: 'XeF₄', geom: 'square_planar' }
         };
 
         // --- 3D Scene Component ---
@@ -116,10 +130,6 @@
                 const addLP = (vector) => {
                     const lpMesh = new THREE.Mesh(geoLP, matLonePair);
                     lpMesh.position.copy(vector).multiplyScalar(1.5);
-                    // Rotate to point away from center
-                    lpMesh.lookAt(scene.position); 
-                    // Fix orientation: lookAt points Z axis, geometry needs alignment? 
-                    // Actually simpler: position it, then rotate it to align Y axis with vector
                     lpMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vector.normalize());
                     group.add(lpMesh);
                 };
@@ -138,46 +148,45 @@
                     vectors.push(new THREE.Vector3(Math.sin(4*Math.PI/3), Math.cos(4*Math.PI/3), 0));
                 } else if (totalPairs === 4) {
                     // Tetrahedral
-                    const a = 1, b = 1/Math.sqrt(2); // Not exact math but standard tet coords
-                    // Using vertices of a tetrahedron inscribed in cube
                     vectors.push(new THREE.Vector3(1, 1, 1).normalize());
                     vectors.push(new THREE.Vector3(-1, -1, 1).normalize());
                     vectors.push(new THREE.Vector3(-1, 1, -1).normalize());
                     vectors.push(new THREE.Vector3(1, -1, -1).normalize());
                 } else if (totalPairs === 5) {
-                    // Trigonal Bipyramidal
-                    vectors.push(new THREE.Vector3(0, 1, 0)); // Axial
-                    vectors.push(new THREE.Vector3(0, -1, 0)); // Axial
-                    vectors.push(new THREE.Vector3(1, 0, 0)); // Equatorial
-                    vectors.push(new THREE.Vector3(-0.5, 0, Math.sqrt(3)/2)); // Eq
-                    vectors.push(new THREE.Vector3(-0.5, 0, -Math.sqrt(3)/2)); // Eq
+                    // Trigonal Bipyramidal (Specific Order for LP placement)
+                    // 0,1 are Axial. 2,3,4 are Equatorial.
+                    // LPs prefer Equatorial (indices 2,3,4)
+                    vectors.push(new THREE.Vector3(0, 1, 0)); // 0: Axial
+                    vectors.push(new THREE.Vector3(0, -1, 0)); // 1: Axial
+                    vectors.push(new THREE.Vector3(1, 0, 0)); // 2: Equatorial
+                    vectors.push(new THREE.Vector3(-0.5, 0, Math.sqrt(3)/2)); // 3: Equatorial
+                    vectors.push(new THREE.Vector3(-0.5, 0, -Math.sqrt(3)/2)); // 4: Equatorial
                 } else if (totalPairs === 6) {
                     // Octahedral
-                    vectors.push(new THREE.Vector3(0, 1, 0));
-                    vectors.push(new THREE.Vector3(0, -1, 0));
-                    vectors.push(new THREE.Vector3(1, 0, 0));
-                    vectors.push(new THREE.Vector3(-1, 0, 0));
-                    vectors.push(new THREE.Vector3(0, 0, 1));
-                    vectors.push(new THREE.Vector3(0, 0, -1));
+                    // 0,1 are Axial. 2,3,4,5 are Equatorial.
+                    // LPs prefer Axial (indices 0,1) to maximize separation (180deg)
+                    vectors.push(new THREE.Vector3(0, 1, 0)); // 0: Axial (Up)
+                    vectors.push(new THREE.Vector3(0, -1, 0)); // 1: Axial (Down)
+                    vectors.push(new THREE.Vector3(1, 0, 0)); // 2: Eq
+                    vectors.push(new THREE.Vector3(-1, 0, 0)); // 3: Eq
+                    vectors.push(new THREE.Vector3(0, 0, 1)); // 4: Eq
+                    vectors.push(new THREE.Vector3(0, 0, -1)); // 5: Eq
                 }
 
-                // Assign positions to LP first (VSEPR Rule: LP take more space, usually Eq positions in 5-coord)
-                // Logic for 5-coord: LP prefers Equatorial.
-                // Logic for others: Usually symmetric, doesn't matter much for simple visual, but let's be precise.
-                
+                // --- LP Assignment Logic ---
+                // Decides which positions become Lone Pairs
                 const lpIndices = [];
                 if (totalPairs === 5) {
-                     // For 5, indices 2,3,4 are Equatorial in our array
+                     // Rule: LPs go to Equatorial positions first (Indices 2, 3, 4)
                      if (lp >= 1) lpIndices.push(2);
                      if (lp >= 2) lpIndices.push(3);
                      if (lp >= 3) lpIndices.push(4);
                 } else if (totalPairs === 6) {
-                     // For 6, usually trans to minimize repulsion (4,5 are axial in our array? No, 0,1 are axial)
-                     if (lp >= 1) lpIndices.push(0);
-                     if (lp >= 2) lpIndices.push(1); // trans to 0
-                } else if (totalPairs === 4) {
-                     for(let i=0; i<lp; i++) lpIndices.push(i);
+                     // Rule: LPs go to Axial positions first to be Trans (Indices 0, 1)
+                     if (lp >= 1) lpIndices.push(1); // Start bottom
+                     if (lp >= 2) lpIndices.push(0); // Then top
                 } else {
+                     // For 2, 3, 4, all positions equivalent, just fill linearly
                      for(let i=0; i<lp; i++) lpIndices.push(i);
                 }
 
@@ -208,7 +217,7 @@
                         mountRef.current.removeChild(renderer.domElement);
                     }
                     
-                    // Proper cleanup of geometry and material
+                    // Generic cleanup for geometries and materials in the group
                     group.traverse((object) => {
                         if (object.isMesh) {
                             if (object.geometry) object.geometry.dispose();
@@ -238,7 +247,6 @@
             const info = VSEPR_DATA[key];
             const totalPairs = bp + lp;
 
-            // Constraints to prevent invalid chemistry or complex geometries not covered
             const isValid = info !== undefined;
 
             return (
@@ -264,13 +272,12 @@
                                 <div className="w-full h-full bg-slate-800 rounded-2xl flex items-center justify-center text-slate-500 border-4 border-slate-700 border-dashed">
                                     <div className="text-center">
                                         <i data-lucide="ban" size={48} className="mx-auto mb-2"/>
-                                        <p>此組合在 DSE 範圍外或不常見 (Uncommon Geometry)</p>
-                                        <p className="text-xs mt-1">請嘗試 BP+LP = 2 ~ 6</p>
+                                        <p>此組合不常見或不穩定 (Uncommon/Unstable)</p>
+                                        <p className="text-xs mt-1">嘗試 Total Pairs = 2 ~ 6</p>
                                     </div>
                                 </div>
                             )}
                             
-                            {/* Overlay Controls (Zoom/Rotate hint) */}
                             <div className="absolute bottom-4 left-4 text-xs text-slate-400 bg-black/50 px-3 py-1 rounded pointer-events-none">
                                 左鍵旋轉 • 右鍵平移 • 滾輪縮放
                             </div>
@@ -288,7 +295,7 @@
                                 <div className="space-y-6">
                                     <div>
                                         <div className="flex justify-between mb-2">
-                                            <label className="text-green-400 font-bold">鍵合電子對 (Bond Pairs, BP)</label>
+                                            <label className="text-green-400 font-bold">鍵合電子對 (BP)</label>
                                             <span className="text-2xl font-mono font-bold text-white">{bp}</span>
                                         </div>
                                         <input 
@@ -300,7 +307,7 @@
 
                                     <div>
                                         <div className="flex justify-between mb-2">
-                                            <label className="text-red-400 font-bold">孤對電子 (Lone Pairs, LP)</label>
+                                            <label className="text-red-400 font-bold">孤對電子 (LP)</label>
                                             <span className="text-2xl font-mono font-bold text-white">{lp}</span>
                                         </div>
                                         <input 
@@ -312,8 +319,10 @@
                                 </div>
                                 
                                 <div className="mt-6 pt-4 border-t border-slate-700 flex justify-between items-center text-sm">
-                                    <span className="text-slate-400">電子對總數 (Total Pairs):</span>
-                                    <span className="font-bold text-white bg-slate-700 px-3 py-1 rounded">{totalPairs}</span>
+                                    <span className="text-slate-400">總電子對 (Total Pairs):</span>
+                                    <span className={`font-bold px-3 py-1 rounded ${totalPairs > 6 ? 'bg-red-900 text-red-200' : 'bg-slate-700 text-white'}`}>
+                                        {totalPairs}
+                                    </span>
                                 </div>
                             </div>
 
@@ -329,18 +338,12 @@
                                         <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-blue-500">
                                             <strong className="text-white block mb-1">鍵角 (Bond Angle)</strong>
                                             <span className="font-mono text-lg text-blue-300">{info.angle}</span>
-                                            {lp > 0 && <p className="text-xs mt-1 text-slate-400">孤對電子的斥力較大，將鍵角壓縮變小。</p>}
+                                            {lp > 0 && <p className="text-xs mt-1 text-slate-400">孤對電子的斥力較大，將鍵角壓縮。</p>}
                                         </div>
 
                                         <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-green-500">
                                             <strong className="text-white block mb-1">常見例子 (Examples)</strong>
                                             <span className="font-mono text-lg text-green-300">{info.example}</span>
-                                        </div>
-                                        
-                                        <div className="p-3 bg-slate-900/50 rounded-lg border-l-4 border-yellow-500">
-                                            <strong className="text-white block mb-1">VSEPR 原理</strong>
-                                            <p className="text-xs">電子對會盡可能遠離對方，以減少<span className="text-yellow-400 font-bold">排斥力 (Repulsion)</span>。</p>
-                                            <p className="text-xs mt-1 font-bold">排斥力：LP-LP &gt; LP-BP &gt; BP-BP</p>
                                         </div>
                                     </div>
                                 </div>
