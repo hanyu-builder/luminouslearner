@@ -117,7 +117,6 @@
             ];
 
             // Determine active fraction based on slider temperature
-            // Helper function to get fraction based on temperature
             const getFractionFromTemp = (temp) => {
                 if (temp < 40) return fractions[0];
                 if (temp < 100) return fractions[1];
@@ -193,13 +192,13 @@
                                 {/* Background Gradient */}
                                 <div className="absolute inset-y-0 left-1/4 right-1/4 rounded-lg bg-gradient-to-b from-blue-50 via-yellow-50 to-red-100 border-x-4 border-slate-400 -z-20 opacity-80"></div>
                                 
-                                {/* Temp Markers */}
-                                <div className="absolute left-0 h-full flex flex-col justify-between text-xs font-mono text-slate-400 py-4 select-none">
+                                {/* Temp Markers (Padded to match Fractions) */}
+                                <div className="absolute left-0 h-full flex flex-col justify-between text-xs font-mono text-slate-400 pt-4 pb-24 select-none">
                                     <span>25°C</span><span>100°C</span><span>200°C</span><span>300°C</span><span>400°C</span>
                                 </div>
 
-                                {/* Fractions */}
-                                <div className="flex flex-col h-full justify-between w-full py-2 z-10">
+                                {/* Fractions (Padded bottom to clear furnace) */}
+                                <div className="flex flex-col h-full justify-between w-full pt-2 pb-24 z-10">
                                     {fractions.map(f => <TowerFraction key={f.id} fraction={f} />)}
                                 </div>
 
@@ -228,8 +227,12 @@
                                     <h3 className="font-bold flex items-center gap-2 text-slate-700">
                                         <IconComponents.Thermometer className="text-red-500" /> 溫度控制 (Temperature)
                                     </h3>
-                                    <span className="text-2xl font-mono font-bold text-red-600">{temperature}°C</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-500 text-xs font-semibold uppercase">爐溫</span>
+                                        <span className="text-2xl font-mono font-bold text-slate-800">{temperature}°C</span>
+                                    </div>
                                 </div>
+                                
                                 <div className="relative pt-2 pb-6 px-2">
                                     <input 
                                         type="range" min="25" max="450" value={temperature} 
