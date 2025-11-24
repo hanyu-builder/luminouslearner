@@ -14,17 +14,11 @@
         body { font-family: 'Noto Sans HK', sans-serif; }
         .font-mono { font-family: 'Roboto Mono', monospace; }
         
-        /* Atom Styling */
-        .atom {
-            transition: all 0.3s ease;
-        }
-        .bond {
-            background-color: #94a3b8;
-        }
-        
         /* Card Animation */
         .fade-in { animation: fadeIn 0.5s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .atom-shadow { box-shadow: 2px 2px 5px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -32,70 +26,124 @@
     <div id="root" class="flex-grow flex flex-col"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // Question Database
-        const Questions = [
+        // --- Molecule Data Structure ---
+        // Nodes: { x, y (relative), el (symbol), color (optional class) }
+        // Links: { source, target (indices), type: 'single' | 'double' }
+        
+        const Database = [
             {
-                id: 1,
-                type: 'Alkane',
-                structure: {
-                    chain: 3, // Propane backbone
-                    branches: [] 
-                },
-                formula: 'CH3-CH2-CH3',
+                id: 'alkane-3',
+                type: 'Alkane (烷烴)',
                 correct: 'Propane',
-                options: ['Ethane', 'Propane', 'Butane', 'Methane'],
-                visual: [
-                    { type: 'C', x: 50, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'C', x: 150, y: 50 }
-                ]
+                formula: 'CH₃CH₂CH₃',
+                options: ['Ethane', 'Propane', 'Butane', 'Pentane'],
+                nodes: [
+                    { x: -60, y: 0, el: 'C' },
+                    { x: 0, y: 0, el: 'C' },
+                    { x: 60, y: 0, el: 'C' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
             },
             {
-                id: 2,
-                type: 'Alkane',
-                structure: {
-                    chain: 4, // Butane
-                    branches: [{ pos: 2, group: 'methyl' }] // 2-methylpropane
-                },
-                formula: 'CH3-CH(CH3)-CH3',
-                correct: '2-methylpropane',
-                options: ['Butane', '2-methylpropane', '1-methylpropane', 'Propane'],
-                visual: [
-                    { type: 'C', x: 50, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'C', x: 150, y: 50 },
-                    { type: 'C', x: 100, y: 100 } // Branch
-                ]
-            },
-            {
-                id: 3,
-                type: 'Alkene',
-                structure: { chain: 2, doubleBond: 1 },
-                formula: 'CH2=CH2',
+                id: 'alkene-2',
+                type: 'Alkene (烯烴)',
                 correct: 'Ethene',
+                formula: 'CH₂=CH₂',
                 options: ['Ethane', 'Ethene', 'Ethyne', 'Propene'],
-                visual: [
-                    { type: 'C', x: 80, y: 50 }, { type: 'C', x: 120, y: 50, double: true }
-                ]
+                nodes: [
+                    { x: -40, y: 0, el: 'C' },
+                    { x: 40, y: 0, el: 'C' }
+                ],
+                links: [{ s: 0, t: 1, type: 'double' }]
             },
             {
-                id: 4,
-                type: 'Alcohol',
-                structure: { chain: 2, ohGroup: 1 },
-                formula: 'CH3-CH2-OH',
+                id: 'alcohol-2',
+                type: 'Alcohol (醇)',
                 correct: 'Ethanol',
-                options: ['Methanol', 'Ethanol', 'Ethanoic Acid', 'Ethane'],
-                visual: [
-                    { type: 'C', x: 60, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'O', x: 140, y: 50 }
+                formula: 'CH₃CH₂OH',
+                options: ['Methanol', 'Ethanol', 'Propanol', 'Ethanoic Acid'],
+                nodes: [
+                    { x: -50, y: 0, el: 'C' },
+                    { x: 10, y: 0, el: 'C' },
+                    { x: 70, y: 0, el: 'OH', color: 'bg-red-500 border-red-600' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
+            },
+            {
+                id: 'acid-2',
+                type: 'Carboxylic Acid (羧酸)',
+                correct: 'Ethanoic Acid',
+                formula: 'CH₃COOH',
+                options: ['Methanoic Acid', 'Ethanoic Acid', 'Propanoic Acid', 'Ethanol'],
+                nodes: [
+                    { x: -40, y: 0, el: 'C' },
+                    { x: 20, y: 0, el: 'C' },
+                    { x: 20, y: -60, el: 'O', color: 'bg-red-500 border-red-600' }, // Double bond O up
+                    { x: 70, y: 30, el: 'OH', color: 'bg-red-500 border-red-600' }  // OH down-right
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }, 
+                    { s: 1, t: 3 }
                 ]
             },
             {
-                id: 5,
-                type: 'Carboxylic Acid',
-                structure: { chain: 2 }, // Ethanoic Acid
-                formula: 'CH3-COOH',
-                correct: 'Ethanoic Acid',
-                options: ['Methanoic Acid', 'Ethanoic Acid', 'Ethanol', 'Ethanal'],
-                visual: [
-                    { type: 'C', x: 60, y: 50 }, { type: 'C', x: 100, y: 50, doubleO: true, singleOH: true }
+                id: 'halo-cl-2',
+                type: 'Haloalkane (鹵代烴)',
+                correct: 'Chloroethane',
+                formula: 'CH₃CH₂Cl',
+                options: ['Chloromethane', 'Chloroethane', '1-chloropropane', 'Dichloroethane'],
+                nodes: [
+                    { x: -50, y: 0, el: 'C' },
+                    { x: 10, y: 0, el: 'C' },
+                    { x: 70, y: 0, el: 'Cl', color: 'bg-green-500 border-green-600' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }]
+            },
+            {
+                id: 'halo-br-3',
+                type: 'Haloalkane (鹵代烴)',
+                correct: '2-bromopropane',
+                formula: 'CH₃CH(Br)CH₃',
+                options: ['1-bromopropane', '2-bromopropane', 'Bromobutane', '2,2-dibromopropane'],
+                nodes: [
+                    { x: -60, y: 0, el: 'C' },
+                    { x: 0, y: 0, el: 'C' },
+                    { x: 60, y: 0, el: 'C' },
+                    { x: 0, y: 60, el: 'Br', color: 'bg-orange-500 border-orange-600' } // Branch down
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
+            },
+            {
+                id: 'alkane-branch',
+                type: 'Alkane (支鏈)',
+                correct: '2-methylpropane',
+                formula: 'CH₃CH(CH₃)CH₃',
+                options: ['Butane', '2-methylpropane', 'Pentane', 'Propane'],
+                nodes: [
+                    { x: -60, y: 0, el: 'C' },
+                    { x: 0, y: 0, el: 'C' },
+                    { x: 60, y: 0, el: 'C' },
+                    { x: 0, y: 60, el: 'CH₃' }
+                ],
+                links: [{ s: 0, t: 1 }, { s: 1, t: 2 }, { s: 1, t: 3 }]
+            },
+            {
+                id: 'alkene-3',
+                type: 'Alkene (烯烴)',
+                correct: 'Propene',
+                formula: 'CH₃CH=CH₂',
+                options: ['Ethene', 'Propene', 'But-1-ene', 'Propane'],
+                nodes: [
+                    { x: -50, y: 0, el: 'C' },
+                    { x: 10, y: 0, el: 'C' },
+                    { x: 70, y: 0, el: 'C' }
+                ],
+                links: [
+                    { s: 0, t: 1 }, 
+                    { s: 1, t: 2, type: 'double' }
                 ]
             }
         ];
@@ -104,7 +152,7 @@
             const [currentQ, setCurrentQ] = useState(null);
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
-            const [feedback, setFeedback] = useState(null); // { correct: bool, msg: '' }
+            const [feedback, setFeedback] = useState(null);
 
             useEffect(() => {
                 loadNextQuestion();
@@ -112,87 +160,70 @@
 
             const loadNextQuestion = () => {
                 setFeedback(null);
-                const randomIdx = Math.floor(Math.random() * Questions.length);
-                setCurrentQ(Questions[randomIdx]);
+                const randomIdx = Math.floor(Math.random() * Database.length);
+                setCurrentQ(Database[randomIdx]);
             };
 
             const handleAnswer = (answer) => {
-                if (feedback) return; // Prevent double clicking
+                if (feedback) return;
 
                 if (answer === currentQ.correct) {
                     setScore(s => s + 10);
                     setStreak(s => s + 1);
-                    setFeedback({ correct: true, msg: '正確！ (Correct!)' });
+                    setFeedback({ correct: true, msg: '正確！ (Correct!)', selected: answer });
                 } else {
                     setStreak(0);
-                    setFeedback({ correct: false, msg: `錯誤。正確答案是 ${currentQ.correct}` });
+                    setFeedback({ correct: false, msg: `錯誤。正確答案是 ${currentQ.correct}`, selected: answer });
                 }
             };
 
-            const MoleculeVisual = ({ q }) => {
-                if (!q) return null;
-
-                // Simple renderer for demonstration. In real app, this would be more dynamic based on structure data.
-                // For this demo, we use pre-defined visual coordinates or a simplified representation.
+            // --- Visualization Component (SVG + HTML Overlay) ---
+            const StructureVisual = ({ data }) => {
+                // Center calculation
+                const centerX = 300; // Half of width
+                const centerY = 120; // Half of height
                 
                 return (
-                    <div className="relative w-full h-48 bg-slate-800 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden">
+                    <div className="relative w-full h-60 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-inner group">
+                        {/* Grid Background */}
                         <div className="absolute inset-0 opacity-10" 
                              style={{backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
                         
-                        <div className="relative flex items-center">
-                            {q.visual.map((atom, i) => (
-                                <React.Fragment key={i}>
-                                    {/* Bond line if not first */}
-                                    {i > 0 && atom.y === q.visual[i-1].y && (
-                                        <div className={`h-1 bg-slate-500 absolute`} 
-                                             style={{
-                                                 left: q.visual[i-1].x + 15, 
-                                                 top: atom.y + 14, 
-                                                 width: atom.x - q.visual[i-1].x - 30
-                                             }}></div>
-                                    )}
-                                    {/* Vertical Bond */}
-                                    {i > 0 && atom.x === q.visual[i-1].x && (
-                                        <div className="w-1 bg-slate-500 absolute"
-                                             style={{
-                                                 left: atom.x + 14,
-                                                 top: q.visual[i-1].y + 30,
-                                                 height: atom.y - q.visual[i-1].y - 30
-                                             }}></div>
-                                    )}
+                        {/* SVG Layer for Bonds */}
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                            {data.links.map((link, i) => {
+                                const start = data.nodes[link.s];
+                                const end = data.nodes[link.t];
+                                
+                                // Draw Double Bond
+                                if (link.type === 'double') {
+                                    return (
+                                        <g key={i}>
+                                            <line x1={centerX + start.x} y1={centerY + start.y - 3} x2={centerX + end.x} y2={centerY + end.y - 3} stroke="#94a3b8" strokeWidth="3" />
+                                            <line x1={centerX + start.x} y1={centerY + start.y + 3} x2={centerX + end.x} y2={centerY + end.y + 3} stroke="#94a3b8" strokeWidth="3" />
+                                        </g>
+                                    );
+                                }
+                                // Draw Single Bond
+                                return (
+                                    <line key={i} x1={centerX + start.x} y1={centerY + start.y} x2={centerX + end.x} y2={centerY + end.y} stroke="#94a3b8" strokeWidth="3" />
+                                );
+                            })}
+                        </svg>
 
-                                    {/* Atom */}
-                                    <div 
-                                        className={`
-                                            absolute w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-lg z-10
-                                            ${atom.type === 'C' ? 'bg-slate-600 text-white border-2 border-slate-400' : 
-                                              atom.type === 'O' ? 'bg-red-500 text-white border-2 border-red-300' : 'bg-white text-black'}
-                                        `}
-                                        style={{ left: atom.x, top: atom.y }}
-                                    >
-                                        {atom.type}
-                                    </div>
-                                    
-                                    {/* Double Bond Indicator */}
-                                    {atom.double && <div className="absolute w-8 h-1 bg-white/50 -top-2 left-0" style={{left: atom.x-20, top: atom.y+10, width: 40, transform: 'rotate(0deg)'}}></div>}
-                                    
-                                    {/* Functional Groups for Acid */}
-                                    {atom.doubleO && (
-                                        <>
-                                            <div className="absolute w-1 h-8 bg-slate-500" style={{left: atom.x+14, top: atom.y-20}}></div>
-                                            <div className="absolute w-6 h-6 rounded-full bg-red-500 border-2 border-red-300 flex items-center justify-center text-xs font-bold" style={{left: atom.x+11, top: atom.y-40}}>O</div>
-                                        </>
-                                    )}
-                                    {atom.singleOH && (
-                                        <>
-                                            <div className="absolute w-8 h-1 bg-slate-500" style={{left: atom.x+30, top: atom.y+14}}></div>
-                                            <div className="absolute w-8 h-6 rounded-full bg-red-500 border-2 border-red-300 flex items-center justify-center text-xs font-bold" style={{left: atom.x+50, top: atom.y+2}}>OH</div>
-                                        </>
-                                    )}
-                                </React.Fragment>
-                            ))}
-                        </div>
+                        {/* Atom Nodes */}
+                        {data.nodes.map((node, i) => (
+                            <div 
+                                key={i}
+                                className={`absolute flex items-center justify-center font-bold text-sm rounded-full border-2 atom-shadow transform -translate-x-1/2 -translate-y-1/2 transition-transform group-hover:scale-110
+                                    ${node.color || (node.el === 'C' ? 'bg-slate-600 border-slate-400 text-white' : 'bg-slate-200 border-slate-400 text-slate-800')}
+                                    ${node.el.length > 1 ? 'w-10 h-10 text-xs' : 'w-9 h-9'}
+                                `}
+                                style={{ left: centerX + node.x, top: centerY + node.y }}
+                            >
+                                {node.el}
+                            </div>
+                        ))}
                     </div>
                 );
             };
@@ -220,18 +251,18 @@
                             {/* Question Card */}
                             <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700">
                                 <div className="flex justify-between items-center mb-4">
-                                    <span className="text-xs font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded uppercase tracking-wider">
+                                    <span className="text-xs font-bold text-slate-800 bg-slate-300 px-2 py-1 rounded uppercase tracking-wider">
                                         Identify the Structure
                                     </span>
                                     <span className="text-xs text-teal-400 font-bold">
-                                        Homologous Series: {currentQ.type}
+                                        {currentQ.type}
                                     </span>
                                 </div>
                                 
-                                <MoleculeVisual q={currentQ} />
+                                <StructureVisual data={currentQ} />
                                 
-                                <div className="mt-4 text-center font-mono text-lg text-slate-300 bg-slate-900/50 p-2 rounded-lg">
-                                    Formula Hint: {currentQ.formula}
+                                <div className="mt-4 text-center font-mono text-lg text-slate-300 bg-slate-900/50 p-2 rounded-lg border border-slate-600">
+                                    Formula Hint: <span className="text-white font-bold">{currentQ.formula}</span>
                                 </div>
                             </div>
 
@@ -244,8 +275,8 @@
                                         disabled={feedback}
                                         className={`p-4 rounded-xl border-2 font-bold text-lg transition-all
                                             ${feedback 
-                                                ? (opt === currentQ.correct ? 'bg-green-600 border-green-500 text-white' : opt === feedback.selected ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500')
-                                                : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-teal-400'}
+                                                ? (opt === currentQ.correct ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' : opt === feedback.selected ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500 opacity-50')
+                                                : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-teal-400 hover:shadow-md'}
                                         `}
                                     >
                                         {opt}
@@ -255,7 +286,7 @@
 
                             {/* Feedback & Next */}
                             {feedback && (
-                                <div className={`p-4 rounded-xl border-l-4 shadow-lg flex justify-between items-center animate-in slide-in-from-bottom-2
+                                <div className={`p-4 rounded-xl border-l-4 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-bottom-2
                                     ${feedback.correct ? 'bg-green-900/30 border-green-500 text-green-300' : 'bg-red-900/30 border-red-500 text-red-300'}
                                 `}>
                                     <div className="font-bold text-lg flex items-center gap-2">
@@ -264,7 +295,7 @@
                                     </div>
                                     <button 
                                         onClick={loadNextQuestion}
-                                        className="px-6 py-2 bg-white text-slate-900 font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                                        className="px-8 py-3 bg-white text-slate-900 font-bold rounded-lg hover:bg-slate-200 transition-colors w-full md:w-auto"
                                     >
                                         下一題 (Next) &rarr;
                                     </button>
