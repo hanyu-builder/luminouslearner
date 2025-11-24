@@ -79,13 +79,8 @@
                 setBromineColor('bg-orange-500');
                 
                 setTimeout(() => {
-                    // LOGIC FIX: Random split, but names must match the split!
-                    // Scenario: C10 -> C8 (Alkane) + C2 (Alkene) is the most common textbook example
-                    // Let's prioritize 8+2 split, but allow others for variety if needed.
-                    // For clarity, let's stick to 8 + 2 as it matches the "Octane" expectation.
-                    
-                    const splitAt = 8; // Splits into 8 and 2
-                    
+                    // LOGIC: C10 -> C8 (Octane) + C2 (Ethene)
+                    const splitAt = 8; 
                     const count1 = splitAt; // 8
                     const count2 = initialCarbonCount - splitAt; // 2
 
@@ -171,25 +166,32 @@
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
                         
                         {/* Left: Reaction Chamber */}
-                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-center min-h-[500px] shadow-2xl overflow-hidden p-8">
+                        <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative flex flex-col items-center justify-center min-h-[500px] shadow-2xl overflow-hidden p-8 pb-32">
                             
                             {/* Background Elements */}
                             <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiZmZmYiLz48L3N2Zz4=')]"></div>
                             
-                            {/* Catalyst Bed */}
-                            <div className="absolute bottom-0 w-full h-24 bg-stone-700 border-t-4 border-stone-600 flex items-center justify-center z-0">
-                                <span className="text-stone-500 font-bold text-xl uppercase tracking-widest opacity-50">Hot Catalyst (Al₂O₃ / SiO₂)</span>
+                            {/* Catalyst Bed - UPDATED UI */}
+                            <div className="absolute bottom-0 w-full h-28 bg-gradient-to-t from-red-900/50 to-stone-800 border-t-4 border-stone-600 flex flex-col items-center justify-center z-0 shadow-[0_-10px_20px_rgba(220,38,38,0.1)]">
+                                <div className="flex items-center gap-2 text-orange-200 font-bold text-lg tracking-wide mb-1">
+                                    <i data-lucide="layers" size={20} /> 
+                                    高溫催化劑 (Hot Catalyst)
+                                </div>
+                                <div className="flex items-center gap-3 text-sm">
+                                     <span className="text-stone-400 font-mono bg-stone-900/50 px-2 py-0.5 rounded border border-stone-700">Al₂O₃ / SiO₂</span>
+                                     <span className="text-stone-600">|</span>
+                                     <span className="text-red-400 font-mono font-bold flex items-center gap-1">
+                                        <i data-lucide="thermometer" size={14}/> 450°C - 750°C
+                                     </span>
+                                </div>
                             </div>
 
                             {/* Heat Effect */}
                             {isHeating && (
                                 <>
-                                    <div className="heat-wave bottom-10 left-1/4"></div>
-                                    <div className="heat-wave bottom-20 left-1/2 animation-delay-500"></div>
-                                    <div className="heat-wave bottom-10 right-1/4 animation-delay-1000"></div>
-                                    <div className="absolute top-10 text-red-400 font-bold animate-pulse flex items-center gap-2">
-                                        <i data-lucide="thermometer" /> Temperature > 400°C
-                                    </div>
+                                    <div className="heat-wave bottom-24 left-1/4"></div>
+                                    <div className="heat-wave bottom-32 left-1/2 animation-delay-500"></div>
+                                    <div className="heat-wave bottom-24 right-1/4 animation-delay-1000"></div>
                                 </>
                             )}
 
@@ -223,7 +225,7 @@
 
                             {/* Action Button */}
                             {!cracked && (
-                                <div className="absolute bottom-32 z-20">
+                                <div className="absolute bottom-36 z-20">
                                     <button 
                                         onClick={startCracking}
                                         disabled={isHeating}
