@@ -39,6 +39,7 @@
             const hBondsRef = useRef([]);
             const controlsRef = useRef(null);
             const frameIdRef = useRef(null);
+            const rendererRef = useRef(null);
 
             useEffect(() => {
                 // 1. Setup Scene
@@ -55,6 +56,7 @@
                 renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
                 renderer.setPixelRatio(window.devicePixelRatio);
                 mountRef.current.appendChild(renderer.domElement);
+                rendererRef.current = renderer;
 
                 // 4. Lights
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -266,8 +268,10 @@
                 // Cleanup
                 return () => {
                     cancelAnimationFrame(frameIdRef.current);
-                    mountRef.current.removeChild(renderer.domElement);
-                    renderer.dispose();
+                    if (mountRef.current && rendererRef.current) {
+                         mountRef.current.removeChild(rendererRef.current.domElement);
+                         rendererRef.current.dispose();
+                    }
                 };
             }, [showHBonds, state]);
 
