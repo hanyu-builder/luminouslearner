@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>有機化學命名特訓 (IUPAC Naming Drill)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        /* Atom Styling */
+        .atom {
+            transition: all 0.3s ease;
+        }
+        .bond {
+            background-color: #94a3b8;
+        }
+        
+        /* Card Animation */
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Question Database
+        const Questions = [
+            {
+                id: 1,
+                type: 'Alkane',
+                structure: {
+                    chain: 3, // Propane backbone
+                    branches: [] 
+                },
+                formula: 'CH3-CH2-CH3',
+                correct: 'Propane',
+                options: ['Ethane', 'Propane', 'Butane', 'Methane'],
+                visual: [
+                    { type: 'C', x: 50, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'C', x: 150, y: 50 }
+                ]
+            },
+            {
+                id: 2,
+                type: 'Alkane',
+                structure: {
+                    chain: 4, // Butane
+                    branches: [{ pos: 2, group: 'methyl' }] // 2-methylpropane
+                },
+                formula: 'CH3-CH(CH3)-CH3',
+                correct: '2-methylpropane',
+                options: ['Butane', '2-methylpropane', '1-methylpropane', 'Propane'],
+                visual: [
+                    { type: 'C', x: 50, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'C', x: 150, y: 50 },
+                    { type: 'C', x: 100, y: 100 } // Branch
+                ]
+            },
+            {
+                id: 3,
+                type: 'Alkene',
+                structure: { chain: 2, doubleBond: 1 },
+                formula: 'CH2=CH2',
+                correct: 'Ethene',
+                options: ['Ethane', 'Ethene', 'Ethyne', 'Propene'],
+                visual: [
+                    { type: 'C', x: 80, y: 50 }, { type: 'C', x: 120, y: 50, double: true }
+                ]
+            },
+            {
+                id: 4,
+                type: 'Alcohol',
+                structure: { chain: 2, ohGroup: 1 },
+                formula: 'CH3-CH2-OH',
+                correct: 'Ethanol',
+                options: ['Methanol', 'Ethanol', 'Ethanoic Acid', 'Ethane'],
+                visual: [
+                    { type: 'C', x: 60, y: 50 }, { type: 'C', x: 100, y: 50 }, { type: 'O', x: 140, y: 50 }
+                ]
+            },
+            {
+                id: 5,
+                type: 'Carboxylic Acid',
+                structure: { chain: 2 }, // Ethanoic Acid
+                formula: 'CH3-COOH',
+                correct: 'Ethanoic Acid',
+                options: ['Methanoic Acid', 'Ethanoic Acid', 'Ethanol', 'Ethanal'],
+                visual: [
+                    { type: 'C', x: 60, y: 50 }, { type: 'C', x: 100, y: 50, doubleO: true, singleOH: true }
+                ]
+            }
+        ];
+
+        const App = () => {
+            const [currentQ, setCurrentQ] = useState(null);
+            const [score, setScore] = useState(0);
+            const [streak, setStreak] = useState(0);
+            const [feedback, setFeedback] = useState(null); // { correct: bool, msg: '' }
+
+            useEffect(() => {
+                loadNextQuestion();
+            }, []);
+
+            const loadNextQuestion = () => {
+                setFeedback(null);
+                const randomIdx = Math.floor(Math.random() * Questions.length);
+                setCurrentQ(Questions[randomIdx]);
+            };
+
+            const handleAnswer = (answer) => {
+                if (feedback) return; // Prevent double clicking
+
+                if (answer === currentQ.correct) {
+                    setScore(s => s + 10);
+                    setStreak(s => s + 1);
+                    setFeedback({ correct: true, msg: '正確！ (Correct!)' });
+                } else {
+                    setStreak(0);
+                    setFeedback({ correct: false, msg: `錯誤。正確答案是 ${currentQ.correct}` });
+                }
+            };
+
+            const MoleculeVisual = ({ q }) => {
+                if (!q) return null;
+
+                // Simple renderer for demonstration. In real app, this would be more dynamic based on structure data.
+                // For this demo, we use pre-defined visual coordinates or a simplified representation.
+                
+                return (
+                    <div className="relative w-full h-48 bg-slate-800 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden">
+                        <div className="absolute inset-0 opacity-10" 
+                             style={{backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+                        
+                        <div className="relative flex items-center">
+                            {q.visual.map((atom, i) => (
+                                <React.Fragment key={i}>
+                                    {/* Bond line if not first */}
+                                    {i > 0 && atom.y === q.visual[i-1].y && (
+                                        <div className={`h-1 bg-slate-500 absolute`} 
+                                             style={{
+                                                 left: q.visual[i-1].x + 15, 
+                                                 top: atom.y + 14, 
+                                                 width: atom.x - q.visual[i-1].x - 30
+                                             }}></div>
+                                    )}
+                                    {/* Vertical Bond */}
+                                    {i > 0 && atom.x === q.visual[i-1].x && (
+                                        <div className="w-1 bg-slate-500 absolute"
+                                             style={{
+                                                 left: atom.x + 14,
+                                                 top: q.visual[i-1].y + 30,
+                                                 height: atom.y - q.visual[i-1].y - 30
+                                             }}></div>
+                                    )}
+
+                                    {/* Atom */}
+                                    <div 
+                                        className={`
+                                            absolute w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-lg z-10
+                                            ${atom.type === 'C' ? 'bg-slate-600 text-white border-2 border-slate-400' : 
+                                              atom.type === 'O' ? 'bg-red-500 text-white border-2 border-red-300' : 'bg-white text-black'}
+                                        `}
+                                        style={{ left: atom.x, top: atom.y }}
+                                    >
+                                        {atom.type}
+                                    </div>
+                                    
+                                    {/* Double Bond Indicator */}
+                                    {atom.double && <div className="absolute w-8 h-1 bg-white/50 -top-2 left-0" style={{left: atom.x-20, top: atom.y+10, width: 40, transform: 'rotate(0deg)'}}></div>}
+                                    
+                                    {/* Functional Groups for Acid */}
+                                    {atom.doubleO && (
+                                        <>
+                                            <div className="absolute w-1 h-8 bg-slate-500" style={{left: atom.x+14, top: atom.y-20}}></div>
+                                            <div className="absolute w-6 h-6 rounded-full bg-red-500 border-2 border-red-300 flex items-center justify-center text-xs font-bold" style={{left: atom.x+11, top: atom.y-40}}>O</div>
+                                        </>
+                                    )}
+                                    {atom.singleOH && (
+                                        <>
+                                            <div className="absolute w-8 h-1 bg-slate-500" style={{left: atom.x+30, top: atom.y+14}}></div>
+                                            <div className="absolute w-8 h-6 rounded-full bg-red-500 border-2 border-red-300 flex items-center justify-center text-xs font-bold" style={{left: atom.x+50, top: atom.y+2}}>OH</div>
+                                        </>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-2xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-teal-400 flex items-center gap-2">
+                                <i data-lucide="pencil-ruler"></i> 命名特訓
+                            </h1>
+                            <p className="text-slate-400 text-sm">IUPAC Naming Drill</p>
+                        </div>
+                        <div className="flex gap-4 font-mono font-bold text-xl">
+                            <div className="text-teal-400">Score: {score}</div>
+                            <div className="text-orange-400">Streak: {streak} 🔥</div>
+                        </div>
+                    </div>
+
+                    {currentQ && (
+                        <div className="flex flex-col gap-6 animate-in fade-in">
+                            
+                            {/* Question Card */}
+                            <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700">
+                                <div className="flex justify-between items-center mb-4">
+                                    <span className="text-xs font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded uppercase tracking-wider">
+                                        Identify the Structure
+                                    </span>
+                                    <span className="text-xs text-teal-400 font-bold">
+                                        Homologous Series: {currentQ.type}
+                                    </span>
+                                </div>
+                                
+                                <MoleculeVisual q={currentQ} />
+                                
+                                <div className="mt-4 text-center font-mono text-lg text-slate-300 bg-slate-900/50 p-2 rounded-lg">
+                                    Formula Hint: {currentQ.formula}
+                                </div>
+                            </div>
+
+                            {/* Options */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {currentQ.options.map((opt, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleAnswer(opt)}
+                                        disabled={feedback}
+                                        className={`p-4 rounded-xl border-2 font-bold text-lg transition-all
+                                            ${feedback 
+                                                ? (opt === currentQ.correct ? 'bg-green-600 border-green-500 text-white' : opt === feedback.selected ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-500')
+                                                : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700 hover:border-teal-400'}
+                                        `}
+                                    >
+                                        {opt}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Feedback & Next */}
+                            {feedback && (
+                                <div className={`p-4 rounded-xl border-l-4 shadow-lg flex justify-between items-center animate-in slide-in-from-bottom-2
+                                    ${feedback.correct ? 'bg-green-900/30 border-green-500 text-green-300' : 'bg-red-900/30 border-red-500 text-red-300'}
+                                `}>
+                                    <div className="font-bold text-lg flex items-center gap-2">
+                                        {feedback.correct ? <i data-lucide="check-circle"/> : <i data-lucide="x-circle"/>}
+                                        {feedback.msg}
+                                    </div>
+                                    <button 
+                                        onClick={loadNextQuestion}
+                                        className="px-6 py-2 bg-white text-slate-900 font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                                    >
+                                        下一題 (Next) &rarr;
+                                    </button>
+                                </div>
+                            )}
+
+                        </div>
+                    )}
+                    
+                    <div className="text-center text-slate-500 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic V & XI
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
