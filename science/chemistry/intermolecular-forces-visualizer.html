@@ -28,31 +28,50 @@
                 id: 'He', name: '氦 (Helium)', type: 'vdW', 
                 color: '#a855f7', radius: 15, mass: 4, 
                 forceStrength: 1, bp: -269,
+                polarity: 'nonpolar',
                 desc: '非極性單原子。僅有極微弱的范德華力 (Dispersion forces)。' 
             },
             'N2': { 
                 id: 'N2', name: '氮氣 (Nitrogen)', type: 'vdW', 
                 color: '#3b82f6', radius: 20, mass: 28, 
                 forceStrength: 2, bp: -196,
+                polarity: 'nonpolar',
                 desc: '非極性分子。電子數較多，范德華力比 He 強。' 
+            },
+            'Hexane': {
+                id: 'Hexane', name: '己烷 (Hexane)', type: 'vdW',
+                color: '#f59e0b', radius: 28, mass: 86,
+                forceStrength: 6, bp: 68,
+                polarity: 'nonpolar',
+                desc: '非極性有機分子。分子量大，范德華力強，常溫下為液體。'
             },
             'HCl': { 
                 id: 'HCl', name: '氯化氫 (HCl)', type: 'Dipole', 
                 color: '#22c55e', radius: 22, mass: 36.5, 
                 forceStrength: 4, bp: -85,
+                polarity: 'polar',
                 desc: '極性分子。具有永久偶極-永久偶極引力 (Permanent Dipole)。' 
+            },
+            'Ethanol': {
+                id: 'Ethanol', name: '乙醇 (Ethanol)', type: 'H-Bond',
+                color: '#ec4899', radius: 25, mass: 46,
+                forceStrength: 7, bp: 78,
+                polarity: 'polar',
+                desc: '極性有機分子。含有 -OH 基團，能形成氫鍵。'
             },
             'H2O': { 
                 id: 'H2O', name: '水 (Water)', type: 'H-Bond', 
                 color: '#ef4444', radius: 18, mass: 18, 
-                forceStrength: 8, bp: 100,
-                desc: '能夠形成氫鍵 (Hydrogen Bond)。引力極強，沸點異常高。' 
+                forceStrength: 9, bp: 100,
+                polarity: 'polar',
+                desc: '強極性分子。能夠形成強大的氫鍵 (Hydrogen Bond)。' 
             }
         };
 
         const App = () => {
-            const [selectedMol, setSelectedMol] = useState(Molecules['He']);
-            const [temperature, setTemperature] = useState(50); // 0-100 (Simulation scale)
+            const [molA, setMolA] = useState(Molecules['H2O']);
+            const [molB, setMolB] = useState(null); // Second molecule for mixing
+            const [temperature, setTemperature] = useState(25); 
             const [isRunning, setIsRunning] = useState(true);
             
             const canvasRef = useRef(null);
@@ -61,7 +80,7 @@
 
             // Initialize Particles
             useEffect(() => {
-                const numParticles = 20;
+                const numParticles = 24;
                 const newParticles = [];
                 const canvas = canvasRef.current;
                 if (!canvas) return;
@@ -69,18 +88,46 @@
                 const w = canvas.width;
                 const h = canvas.height;
 
+                // If mixing, split 50/50
+                const typeACount = molB ? numParticles / 2 : numParticles;
+
                 for (let i = 0; i < numParticles; i++) {
+                    const isTypeA = i < typeACount;
+                    const molType = isTypeA ? molA : molB;
+                    
                     newParticles.push({
                         id: i,
                         x: Math.random() * (w - 40) + 20,
                         y: Math.random() * (h - 40) + 20,
                         vx: (Math.random() - 0.5) * 2,
                         vy: (Math.random() - 0.5) * 2,
-                        type: selectedMol.id
+                        mol: molType // Store ref to molecule data
                     });
                 }
                 particlesRef.current = newParticles;
-            }, [selectedMol]);
+            }, [molA, molB]);
+
+            // Interaction Logic (Mixing Rule)
+            const getInteraction = (m1, m2) => {
+                // Like dissolves like
+                // Polar + Polar = Strong (Dipole/H-bond)
+                // Nonpolar + Nonpolar = Medium (vdW)
+                // Polar + Nonpolar = Weak (Induction only)
+                
+                if (m1.polarity !== m2.polarity) {
+                    // Immiscible case (e.g. Water + Hexane)
+                    return { strength: 0.5, type: 'Weak' };
+                }
+                
+                // Miscible
+                if (m1.type === 'H-Bond' || m2.type === 'H-Bond') {
+                     return { strength: Math.min(m1.forceStrength, m2.forceStrength), type: 'H-Bond' };
+                }
+                if (m1.type === 'Dipole' || m2.type === 'Dipole') {
+                     return { strength: Math.min(m1.forceStrength, m2.forceStrength), type: 'Dipole' };
+                }
+                return { strength: Math.min(m1.forceStrength, m2.forceStrength), type: 'vdW' };
+            };
 
             // Animation Loop
             const animate = () => {
@@ -92,8 +139,8 @@
                 const h = canvas.height;
                 
                 // Physics Parameters
-                const speedFactor = (temperature / 50) * 2; // Temp controls speed
-                const interactionDist = 100; // Distance to form bond
+                const speedFactor = (temperature / 50) * 2; 
+                const interactionDist = 100; 
                 
                 ctx.clearRect(0, 0, w, h);
 
@@ -104,18 +151,15 @@
                     p.y += p.vy * speedFactor;
 
                     // Bounce walls
-                    if (p.x < 15 || p.x > w - 15) p.vx *= -1;
-                    if (p.y < 15 || p.y > h - 15) p.vy *= -1;
+                    if (p.x < p.mol.radius || p.x > w - p.mol.radius) p.vx *= -1;
+                    if (p.y < p.mol.radius || p.y > h - p.mol.radius) p.vy *= -1;
                     
                     // Keep in bounds
-                    p.x = Math.max(15, Math.min(w-15, p.x));
-                    p.y = Math.max(15, Math.min(h-15, p.y));
+                    p.x = Math.max(p.mol.radius, Math.min(w-p.mol.radius, p.x));
+                    p.y = Math.max(p.mol.radius, Math.min(h-p.mol.radius, p.y));
                 });
 
-                // Draw Connections (Forces)
-                // O(N^2) but N is small (20)
-                ctx.lineWidth = selectedMol.forceStrength; 
-                
+                // Calculate Forces
                 for (let i = 0; i < particlesRef.current.length; i++) {
                     for (let j = i + 1; j < particlesRef.current.length; j++) {
                         const p1 = particlesRef.current[i];
@@ -124,37 +168,52 @@
                         const dx = p1.x - p2.x;
                         const dy = p1.y - p2.y;
                         const dist = Math.sqrt(dx*dx + dy*dy);
+                        const minDist = p1.mol.radius + p2.mol.radius;
 
-                        if (dist < interactionDist) {
-                            // Probability of bonding decreases with Temperature
-                            // Probability increases with Force Strength
-                            const bondStability = (selectedMol.forceStrength * 20) / (temperature + 1);
+                        // Collision (Simple elastic)
+                        if (dist < minDist) {
+                             const angle = Math.atan2(dy, dx);
+                             const targetX = p2.x + Math.cos(angle) * minDist;
+                             const targetY = p2.y + Math.sin(angle) * minDist;
+                             const ax = (targetX - p1.x) * 0.5; // Spring constant
+                             const ay = (targetY - p1.y) * 0.5;
+                             p1.vx -= ax; p1.vy -= ay;
+                             p2.vx += ax; p2.vy += ay;
+                        }
+
+                        // Attraction
+                        if (dist < interactionDist && dist > minDist) {
+                            const interaction = getInteraction(p1.mol, p2.mol);
                             
-                            // Visual: Opacity based on distance and stability
+                            // Stability decreases with Temp
+                            const bondStability = (interaction.strength * 30) / (temperature + 1);
                             const opacity = Math.max(0, (1 - dist/interactionDist) * Math.min(1, bondStability));
                             
                             if (opacity > 0.1) {
                                 ctx.beginPath();
                                 ctx.moveTo(p1.x, p1.y);
                                 ctx.lineTo(p2.x, p2.y);
-                                
-                                // Style based on type
-                                if (selectedMol.type === 'H-Bond') {
-                                    ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`; // Yellow solid for H-bond
+                                ctx.lineWidth = Math.max(1, interaction.strength / 2);
+
+                                if (interaction.type === 'H-Bond') {
+                                    ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`; // Yellow
                                     ctx.setLineDash([]);
-                                } else if (selectedMol.type === 'Dipole') {
+                                } else if (interaction.type === 'Dipole') {
                                     ctx.strokeStyle = `rgba(56, 189, 248, ${opacity})`; // Blue dashed
                                     ctx.setLineDash([5, 5]);
-                                } else {
+                                } else if (interaction.type === 'vdW') {
                                     ctx.strokeStyle = `rgba(148, 163, 184, ${opacity})`; // Grey dotted
                                     ctx.setLineDash([2, 4]);
+                                } else {
+                                    // Weak interaction (Immiscible)
+                                    ctx.strokeStyle = `rgba(255, 0, 0, ${opacity * 0.5})`; // Red weak
+                                    ctx.setLineDash([1, 8]);
                                 }
-                                
                                 ctx.stroke();
                                 
-                                // "Attraction" effect: pull them together slightly if low temp
-                                if (temperature < 30) {
-                                    const pull = 0.02 * selectedMol.forceStrength;
+                                // Attraction Force Logic
+                                if (temperature < 50 || interaction.strength > 5) {
+                                    const pull = 0.005 * interaction.strength;
                                     const angle = Math.atan2(dy, dx);
                                     p1.vx -= Math.cos(angle) * pull;
                                     p1.vy -= Math.sin(angle) * pull;
@@ -166,26 +225,24 @@
                     }
                 }
 
-                // Draw Particles on top
+                // Draw Particles
                 particlesRef.current.forEach(p => {
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, selectedMol.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = selectedMol.color;
+                    ctx.arc(p.x, p.y, p.mol.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p.mol.color;
                     ctx.fill();
                     
-                    // Visual Detail (Dipole or H-bond hint)
-                    if (selectedMol.type === 'H-Bond') {
+                    // Visual Detail
+                    if (p.mol.type === 'H-Bond' || p.mol.id === 'Ethanol') {
                         ctx.fillStyle = 'white';
                         ctx.font = '10px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText('H', p.x-4, p.y+3);
-                        ctx.fillText('O', p.x+4, p.y+3);
-                    } else if (selectedMol.type === 'Dipole') {
-                        ctx.fillStyle = 'white';
-                        ctx.font = '8px Arial';
+                        ctx.fillText(p.mol.id === 'H2O' ? 'H₂O' : 'OH', p.x, p.y+4);
+                    } else {
+                        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                        ctx.font = '10px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText('δ+', p.x-6, p.y+3);
-                        ctx.fillText('δ-', p.x+6, p.y+3);
+                        ctx.fillText(p.mol.id, p.x, p.y+4);
                     }
                     
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -198,24 +255,27 @@
             };
 
             useEffect(() => {
-                // Initial Resize
                 if (canvasRef.current) {
                     const parent = canvasRef.current.parentElement;
                     canvasRef.current.width = parent.clientWidth;
                     canvasRef.current.height = parent.clientHeight;
                 }
-                
                 requestRef.current = requestAnimationFrame(animate);
                 return () => cancelAnimationFrame(requestRef.current);
             });
 
             // Derived Status
-            const getState = () => {
-                // Simple thresholds for visual feedback
-                const threshold = selectedMol.forceStrength * 15;
-                if (temperature > threshold) return 'Gas (氣態) - 引力已斷裂';
-                if (temperature > threshold / 2) return 'Liquid (液態) - 分子滑動';
-                return 'Solid (固態) - 分子振動';
+            const getStatus = () => {
+                if (molB) {
+                    const inter = getInteraction(molA, molB);
+                    if (inter.type === 'Weak') return '不互溶 (Immiscible) - 分層';
+                    return '互溶 (Miscible) - 均勻混合';
+                }
+                const bp = molA.bp;
+                if (temperature > bp + 20) return 'Gas (氣態)';
+                if (temperature > bp - 20) return 'Boiling (沸騰中)';
+                if (temperature > -100) return 'Liquid (液態)';
+                return 'Solid (固態)';
             };
 
             return (
@@ -227,24 +287,7 @@
                             <h1 className="text-2xl font-bold text-blue-400 flex items-center gap-2">
                                 <i data-lucide="network"></i> 分子間引力視圖
                             </h1>
-                            <p className="text-slate-400 text-sm">Intermolecular Forces Visualizer</p>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                            {Object.values(Molecules).map(m => (
-                                <button 
-                                    key={m.id}
-                                    onClick={() => setSelectedMol(m)}
-                                    className={`px-3 py-1 rounded border text-sm font-bold transition-all
-                                        ${selectedMol.id === m.id 
-                                            ? `bg-slate-700 text-white border-white` 
-                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}
-                                    `}
-                                    style={{ borderColor: selectedMol.id === m.id ? m.color : '' }}
-                                >
-                                    {m.name}
-                                </button>
-                            ))}
+                            <p className="text-slate-400 text-sm">Intermolecular Forces & Solubility</p>
                         </div>
                     </div>
 
@@ -252,76 +295,87 @@
                         
                         {/* Left: Canvas Area */}
                         <div className="w-full lg:w-2/3 bg-slate-800 rounded-3xl border-4 border-slate-700 relative h-[500px] shadow-2xl overflow-hidden">
-                            
                             <canvas ref={canvasRef} className="block w-full h-full" />
-                            
-                            {/* Overlay Info */}
-                            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur px-4 py-2 rounded-xl border border-slate-600">
-                                <div className="text-xs text-slate-400 font-bold uppercase">Current State</div>
-                                <div className={`text-lg font-bold ${temperature > 80 ? 'text-red-400' : 'text-blue-300'}`}>
-                                    {getState()}
-                                </div>
+                            <div className="absolute top-4 left-4 bg-black/60 backdrop-blur px-4 py-2 rounded-xl border border-slate-600 z-10">
+                                <div className="text-xs text-slate-400 font-bold uppercase">Status</div>
+                                <div className="text-lg font-bold text-blue-300">{getStatus()}</div>
                             </div>
-
                         </div>
 
-                        {/* Right: Controls & Theory */}
-                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                        {/* Right: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-4">
                             
-                            {/* Controls */}
-                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-                                <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
-                                    <i data-lucide="thermometer" className="text-red-500" /> 溫度控制
-                                </h3>
-                                
-                                <div className="flex items-center gap-4 mb-2">
-                                    <span className="text-blue-300 font-bold text-xs">Cold</span>
-                                    <input 
-                                        type="range" min="1" max="100" value={temperature} 
-                                        onChange={(e) => setTemperature(Number(e.target.value))}
-                                        className="flex-grow h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-red-500"
-                                    />
-                                    <span className="text-red-400 font-bold text-xs">Hot</span>
+                            {/* 1. Molecule Selection */}
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">選擇物質 (Select Substance)</h3>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {Object.values(Molecules).map(m => (
+                                        <button 
+                                            key={m.id}
+                                            onClick={() => { setMolA(m); setMolB(null); }}
+                                            className={`px-3 py-1 rounded border text-xs font-bold transition-all
+                                                ${!molB && molA.id === m.id 
+                                                    ? `bg-slate-700 text-white border-white ring-2 ring-blue-500` 
+                                                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}
+                                            `}
+                                            style={{ borderColor: m.color }}
+                                        >
+                                            {m.name}
+                                        </button>
+                                    ))}
                                 </div>
-                                <div className="text-center font-mono text-xl text-white font-bold">
-                                    {temperature}°C (Simulation)
+
+                                <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">混合模式 (Mixing Mode)</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Hexane']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600">
+                                        水 + 己烷 (Polar + Nonpolar)
+                                    </button>
+                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Ethanol']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600">
+                                        水 + 乙醇 (H-Bond + H-Bond)
+                                    </button>
                                 </div>
-                                <p className="text-xs text-slate-400 text-center mt-2">
-                                    溫度越高，動能越大，越容易打破分子間引力。
-                                </p>
                             </div>
 
-                            {/* Theory Card */}
-                            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex-grow animate-in fade-in slide-in-from-right">
-                                <div className="mb-4 border-b border-slate-600 pb-4">
-                                    <div className="text-xs text-slate-400 uppercase font-bold mb-1">Force Type</div>
-                                    <div className="text-2xl font-bold text-white" style={{ color: selectedMol.color }}>
-                                        {selectedMol.type === 'vdW' ? '范德華力 (van der Waals)' :
-                                         selectedMol.type === 'Dipole' ? '永久偶極引力 (Permanent Dipole)' :
-                                         '氫鍵 (Hydrogen Bond)'}
-                                    </div>
+                            {/* 2. Temperature */}
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                                <div className="flex justify-between mb-2">
+                                    <span className="text-blue-400 font-bold text-sm"><i data-lucide="thermometer" className="inline w-4"/> 溫度</span>
+                                    <span className="text-white font-mono font-bold">{temperature}°C</span>
                                 </div>
+                                <input 
+                                    type="range" min="-200" max="200" value={temperature} 
+                                    onChange={(e) => setTemperature(Number(e.target.value))}
+                                    className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                />
+                            </div>
 
-                                <div className="space-y-4 text-sm text-slate-300 leading-relaxed">
-                                    <div className="p-3 bg-slate-900/50 rounded-lg border-l-4" style={{ borderColor: selectedMol.color }}>
-                                        <strong className="text-white block mb-1">原理說明</strong>
-                                        {selectedMol.desc}
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg">
-                                        <span>相對強度</span>
-                                        <div className="flex gap-1">
-                                            {Array.from({length: 5}).map((_, i) => (
-                                                <div key={i} className={`w-4 h-2 rounded-sm ${i < selectedMol.forceStrength/2 ? 'bg-yellow-400' : 'bg-slate-600'}`}></div>
-                                            ))}
+                            {/* 3. Info Card */}
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg flex-grow overflow-y-auto">
+                                {molB ? (
+                                    <div>
+                                        <div className="font-bold text-white mb-2">混合物性質：</div>
+                                        <div className="text-sm text-slate-300 space-y-2">
+                                            <p><strong>{molA.name}</strong> ({molA.polarity})</p>
+                                            <p><strong>{molB.name}</strong> ({molB.polarity})</p>
+                                            <hr className="border-slate-600 my-2"/>
+                                            <p className={getInteraction(molA, molB).type === 'Weak' ? 'text-red-400' : 'text-green-400'}>
+                                                {getInteraction(molA, molB).type === 'Weak' 
+                                                    ? '由於極性不同，兩者之間的引力很弱，導致不互溶 (Immiscible)。' 
+                                                    : '兩者極性相似 (Like dissolves like)，能形成有效的引力，因此互溶 (Miscible)。'}
+                                            </p>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg">
-                                        <span>沸點 (Boiling Point)</span>
-                                        <span className="font-mono font-bold text-white">{selectedMol.bp}°C</span>
+                                ) : (
+                                    <div>
+                                        <div className="font-bold text-white mb-1" style={{color: molA.color}}>{molA.name}</div>
+                                        <div className="text-xs text-slate-400 mb-3">{molA.type === 'vdW' ? '非極性' : '極性'} 分子</div>
+                                        <p className="text-sm text-slate-300 leading-relaxed">{molA.desc}</p>
+                                        <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between text-sm">
+                                            <span className="text-slate-400">沸點：</span>
+                                            <span className="text-white font-mono">{molA.bp}°C</span>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
                         </div>
