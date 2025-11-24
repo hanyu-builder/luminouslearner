@@ -95,13 +95,17 @@
                     const isTypeA = i < typeACount;
                     const molType = isTypeA ? molA : molB;
                     
+                    // Initialize with random small velocity
+                    const vx = (Math.random() - 0.5) * 1.0;
+                    const vy = (Math.random() - 0.5) * 1.0;
+
                     newParticles.push({
                         id: i,
                         x: Math.random() * (w - 40) + 20,
                         y: Math.random() * (h - 40) + 20,
-                        vx: (Math.random() - 0.5) * 2,
-                        vy: (Math.random() - 0.5) * 2,
-                        mol: molType // Store ref to molecule data
+                        vx: vx,
+                        vy: vy,
+                        mol: molType
                     });
                 }
                 particlesRef.current = newParticles;
@@ -109,17 +113,9 @@
 
             // Interaction Logic (Mixing Rule)
             const getInteraction = (m1, m2) => {
-                // Like dissolves like
-                // Polar + Polar = Strong (Dipole/H-bond)
-                // Nonpolar + Nonpolar = Medium (vdW)
-                // Polar + Nonpolar = Weak (Induction only)
-                
                 if (m1.polarity !== m2.polarity) {
-                    // Immiscible case (e.g. Water + Hexane)
                     return { strength: 0.5, type: 'Weak' };
                 }
-                
-                // Miscible
                 if (m1.type === 'H-Bond' || m2.type === 'H-Bond') {
                      return { strength: Math.min(m1.forceStrength, m2.forceStrength), type: 'H-Bond' };
                 }
@@ -138,8 +134,12 @@
                 const w = canvas.width;
                 const h = canvas.height;
                 
-                // Physics Parameters
-                const speedFactor = (temperature / 50) * 2; 
+                // FIX: Speed Factor based on Kelvin (approx)
+                // -200C = 73K, 25C = 298K, 200C = 473K
+                // We map this to a reasonable speed multiplier range (e.g., 0.2 to 1.5)
+                const kelvin = temperature + 273;
+                const speedFactor = kelvin / 400; 
+                
                 const interactionDist = 100; 
                 
                 ctx.clearRect(0, 0, w, h);
@@ -151,12 +151,14 @@
                     p.y += p.vy * speedFactor;
 
                     // Bounce walls
-                    if (p.x < p.mol.radius || p.x > w - p.mol.radius) p.vx *= -1;
-                    if (p.y < p.mol.radius || p.y > h - p.mol.radius) p.vy *= -1;
-                    
-                    // Keep in bounds
-                    p.x = Math.max(p.mol.radius, Math.min(w-p.mol.radius, p.x));
-                    p.y = Math.max(p.mol.radius, Math.min(h-p.mol.radius, p.y));
+                    if (p.x < p.mol.radius || p.x > w - p.mol.radius) {
+                        p.vx *= -1;
+                        p.x = Math.max(p.mol.radius, Math.min(w-p.mol.radius, p.x));
+                    }
+                    if (p.y < p.mol.radius || p.y > h - p.mol.radius) {
+                        p.vy *= -1;
+                        p.y = Math.max(p.mol.radius, Math.min(h-p.mol.radius, p.y));
+                    }
                 });
 
                 // Calculate Forces
@@ -170,24 +172,42 @@
                         const dist = Math.sqrt(dx*dx + dy*dy);
                         const minDist = p1.mol.radius + p2.mol.radius;
 
-                        // Collision (Simple elastic)
+                        // Collision (Elastic-ish)
                         if (dist < minDist) {
                              const angle = Math.atan2(dy, dx);
-                             const targetX = p2.x + Math.cos(angle) * minDist;
-                             const targetY = p2.y + Math.sin(angle) * minDist;
-                             const ax = (targetX - p1.x) * 0.5; // Spring constant
-                             const ay = (targetY - p1.y) * 0.5;
-                             p1.vx -= ax; p1.vy -= ay;
-                             p2.vx += ax; p2.vy += ay;
+                             // Push apart
+                             const overlap = minDist - dist;
+                             const pushX = Math.cos(angle) * overlap * 0.1;
+                             const pushY = Math.sin(angle) * overlap * 0.1;
+                             
+                             p1.x += pushX; p1.y += pushY;
+                             p2.x -= pushX; p2.y -= pushY;
+
+                             // Bounce velocity
+                             const tx = Math.cos(angle);
+                             const ty = Math.sin(angle);
+                             const v1 = p1.vx * tx + p1.vy * ty;
+                             const v2 = p2.vx * tx + p2.vy * ty;
+                             
+                             // Swap normal velocities (simplified collision)
+                             p1.vx -= (v1 - v2) * tx;
+                             p1.vy -= (v1 - v2) * ty;
+                             p2.vx += (v1 - v2) * tx;
+                             p2.vy += (v1 - v2) * ty;
                         }
 
-                        // Attraction
+                        // Attraction (IMF)
                         if (dist < interactionDist && dist > minDist) {
                             const interaction = getInteraction(p1.mol, p2.mol);
                             
                             // Stability decreases with Temp
-                            const bondStability = (interaction.strength * 30) / (temperature + 1);
-                            const opacity = Math.max(0, (1 - dist/interactionDist) * Math.min(1, bondStability));
+                            // If temp is high, bond breaks easily (opacity 0)
+                            // Bond strength helps maintain bond at higher temp
+                            const thermalEnergy = kelvin / 100;
+                            const bondStability = (interaction.strength / thermalEnergy);
+                            
+                            // Visual Opacity
+                            const opacity = Math.max(0, (1 - dist/interactionDist) * Math.min(1, bondStability - 0.5));
                             
                             if (opacity > 0.1) {
                                 ctx.beginPath();
@@ -205,20 +225,21 @@
                                     ctx.strokeStyle = `rgba(148, 163, 184, ${opacity})`; // Grey dotted
                                     ctx.setLineDash([2, 4]);
                                 } else {
-                                    // Weak interaction (Immiscible)
-                                    ctx.strokeStyle = `rgba(255, 0, 0, ${opacity * 0.5})`; // Red weak
+                                    // Weak/Repulsive (Immiscible)
+                                    ctx.strokeStyle = `rgba(239, 68, 68, ${opacity * 0.5})`; // Red
                                     ctx.setLineDash([1, 8]);
                                 }
                                 ctx.stroke();
                                 
                                 // Attraction Force Logic
-                                if (temperature < 50 || interaction.strength > 5) {
-                                    const pull = 0.005 * interaction.strength;
+                                // Only attract if bond is stable enough relative to temp
+                                if (bondStability > 1.0) {
+                                    const pullStrength = 0.02 * interaction.strength; // Reduced pull for smoother motion
                                     const angle = Math.atan2(dy, dx);
-                                    p1.vx -= Math.cos(angle) * pull;
-                                    p1.vy -= Math.sin(angle) * pull;
-                                    p2.vx += Math.cos(angle) * pull;
-                                    p2.vy += Math.sin(angle) * pull;
+                                    p1.vx -= Math.cos(angle) * pullStrength;
+                                    p1.vy -= Math.sin(angle) * pullStrength;
+                                    p2.vx += Math.cos(angle) * pullStrength;
+                                    p2.vy += Math.sin(angle) * pullStrength;
                                 }
                             }
                         }
@@ -237,12 +258,20 @@
                         ctx.fillStyle = 'white';
                         ctx.font = '10px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(p.mol.id === 'H2O' ? 'H₂O' : 'OH', p.x, p.y+4);
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(p.mol.id === 'H2O' ? 'H₂O' : 'OH', p.x, p.y);
+                    } else if (p.mol.type === 'Dipole') {
+                         ctx.fillStyle = 'white';
+                         ctx.font = '10px Arial';
+                         ctx.textAlign = 'center';
+                         ctx.textBaseline = 'middle';
+                         ctx.fillText('δ+/-', p.x, p.y);
                     } else {
                         ctx.fillStyle = 'rgba(255,255,255,0.5)';
                         ctx.font = '10px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(p.mol.id, p.x, p.y+4);
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(p.mol.id, p.x, p.y);
                     }
                     
                     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -327,10 +356,10 @@
 
                                 <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">混合模式 (Mixing Mode)</h3>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Hexane']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600">
+                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Hexane']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600 text-slate-300">
                                         水 + 己烷 (Polar + Nonpolar)
                                     </button>
-                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Ethanol']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600">
+                                    <button onClick={() => { setMolA(Molecules['H2O']); setMolB(Molecules['Ethanol']); }} className="flex-1 py-2 bg-slate-700 rounded border border-slate-600 text-xs hover:bg-slate-600 text-slate-300">
                                         水 + 乙醇 (H-Bond + H-Bond)
                                     </button>
                                 </div>
@@ -347,6 +376,10 @@
                                     onChange={(e) => setTemperature(Number(e.target.value))}
                                     className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-red-500"
                                 />
+                                <div className="flex justify-between text-xs text-slate-500 mt-2">
+                                    <span>Cold (-200°C)</span>
+                                    <span>Hot (200°C)</span>
+                                </div>
                             </div>
 
                             {/* 3. Info Card */}
