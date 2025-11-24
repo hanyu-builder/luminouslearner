@@ -79,13 +79,25 @@
                 setBromineColor('bg-orange-500');
                 
                 setTimeout(() => {
-                    // LOGIC: C10 -> C8 (Octane) + C2 (Ethene)
-                    const splitAt = 8; 
-                    const count1 = splitAt; // 8
-                    const count2 = initialCarbonCount - splitAt; // 2
+                    // --- NEW WEIGHTED RANDOM LOGIC ---
+                    const rand = Math.random();
+                    let splitAt = 8;
 
-                    const info1 = getAlkaneName(count1); // Octane
-                    const info2 = getAlkeneName(count2); // Ethene
+                    if (rand < 0.25) {
+                        splitAt = 5; // 25% chance: Pentane (C5) + Pentene (C5)
+                    } else if (rand < 0.50) {
+                        splitAt = 6; // 25% chance: Hexane (C6) + Butene (C4)
+                    } else if (rand < 0.75) {
+                        splitAt = 7; // 25% chance: Heptane (C7) + Propene (C3)
+                    } else {
+                        splitAt = 8; // 25% chance: Octane (C8) + Ethene (C2)
+                    }
+                    
+                    const count1 = splitAt; 
+                    const count2 = initialCarbonCount - splitAt;
+
+                    const info1 = getAlkaneName(count1);
+                    const info2 = getAlkeneName(count2);
 
                     const prod1 = { 
                         name: info1.en,
@@ -101,7 +113,7 @@
                         nameZh: info2.zh,
                         formula: info2.formula,
                         type: 'alkene', 
-                        atoms: longChain.slice(count1), // The remaining 2
+                        atoms: longChain.slice(count1),
                         desc: '烯烴 (Alkene)',
                         isUnsaturated: true
                     };
@@ -158,7 +170,7 @@
                             </h1>
                             <p className="text-slate-400 text-sm">Cracking Simulator: {initialInfo.en} &rarr; Alkanes + Alkenes</p>
                         </div>
-                        <button onClick={reset} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors border border-slate-600">
+                        <button onClick={reset} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors border border-slate-600">
                             <i data-lucide="rotate-ccw" size={16}></i> 重置
                         </button>
                     </div>
