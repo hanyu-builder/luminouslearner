@@ -53,7 +53,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Monomer Data
+        // Monomer Data (Updated with Conditions)
         const Monomers = [
             { 
                 id: 'ethene', 
@@ -61,7 +61,11 @@
                 polymer: '聚乙烯 (Polythene / PE)', 
                 sideGroups: ['H', 'H', 'H', 'H'], 
                 color: 'bg-blue-500',
-                uses: '膠袋 (Plastic bags), 膠樽 (Bottles)'
+                uses: '膠袋 (Plastic bags), 膠樽 (Bottles)',
+                conditions: [
+                    { type: 'LDPE (低密度)', detail: '高壓 (1000 atm), 高溫 (200°C), 微量氧' },
+                    { type: 'HDPE (高密度)', detail: '低壓, 低溫, 齊格勒-納塔催化劑 (Ziegler-Natta Catalyst)' }
+                ]
             },
             { 
                 id: 'propene', 
@@ -69,7 +73,10 @@
                 polymer: '聚丙烯 (Polypropene / PP)', 
                 sideGroups: ['CH₃', 'H', 'H', 'H'], 
                 color: 'bg-yellow-500',
-                uses: '繩索 (Ropes), 堅硬塑膠容器'
+                uses: '繩索 (Ropes), 堅硬塑膠容器, 醫療器材',
+                conditions: [
+                    { type: '一般條件', detail: '齊格勒-納塔催化劑 (Ziegler-Natta Catalyst), 溫和溫度與壓力' }
+                ]
             },
             { 
                 id: 'chloroethene', 
@@ -77,7 +84,10 @@
                 polymer: '聚氯乙烯 (PVC)', 
                 sideGroups: ['Cl', 'H', 'H', 'H'], 
                 color: 'bg-green-500',
-                uses: '水管 (Water pipes), 電線絕緣層 (Wire insulation)'
+                uses: '水管 (Water pipes), 電線絕緣層, 雨衣',
+                conditions: [
+                    { type: '一般條件', detail: '過氧化物引發劑 (Peroxide initiator), 加熱 (40-60°C), 高壓' }
+                ]
             },
             { 
                 id: 'styrene', 
@@ -85,7 +95,10 @@
                 polymer: '聚苯乙烯 (Polystyrene / PS)', 
                 sideGroups: ['C₆H₅', 'H', 'H', 'H'], 
                 color: 'bg-purple-500',
-                uses: '發泡膠 (Foam packaging), 即棄餐具'
+                uses: '發泡膠 (Foam), 即棄餐具, CD盒',
+                conditions: [
+                    { type: '一般條件', detail: '過氧化物引發劑 (Peroxide initiator), 加熱 (Reflux)' }
+                ]
             }
         ];
 
@@ -286,6 +299,21 @@
                                     <div>
                                         <strong className="text-yellow-400 block mb-1 text-xs uppercase">主要用途 (Uses)</strong>
                                         <p>{selectedMonomer.uses}</p>
+                                    </div>
+
+                                    {/* Process Conditions Section - NEW */}
+                                    <div className="bg-purple-900/30 p-3 rounded-lg border border-purple-700/50">
+                                        <strong className="text-purple-300 block mb-2 text-xs uppercase flex items-center gap-2">
+                                            <i data-lucide="settings-2" size={12}/> 反應條件 (Process Conditions)
+                                        </strong>
+                                        <ul className="space-y-2">
+                                            {selectedMonomer.conditions.map((cond, idx) => (
+                                                <li key={idx} className="text-xs border-l-2 border-purple-500 pl-2">
+                                                    {cond.type !== '一般條件' && <span className="font-bold text-purple-200 block">{cond.type}</span>}
+                                                    <span className="text-slate-300">{cond.detail}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                     
                                     <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600 mt-2">
