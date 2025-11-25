@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡易電池組裝器 (Simple Chemical Cell Builder)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* Electron Animation */
+        @keyframes flow-right {
+            0% { offset-distance: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { offset-distance: 100%; opacity: 0; }
+        }
+        
+        .electron {
+            width: 8px;
+            height: 8px;
+            background-color: #facc15; /* Yellow */
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 5px #facc15;
+            offset-path: path("M 60 200 V 50 H 240 V 200"); /* Default path, will be overridden by JS logic if needed or CSS relative */
+            /* CSS Motion Path is tricky with responsive, using JS translation is safer for simple lines */
+            transition: transform 0.1s linear;
+        }
+
+        /* Bulb Glow Animation */
+        @keyframes glow {
+            0% { box-shadow: 0 0 10px var(--glow-color); }
+            50% { box-shadow: 0 0 30px var(--glow-color); }
+            100% { box-shadow: 0 0 10px var(--glow-color); }
+        }
+        .bulb-glow {
+            animation: glow 1.5s infinite ease-in-out;
+        }
+
+        /* Bubble Animation */
+        @keyframes rise {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            animation: rise 2s infinite linear;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Metals Data (E values are approximate standard potentials for comparison)
+        const Metals = [
+            { id: 'Mg', name: '鎂 (Magnesium)', symbol: 'Mg', E: -2.37, color: 'bg-gray-300 border-gray-400' },
+            { id: 'Zn', name: '鋅 (Zinc)', symbol: 'Zn', E: -0.76, color: 'bg-slate-400 border-slate-500' },
+            { id: 'Fe', name: '鐵 (Iron)', symbol: 'Fe', E: -0.44, color: 'bg-amber-700 border-amber-800' },
+            { id: 'Cu', name: '銅 (Copper)', symbol: 'Cu', E: 0.34, color: 'bg-orange-500 border-orange-600' },
+            { id: 'Ag', name: '銀 (Silver)', symbol: 'Ag', E: 0.80, color: 'bg-slate-200 border-slate-300' }
+        ];
+
+        const Electrolytes = [
+            { id: 'NaCl', name: '稀食鹽水 (Dilute NaCl)', type: 'neutral', color: 'bg-sky-100/80' },
+            { id: 'HCl', name: '稀鹽酸 (Dilute HCl)', type: 'acid', color: 'bg-yellow-50/80' },
+            { id: 'Lemon', name: '檸檬汁 (Lemon Juice)', type: 'acid', color: 'bg-yellow-200/80' },
+            { id: 'Vinegar', name: '醋 (Vinegar)', type: 'acid', color: 'bg-orange-50/80' }
+        ];
+
+        const App = () => {
+            const [electrodeL, setElectrodeL] = useState(Metals[1]); // Zn
+            const [electrodeR, setElectrodeR] = useState(Metals[3]); // Cu
+            const [electrolyte, setElectrolyte] = useState(Electrolytes[1]); // HCl
+            
+            const [voltage, setVoltage] = useState(0);
+            const [anode, setAnode] = useState(null); // 'left' or 'right'
+            const [electrons, setElectrons] = useState([]);
+            const [showVoltmeter, setShowVoltmeter] = useState(false); // Toggle between Bulb/Voltmeter
+
+            useEffect(() => {
+                // Calculate Voltage difference (Absolute value for simple cell potential magnitude)
+                // Real cells are complex, but for simple cell model: V proportional to delta E
+                const diff = Math.abs(electrodeR.E - electrodeL.E);
+                setVoltage(diff);
+
+                // Determine flow direction
+                if (electrodeL.E < electrodeR.E) {
+                    // Left is more reactive (more negative E) -> Anode (-)
+                    setAnode('left');
+                } else if (electrodeR.E < electrodeL.E) {
+                    // Right is more reactive -> Anode (-)
+                    setAnode('right');
+                } else {
+                    setAnode(null); // No reaction
+                }
+
+            }, [electrodeL, electrodeR]);
+
+            // Electron Animation Loop
+            useEffect(() => {
+                let interval;
+                if (voltage > 0) {
+                    interval = setInterval(() => {
+                        setElectrons(prev => {
+                            const newE = { id: Date.now(), progress: 0 };
+                            // Keep max 5 electrons to avoid clutter
+                            const next = [...prev, newE].filter(e => e.progress < 100); 
+                            return next;
+                        });
+                    }, 300); // Spawn rate
+                } else {
+                    setElectrons([]);
+                }
+                return () => clearInterval(interval);
+            }, [voltage]);
+
+            // Animation Frame for movement
+            useEffect(() => {
+                let animFrame;
+                const updatePos = () => {
+                    setElectrons(prev => prev.map(e => ({ ...e, progress: e.progress + 2 }))); // Speed
+                    animFrame = requestAnimationFrame(updatePos);
+                };
+                if (voltage > 0) {
+                    animFrame = requestAnimationFrame(updatePos);
+                }
+                return () => cancelAnimationFrame(animFrame);
+            }, [voltage]);
+
+            const getBulbStyle = () => {
+                if (voltage === 0) return { opacity: 0.2, filter: 'grayscale(100%)' };
+                // Map voltage 0-3.2 to opacity/brightness
+                const intensity = Math.min(1, voltage / 2.0); 
+                return { 
+                    opacity: 1, 
+                    filter: `drop-shadow(0 0 ${intensity * 30}px #facc15) brightness(${1 + intensity})`,
+                    '--glow-color': `rgba(250, 204, 21, ${intensity})`
+                };
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-yellow-600 flex items-center gap-2">
+                                <i data-lucide="battery-charging"></i> 簡易電池組裝器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Simple Chemical Cell Builder</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-500">顯示模式:</span>
+                            <button 
+                                onClick={() => setShowVoltmeter(false)}
+                                className={`px-3 py-1 rounded text-xs font-bold border ${!showVoltmeter ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-slate-400'}`}
+                            >
+                                燈泡
+                            </button>
+                            <button 
+                                onClick={() => setShowVoltmeter(true)}
+                                className={`px-3 py-1 rounded text-xs font-bold border ${showVoltmeter ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-slate-400'}`}
+                            >
+                                電壓計
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Configuration */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="settings-2" size={16}/> 電池設定
+                                </h3>
+                                
+                                {/* Left Electrode */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">電極 A (左)</label>
+                                    <select 
+                                        value={electrodeL.symbol}
+                                        onChange={(e) => setElectrodeL(Metals.find(m => m.symbol === e.target.value))}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400"
+                                    >
+                                        {Metals.map(m => <option key={m.symbol} value={m.symbol}>{m.name}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Right Electrode */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">電極 B (右)</label>
+                                    <select 
+                                        value={electrodeR.symbol}
+                                        onChange={(e) => setElectrodeR(Metals.find(m => m.symbol === e.target.value))}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400"
+                                    >
+                                        {Metals.map(m => <option key={m.symbol} value={m.symbol}>{m.name}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Electrolyte */}
+                                <div className="mb-2">
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">電解質 (Electrolyte)</label>
+                                    <select 
+                                        value={electrolyte.id}
+                                        onChange={(e) => setElectrolyte(Electrolytes.find(el => el.id === e.target.value))}
+                                        className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                        {Electrolytes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Info Box */}
+                            <div className="bg-slate-800 p-5 rounded-2xl text-white shadow-lg">
+                                <h3 className="text-sm font-bold text-yellow-400 uppercase mb-2 flex items-center gap-2">
+                                    <i data-lucide="info" size={16}/> 實驗原理
+                                </h3>
+                                <div className="text-sm space-y-2 opacity-90">
+                                    <p>• 活潑金屬 (較高 E.C.S. 位置) 失去電子，成為<strong>負極 (Anode)</strong>。</p>
+                                    <p>• 電子經導線流向較不活潑金屬，即<strong>正極 (Cathode)</strong>。</p>
+                                    <p>• 兩個金屬的活性差異越大，電壓越高，燈泡越亮。</p>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Right: Visualization */}
+                        <div className="w-full lg:w-2/3 flex flex-col gap-6 items-center justify-center bg-slate-100 rounded-3xl border-4 border-slate-200 relative overflow-hidden min-h-[500px] p-8">
+                            
+                            {/* Background Grid */}
+                            <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+
+                            {/* Circuit Top */}
+                            <div className="relative w-full max-w-md h-32 flex justify-center items-center mb-4">
+                                {/* Wire Path (Simplified SVG) */}
+                                <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
+                                    {/* Left Wire vertical */}
+                                    <line x1="20%" y1="100%" x2="20%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                    {/* Right Wire vertical */}
+                                    <line x1="80%" y1="100%" x2="80%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                    {/* Top Wire horizontal */}
+                                    <line x1="20%" y1="50%" x2="80%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                </svg>
+
+                                {/* Device (Bulb or Voltmeter) */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-white p-2 rounded-full shadow-md border-2 border-slate-300">
+                                    {showVoltmeter ? (
+                                        <div className="w-24 h-16 bg-slate-800 rounded-lg border-4 border-slate-600 flex items-center justify-center font-mono text-green-400 font-bold text-xl shadow-inner">
+                                            {voltage.toFixed(2)} V
+                                        </div>
+                                    ) : (
+                                        <div className={`bulb-glow transition-all duration-500`} style={getBulbStyle()}>
+                                            <i data-lucide="lightbulb" size={64} className="text-yellow-400 fill-yellow-400" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Moving Electrons */}
+                                {electrons.map(e => {
+                                    // Calculate position based on progress 0-100
+                                    // Path: Up Left (0-20) -> Across (20-80) -> Down Right (80-100)
+                                    // Or Reverse: Up Right (0-20) -> Across (20-80) -> Down Left (80-100)
+                                    
+                                    let x, y;
+                                    const p = e.progress;
+                                    
+                                    if (anode === 'left') {
+                                        // Left to Right
+                                        if (p < 20) { x = 20; y = 100 - (p/20)*50; }
+                                        else if (p < 80) { x = 20 + ((p-20)/60)*60; y = 50; }
+                                        else { x = 80; y = 50 + ((p-80)/20)*50; }
+                                    } else {
+                                        // Right to Left
+                                        if (p < 20) { x = 80; y = 100 - (p/20)*50; }
+                                        else if (p < 80) { x = 80 - ((p-20)/60)*60; y = 50; }
+                                        else { x = 20; y = 50 + ((p-80)/20)*50; }
+                                    }
+
+                                    return (
+                                        <div key={e.id} className="electron z-20" style={{ left: `${x}%`, top: `${y}%` }}></div>
+                                    );
+                                })}
+
+                                {/* Flow Label */}
+                                {anode && (
+                                    <div className="absolute top-0 bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full font-bold border border-yellow-300 animate-pulse">
+                                        e⁻ Flow {anode === 'left' ? '→' : '←'}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Beaker & Electrodes */}
+                            <div className="relative">
+                                <div className="w-64 h-48 border-x-4 border-b-4 border-slate-400 bg-white/60 backdrop-blur-sm rounded-b-3xl relative overflow-hidden">
+                                    {/* Liquid */}
+                                    <div className={`absolute bottom-0 w-full h-3/4 ${electrolyte.color} transition-colors duration-500`}></div>
+                                    
+                                    {/* Bubbles Animation (If reaction occurring) */}
+                                    {anode && electrolyte.type === 'acid' && (
+                                        <div className="absolute bottom-0 w-full h-3/4 overflow-hidden">
+                                            {/* Bubbles at Cathode (Positive Electrode) */}
+                                            <div className={`absolute w-1/2 h-full ${anode === 'left' ? 'right-0' : 'left-0'}`}>
+                                                {[...Array(6)].map((_, i) => (
+                                                    <div key={i} className="bubble" 
+                                                         style={{
+                                                            left: `${Math.random()*60 + 20}%`, 
+                                                            bottom: `${Math.random()*20}%`,
+                                                            width: `${Math.random()*6+4}px`, height: `${Math.random()*6+4}px`,
+                                                            animationDelay: `${Math.random()}s`
+                                                         }}></div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Left Electrode */}
+                                <div className={`absolute top-[-20px] left-8 w-12 h-40 ${electrodeL.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
+                                    <span className="font-bold text-slate-700">{electrodeL.symbol}</span>
+                                    {anode === 'left' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
+                                    {anode === 'right' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
+                                </div>
+
+                                {/* Right Electrode */}
+                                <div className={`absolute top-[-20px] right-8 w-12 h-40 ${electrodeR.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
+                                    <span className="font-bold text-slate-700">{electrodeR.symbol}</span>
+                                    {anode === 'right' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
+                                    {anode === 'left' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
+                                </div>
+                            </div>
+
+                            {/* Result Text */}
+                            <div className="bg-white px-6 py-3 rounded-xl shadow-sm border border-slate-200 text-center mt-4">
+                                {anode ? (
+                                    <>
+                                        <div className="text-sm text-slate-500 mb-1">電流方向 (Current Direction)</div>
+                                        <div className="font-bold text-lg text-slate-800">
+                                            {anode === 'left' ? `${electrodeL.symbol} → ${electrodeR.symbol}` : `${electrodeR.symbol} → ${electrodeL.symbol}`}
+                                        </div>
+                                        <div className="text-xs text-slate-400 mt-1">
+                                            (電子由 {anode === 'left' ? electrodeL.symbol : electrodeR.symbol} 流出)
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-slate-400 font-bold">無反應 (No Reaction)</div>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
