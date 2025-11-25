@@ -43,9 +43,6 @@
             useEffect(() => {
                 if (reactionType === 'exothermic' && deltaH > 0) setDeltaH(-deltaH);
                 if (reactionType === 'endothermic' && deltaH < 0) setDeltaH(-deltaH);
-                
-                // Ea must be > deltaH for endo, and > 0 always
-                // For simplicity, keep Ea independent positive value relative to reactants
             }, [reactionType]);
 
             // Draw Chart
@@ -56,25 +53,19 @@
                 if (chartInstance.current) chartInstance.current.destroy();
 
                 // Coordinates Logic
-                // X axis: 0 to 100 (Progress)
-                // Y axis: Energy
-                
                 const reactantY = 50; // Base line
                 const productY = reactantY + deltaH; // Higher or lower
                 const transitionY = reactantY + activationEnergy; // Peak
                 const catalystY = reactantY + (activationEnergy * 0.6); // Lower peak
 
-                // Generate Curve Points (Gaussian-like or Cubic Bezier approximation via points)
-                // We use a scatter plot with lines to draw custom shapes
-                
+                // Generate Curve Points
                 const generateCurve = (peakY) => {
                     const points = [];
                     // Reactants flat
                     for(let x=0; x<=20; x+=2) points.push({x, y: reactantY});
                     
-                    // Rise to peak (Sigmoid-ish)
+                    // Rise to peak
                     for(let x=21; x<=50; x+=1) {
-                        // Simple sine curve up
                         const progress = (x - 20) / 30;
                         const y = reactantY + (peakY - reactantY) * Math.sin(progress * Math.PI / 2);
                         points.push({x, y});
@@ -96,15 +87,12 @@
                 const uncatalysedData = generateCurve(transitionY);
                 const catalysedData = showCatalyst ? generateCurve(catalystY) : [];
 
-                // Annotations (Using Chart.js annotation plugin approach or simple datasets)
-                // We will use scatter points for labels to keep it simple without heavy plugins
-                
                 chartInstance.current = new Chart(ctx, {
                     type: 'scatter',
                     data: {
                         datasets: [
                             {
-                                label: 'Uncatalysed Path',
+                                label: '無催化路徑 (Uncatalysed)',
                                 data: uncatalysedData,
                                 showLine: true,
                                 borderColor: '#3b82f6', // Blue
@@ -113,16 +101,17 @@
                                 tension: 0.4
                             },
                             {
-                                label: 'Catalysed Path',
+                                label: '催化路徑 (Catalysed)',
                                 data: catalysedData,
                                 showLine: true,
                                 borderColor: '#22c55e', // Green
                                 borderWidth: 3,
                                 borderDash: [5, 5],
                                 pointRadius: 0,
-                                tension: 0.4
-                            },
-                            // Markers for Labels (Invisible points, used for tooltips/visuals if needed, or just labels)
+                                tension: 0.4,
+                                // Hide from legend if not active to avoid confusion, but we keep consistent here
+                                hidden: !showCatalyst
+                            }
                         ]
                     },
                     options: {
@@ -137,19 +126,19 @@
                                 grid: { display: false }
                             },
                             y: {
-                                // Dynamic range based on values
                                 min: Math.min(productY, reactantY) - 20,
                                 max: Math.max(transitionY, catalystY) + 20,
                                 title: { display: true, text: '勢能 (Potential Energy)', font: { weight: 'bold' } },
-                                ticks: { display: false } // Hide numbers for generic diagram
+                                ticks: { display: false }
                             }
                         },
                         plugins: {
                             legend: { 
                                 position: 'top',
-                                labels: { usePointStyle: true }
+                                labels: { usePointStyle: true, font: { weight: 'bold' } },
+                                onClick: null // DISABLE CLICKING to prevent hiding lines
                             },
-                            tooltip: { enabled: false } // Disable standard tooltips
+                            tooltip: { enabled: false }
                         },
                         animation: { duration: 1000 }
                     },
@@ -165,7 +154,7 @@
                             ctx.textAlign = 'center';
                             
                             // Draw Arrows Helper
-                            const drawArrow = (x, y1, y2, color, label, offset) => {
+                            const drawArrow = (x, y1, y2, color, label, labelXOffset = 5) => {
                                 ctx.beginPath();
                                 ctx.strokeStyle = color;
                                 ctx.lineWidth = 2;
@@ -175,7 +164,6 @@
                                 
                                 // Arrowhead
                                 const headSize = 5;
-                                const angle = Math.atan2(y2 - y1, 0); // Vertical
                                 ctx.beginPath();
                                 if (y2 > y1) { // Up
                                      ctx.moveTo(x, y2);
@@ -192,7 +180,7 @@
                                 // Label
                                 ctx.fillStyle = color;
                                 ctx.textAlign = 'left';
-                                ctx.fillText(label, x + 5, (y1 + y2) / 2);
+                                ctx.fillText(label, x + labelXOffset, (y1 + y2) / 2);
                             };
 
                             // Reactants Label
@@ -206,17 +194,18 @@
                             const arrowX = xAxis.getPixelForValue(35);
                             const rY = yAxis.getPixelForValue(reactantY);
                             const peakY = yAxis.getPixelForValue(transitionY);
-                            drawArrow(arrowX, rY, peakY, '#f59e0b', 'Ea (活化能)', 0);
+                            drawArrow(arrowX, rY, peakY, '#f59e0b', 'Ea (無催化)');
 
                             // Delta H Arrow (Reactants to Products)
                             const dhX = xAxis.getPixelForValue(85);
                             const pY = yAxis.getPixelForValue(productY);
-                            drawArrow(dhX, rY, pY, '#ec4899', 'ΔH', 0);
+                            drawArrow(dhX, rY, pY, '#ec4899', 'ΔH');
                             
+                            // Catalyst Arrow
                             if (showCatalyst) {
                                 const catPeakY = yAxis.getPixelForValue(catalystY);
                                 const catArrowX = xAxis.getPixelForValue(45);
-                                drawArrow(catArrowX, rY, catPeakY, '#15803d', "Ea'", 0);
+                                drawArrow(catArrowX, rY, catPeakY, '#15803d', "Ea' (有催化)");
                             }
 
                             ctx.restore();
@@ -318,7 +307,7 @@
                                 <ul className="text-xs space-y-2 opacity-90 list-disc list-inside">
                                     <li><span className="text-amber-400 font-bold">Ea</span>: 反應所需的最小能量。</li>
                                     <li><span className="text-pink-400 font-bold">ΔH</span>: 反應前後的總能量變化 (與路徑無關)。</li>
-                                    <li><span className="text-green-400 font-bold">催化劑</span>: 提供一條 Ea 較低的路徑，加快反應速率。</li>
+                                    <li><span className="text-green-400 font-bold">催化劑</span>: 提供一條 Ea 較低的路徑 (Ea')，加快反應速率，但不改變 ΔH。</li>
                                 </ul>
                             </div>
 
