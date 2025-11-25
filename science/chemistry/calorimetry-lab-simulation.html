@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量熱法實驗室 (Calorimetry Lab)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* Flame Animation */
+        @keyframes flicker {
+            0% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.1) translateX(1px); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.9; }
+        }
+        .flame-anim { animation: flicker 0.1s infinite alternate; }
+
+        /* Heat Waves */
+        @keyframes heat-rise {
+            0% { transform: translateY(0) scale(1); opacity: 0; }
+            20% { opacity: 0.5; }
+            100% { transform: translateY(-30px) scale(1.2); opacity: 0; }
+        }
+        .heat-wave { animation: heat-rise 1.5s infinite linear; }
+
+        /* Thermometer Liquid */
+        .liquid-rise { transition: height 0.5s ease-out; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Constants
+        const SPECIFIC_HEAT_WATER = 4.18; // J g-1 K-1
+
+        // Experiment Modes
+        const Modes = {
+            COMBUSTION: {
+                id: 'combustion',
+                name: '燃燒焓 (Combustion)',
+                fuel: [
+                    { name: '甲醇 (Methanol)', formula: 'CH3OH', molarMass: 32.0, theoDH: -726 },
+                    { name: '乙醇 (Ethanol)', formula: 'C2H5OH', molarMass: 46.0, theoDH: -1367 },
+                    { name: '丙醇 (Propan-1-ol)', formula: 'C3H7OH', molarMass: 60.1, theoDH: -2021 }
+                ]
+            },
+            NEUTRALIZATION: {
+                id: 'neutralization',
+                name: '中和焓 (Neutralisation)',
+                reactants: [
+                    { name: 'HCl + NaOH', theoDH: -57.1 }, // Strong + Strong
+                    { name: 'CH3COOH + NaOH', theoDH: -55.2 }, // Weak + Strong
+                    { name: 'HCl + NH3', theoDH: -52.2 } // Strong + Weak
+                ]
+            }
+        };
+
+        const App = () => {
+            const [mode, setMode] = useState('combustion'); // combustion or neutralization
+            const [selectedFuel, setSelectedFuel] = useState(Modes.COMBUSTION.fuel[1]);
+            const [selectedReactant, setSelectedReactant] = useState(Modes.NEUTRALIZATION.reactants[0]);
+            
+            // Experiment Settings
+            const [waterMass, setWaterMass] = useState(100); // g (for combustion) or Total Vol (for neut)
+            const [fuelBurned, setFuelBurned] = useState(0.5); // g (mass loss)
+            
+            // Protection (Heat Loss Factors)
+            const [hasShield, setHasShield] = useState(false); // Combustion: Draught Shield
+            const [hasLid, setHasLid] = useState(false); // Neutralization: Lid
+            const [usePolystyrene, setUsePolystyrene] = useState(false); // Neutralization: Cup type
+
+            // Simulation State
+            const [isRunning, setIsRunning] = useState(false);
+            const [temp, setTemp] = useState(25.0);
+            const [startTemp, setStartTemp] = useState(25.0);
+            const [maxTemp, setMaxTemp] = useState(25.0);
+            const [result, setResult] = useState(null);
+            
+            // Reset
+            const reset = () => {
+                setIsRunning(false);
+                setTemp(25.0);
+                setStartTemp(25.0);
+                setMaxTemp(25.0);
+                setResult(null);
+            };
+
+            // Calculate Efficiency based on protection
+            const getEfficiency = () => {
+                if (mode === 'combustion') {
+                    // Base efficiency (very poor for simple calorimetry)
+                    let eff = 0.40; // 40% heat captured without shield
+                    if (hasShield) eff += 0.25; // +25% with shield
+                    return eff;
+                } else {
+                    // Neutralization
+                    let eff = 0.80; // Glass beaker
+                    if (usePolystyrene) eff += 0.10; // Foam cup
+                    if (hasLid) eff += 0.05; // Lid
+                    return eff;
+                }
+            };
+
+            const startExperiment = () => {
+                if (isRunning) return;
+                reset();
+                setIsRunning(true);
+
+                // 1. Calculate Theoretical Energy Released (Q_theo)
+                let Q_theo = 0; // Joules
+                let moles = 0;
+
+                if (mode === 'combustion') {
+                    moles = fuelBurned / selectedFuel.molarMass;
+                    Q_theo = Math.abs(selectedFuel.theoDH * 1000 * moles); // kJ -> J
+                } else {
+                    // Assume 50ml 1M acid + 50ml 1M alkali = 0.05 mol water formed
+                    // Simplified for demo: fixed moles reacted
+                    moles = 0.05; 
+                    Q_theo = Math.abs(selectedReactant.theoDH * 1000 * moles);
+                }
+
+                // 2. Apply Heat Loss (Efficiency)
+                const efficiency = getEfficiency();
+                const Q_actual = Q_theo * efficiency;
+
+                // 3. Calculate Max Temp Rise (Delta T)
+                // Q = mcDT -> DT = Q / mc
+                // m is waterMass (approx solution mass)
+                const dT = Q_actual / (waterMass * SPECIFIC_HEAT_WATER);
+                const targetTemp = 25.0 + dT;
+
+                // 4. Animate Temp Rise
+                let currentT = 25.0;
+                const step = dT / 50; // 50 frames
+                let frame = 0;
+
+                const timer = setInterval(() => {
+                    frame++;
+                    currentT += step;
+                    // Add some noise/fluctuation? No, keep smooth.
+                    setTemp(currentT);
+                    
+                    if (frame >= 50) {
+                        clearInterval(timer);
+                        setIsRunning(false);
+                        setMaxTemp(targetTemp);
+                        
+                        // Calculate Experimental DH
+                        // DH_exp = - (m c DT) / n
+                        const experimentalQ = waterMass * SPECIFIC_HEAT_WATER * (targetTemp - 25.0); // J
+                        const expDH = -(experimentalQ / 1000) / moles; // kJ/mol
+
+                        setResult({
+                            dt: targetTemp - 25.0,
+                            q: experimentalQ,
+                            expDH: expDH,
+                            theoDH: mode === 'combustion' ? selectedFuel.theoDH : selectedReactant.theoDH,
+                            efficiency: (efficiency * 100).toFixed(0)
+                        });
+                    }
+                }, 50);
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-rose-600 flex items-center gap-2">
+                                <i data-lucide="thermometer-sun"></i> 量熱法實驗室
+                            </h1>
+                            <p className="text-slate-400 text-sm">Calorimetry Lab Simulation</p>
+                        </div>
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => { setMode('combustion'); reset(); }}
+                                className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${mode === 'combustion' ? 'bg-white text-rose-600 shadow' : 'text-slate-500'}`}
+                            >
+                                燃燒焓
+                            </button>
+                            <button 
+                                onClick={() => { setMode('neutralization'); reset(); }}
+                                className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${mode === 'neutralization' ? 'bg-white text-blue-600 shadow' : 'text-slate-500'}`}
+                            >
+                                中和焓
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Settings */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="settings-2" size={16}/> 實驗設定
+                                </h3>
+                                
+                                {mode === 'combustion' ? (
+                                    <>
+                                        <div className="mb-4">
+                                            <label className="text-xs font-bold text-slate-700 block mb-1">燃料 (Fuel)</label>
+                                            <select 
+                                                value={selectedFuel.formula}
+                                                onChange={(e) => setSelectedFuel(Modes.COMBUSTION.fuel.find(f => f.formula === e.target.value))}
+                                                className="w-full p-2 border rounded font-bold text-rose-600 bg-rose-50 border-rose-200"
+                                            >
+                                                {Modes.COMBUSTION.fuel.map(f => <option key={f.formula} value={f.formula}>{f.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="mb-4">
+                                            <label className="text-xs font-bold text-slate-700 block mb-1">防熱流失措施 (Heat Loss Prevention)</label>
+                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                                <input type="checkbox" checked={hasShield} onChange={(e) => setHasShield(e.target.checked)} className="accent-rose-500 w-4 h-4" />
+                                                <span className="text-sm">加裝防風罩 (Draught Shield)</span>
+                                            </label>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="mb-4">
+                                            <label className="text-xs font-bold text-slate-700 block mb-1">反應物 (Reactants)</label>
+                                            <select 
+                                                value={selectedReactant.name}
+                                                onChange={(e) => setSelectedReactant(Modes.NEUTRALIZATION.reactants.find(r => r.name === e.target.value))}
+                                                className="w-full p-2 border rounded font-bold text-blue-600 bg-blue-50 border-blue-200"
+                                            >
+                                                {Modes.NEUTRALIZATION.reactants.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="mb-4 space-y-2">
+                                            <label className="text-xs font-bold text-slate-700 block mb-1">儀器設定 (Setup)</label>
+                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                                <input type="checkbox" checked={usePolystyrene} onChange={(e) => setUsePolystyrene(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                                                <span className="text-sm">使用保麗龍杯 (Polystyrene Cup)</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                                <input type="checkbox" checked={hasLid} onChange={(e) => setHasLid(e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                                                <span className="text-sm">加蓋 (Lid)</span>
+                                            </label>
+                                        </div>
+                                    </>
+                                )}
+                                
+                                <button 
+                                    onClick={startExperiment}
+                                    disabled={isRunning}
+                                    className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50
+                                        ${mode === 'combustion' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-500 hover:bg-blue-600'}
+                                    `}
+                                >
+                                    {isRunning ? <i data-lucide="loader-2" className="animate-spin"/> : <i data-lucide="play" />}
+                                    {isRunning ? '加熱中...' : '開始實驗'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Center: Visualization */}
+                        <div className="w-full lg:w-1/3 flex flex-col items-center justify-end relative min-h-[400px] bg-slate-200 rounded-3xl border-4 border-slate-300 overflow-hidden p-4">
+                            
+                            {/* Background Lab Bench */}
+                            <div className="absolute bottom-0 w-full h-4 bg-slate-400 border-t border-slate-500 z-10"></div>
+
+                            {/* Setup Display */}
+                            {mode === 'combustion' ? (
+                                <div className="relative z-20 flex flex-col items-center mb-4">
+                                    
+                                    {/* Thermometer */}
+                                    <div className="absolute -top-32 right-12 w-2 h-48 bg-white border border-slate-400 rounded-full overflow-hidden shadow-sm z-30">
+                                        <div className="absolute bottom-0 w-full bg-red-500 liquid-rise" style={{height: `${((temp-20)/80)*100}%`}}></div>
+                                    </div>
+
+                                    {/* Metal Can (Calorimeter) */}
+                                    <div className="w-32 h-40 bg-gradient-to-r from-slate-300 to-slate-100 border-2 border-slate-400 rounded-b-lg relative flex items-end justify-center mb-12 shadow-lg">
+                                        <div className="absolute top-2 text-[10px] text-slate-500 font-bold">Water (100g)</div>
+                                        <div className="w-full h-3/4 bg-blue-200/30 absolute bottom-0 rounded-b-lg"></div>
+                                        {/* Tripod Stand legs (Visual only) */}
+                                        <div className="absolute -bottom-12 left-0 w-1 h-12 bg-black"></div>
+                                        <div className="absolute -bottom-12 right-0 w-1 h-12 bg-black"></div>
+                                    </div>
+
+                                    {/* Spirit Lamp */}
+                                    <div className="absolute bottom-0 flex flex-col items-center">
+                                        {isRunning && (
+                                            <div className="w-8 h-12 bg-orange-400 rounded-full blur-md absolute -top-10 flame-anim opacity-80 mix-blend-screen"></div>
+                                        )}
+                                        {isRunning && <div className="absolute -top-8 w-4 h-8 bg-yellow-200 rounded-full flame-anim"></div>}
+                                        
+                                        <div className="w-16 h-12 bg-white border border-slate-300 rounded-lg relative shadow-sm">
+                                            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-2 h-4 bg-slate-400"></div> {/* Wick */}
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 text-[8px] text-slate-400">Fuel</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Draught Shield */}
+                                    {hasShield && (
+                                        <div className="absolute bottom-[-5px] w-48 h-32 border-x-4 border-b-4 border-slate-400/50 rounded-b-lg bg-slate-500/10 pointer-events-none z-0"></div>
+                                    )}
+
+                                    {/* Heat Loss Waves */}
+                                    {isRunning && !hasShield && (
+                                        <>
+                                            <div className="absolute bottom-10 left-[-30px] heat-wave text-red-400/50 text-xs">~~~</div>
+                                            <div className="absolute bottom-10 right-[-30px] heat-wave text-red-400/50 text-xs" style={{animationDelay: '0.5s'}}>~~~</div>
+                                        </>
+                                    )}
+                                </div>
+                            ) : (
+                                // Neutralization Setup
+                                <div className="relative z-20 flex flex-col items-center mb-4">
+                                    {/* Thermometer */}
+                                    <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-2 h-48 bg-white border border-slate-400 rounded-full overflow-hidden shadow-sm z-30">
+                                        <div className="absolute bottom-0 w-full bg-red-500 liquid-rise" style={{height: `${((temp-20)/50)*100}%`}}></div>
+                                    </div>
+
+                                    {/* Cup */}
+                                    <div className={`w-32 h-40 border-4 ${usePolystyrene ? 'bg-white border-slate-100 shadow-inner' : 'bg-white/30 border-slate-400 backdrop-blur-sm'} rounded-b-xl relative flex items-end overflow-hidden`}>
+                                        {/* Solution */}
+                                        <div className="w-full h-2/3 bg-purple-100/80 absolute bottom-0 transition-all duration-1000"></div>
+                                        
+                                        {/* Lid */}
+                                        {hasLid && (
+                                            <div className="absolute top-0 w-full h-2 bg-slate-300 shadow-sm z-20"></div>
+                                        )}
+                                    </div>
+
+                                    {/* Beaker Holder (if glass) */}
+                                    {!usePolystyrene && (
+                                        <div className="text-[10px] text-slate-500 mt-2">Glass Beaker</div>
+                                    )}
+                                    {usePolystyrene && (
+                                        <div className="text-[10px] text-slate-500 mt-2">Polystyrene Cup (Insulator)</div>
+                                    )}
+
+                                    {/* Heat Loss Waves */}
+                                    {isRunning && !usePolystyrene && (
+                                        <>
+                                            <div className="absolute top-10 left-[-20px] heat-wave text-red-400/50 text-xs">~</div>
+                                            <div className="absolute top-10 right-[-20px] heat-wave text-red-400/50 text-xs">~</div>
+                                        </>
+                                    )}
+                                    {isRunning && !hasLid && (
+                                        <div className="absolute -top-10 heat-wave text-red-400/50 text-xs">~~~</div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Live Temp Display */}
+                            <div className="absolute top-4 right-4 bg-slate-800 text-green-400 font-mono text-2xl font-bold px-4 py-2 rounded-lg shadow-lg border border-slate-600">
+                                {temp.toFixed(1)}°C
+                            </div>
+
+                        </div>
+
+                        {/* Right: Results */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-4">
+                            {result ? (
+                                <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 animate-in slide-in-from-bottom-4 flex-grow">
+                                    <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                        <i data-lucide="clipboard-list" className="text-green-500" /> 實驗報告
+                                    </h3>
+                                    
+                                    <div className="space-y-3 text-sm">
+                                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                                            <span className="text-slate-500">最高溫度 (Max Temp):</span>
+                                            <span className="font-bold">{maxTemp.toFixed(1)} °C</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                                            <span className="text-slate-500">溫升 (ΔT):</span>
+                                            <span className="font-bold text-red-500">+{result.dt.toFixed(1)} °C</span>
+                                        </div>
+                                        <div className="flex justify-between border-b border-slate-100 pb-2">
+                                            <span className="text-slate-500">能量釋放 (Q = mcΔT):</span>
+                                            <span className="font-bold">{result.q.toFixed(0)} J</span>
+                                        </div>
+                                        
+                                        <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase">Experimental ΔH</span>
+                                                <span className="text-xs font-bold text-slate-400 uppercase">Theoretical</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-2xl font-mono font-bold text-rose-600">{result.expDH.toFixed(0)}</span>
+                                                <span className="text-lg font-mono font-bold text-slate-400">{result.theoDH}</span>
+                                            </div>
+                                            <div className="text-right text-xs text-slate-400 mt-1">kJ mol⁻¹</div>
+                                        </div>
+
+                                        {/* Efficiency Bar */}
+                                        <div className="mt-4">
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="font-bold text-slate-500">熱效率 (Heat Efficiency)</span>
+                                                <span className={`font-bold ${result.efficiency < 50 ? 'text-red-500' : 'text-green-500'}`}>{result.efficiency}%</span>
+                                            </div>
+                                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                                <div className={`h-full ${result.efficiency < 50 ? 'bg-red-400' : 'bg-green-400'}`} style={{width: `${result.efficiency}%`}}></div>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                {result.efficiency < 60 ? '⚠️ 大量熱能流失 (Significant Heat Loss)' : '✅ 隔熱良好 (Good Insulation)'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-100 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center h-full min-h-[200px] text-slate-400">
+                                    <div className="text-center">
+                                        <i data-lucide="bar-chart-2" size={48} className="mx-auto mb-2 opacity-20" />
+                                        <p>等待實驗結果...</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-200 pt-4">
+                        Luminous Learner Science Tools | HKDSE Topic VIII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
