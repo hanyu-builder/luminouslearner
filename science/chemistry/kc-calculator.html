@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平衡常數計算機 (Kc Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .input-card { transition: all 0.2s; }
+        .input-card:focus-within { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2); }
+        
+        /* MathJax override for better font size */
+        mjx-container { font-size: 1.2em !important; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Presets
+        const Presets = [
+            {
+                name: '哈伯法 (Haber Process)',
+                reactants: [{ id: 1, name: 'N2', coeff: 1, conc: '0.1' }, { id: 2, name: 'H2', coeff: 3, conc: '0.2' }],
+                products: [{ id: 3, name: 'NH3', coeff: 2, conc: '0.1' }]
+            },
+            {
+                name: '接觸法 (Contact Process)',
+                reactants: [{ id: 1, name: 'SO2', coeff: 2, conc: '0.4' }, { id: 2, name: 'O2', coeff: 1, conc: '0.2' }],
+                products: [{ id: 3, name: 'SO3', coeff: 2, conc: '0.3' }]
+            },
+            {
+                name: '酯化反應 (Esterification)',
+                reactants: [{ id: 1, name: 'Acid', coeff: 1, conc: '0.5' }, { id: 2, name: 'Alcohol', coeff: 1, conc: '0.5' }],
+                products: [{ id: 3, name: 'Ester', coeff: 1, conc: '0.3' }, { id: 4, name: 'Water', coeff: 1, conc: '0.3' }]
+            },
+             {
+                name: 'HI 分解 (Decomp. of HI)',
+                reactants: [{ id: 1, name: 'HI', coeff: 2, conc: '0.02' }],
+                products: [{ id: 2, name: 'H2', coeff: 1, conc: '0.005' }, { id: 3, name: 'I2', coeff: 1, conc: '0.005' }]
+            }
+        ];
+
+        const App = () => {
+            const [reactants, setReactants] = useState([{ id: 1, name: 'A', coeff: 1, conc: '' }]);
+            const [products, setProducts] = useState([{ id: 1, name: 'B', coeff: 1, conc: '' }]);
+            const [result, setResult] = useState(null);
+            const [kcExpression, setKcExpression] = useState('');
+
+            // Helper to update row
+            const updateRow = (type, id, field, value) => {
+                const list = type === 'reactants' ? reactants : products;
+                const newList = list.map(item => item.id === id ? { ...item, [field]: value } : item);
+                if (type === 'reactants') setReactants(newList);
+                else setProducts(newList);
+            };
+
+            const addRow = (type) => {
+                const newItem = { id: Date.now(), name: type === 'reactants' ? 'R' : 'P', coeff: 1, conc: '' };
+                if (type === 'reactants') setReactants([...reactants, newItem]);
+                else setProducts([...products, newItem]);
+            };
+
+            const removeRow = (type, id) => {
+                if (type === 'reactants' && reactants.length > 1) setReactants(reactants.filter(i => i.id !== id));
+                else if (type === 'products' && products.length > 1) setProducts(products.filter(i => i.id !== id));
+            };
+
+            const loadPreset = (p) => {
+                setReactants(p.reactants.map((r, i) => ({ ...r, id: `r-${i}` })));
+                setProducts(p.products.map((pr, i) => ({ ...pr, id: `p-${i}` })));
+                setResult(null);
+            };
+
+            // Calculate Logic
+            const calculate = () => {
+                let num = 1;
+                let den = 1;
+                let totalCoeffP = 0;
+                let totalCoeffR = 0;
+                let isValid = true;
+
+                products.forEach(p => {
+                    const c = parseFloat(p.conc);
+                    const coeff = parseFloat(p.coeff);
+                    if (isNaN(c) || isNaN(coeff)) isValid = false;
+                    num *= Math.pow(c, coeff);
+                    totalCoeffP += coeff;
+                });
+
+                reactants.forEach(r => {
+                    const c = parseFloat(r.conc);
+                    const coeff = parseFloat(r.coeff);
+                    if (isNaN(c) || isNaN(coeff)) isValid = false;
+                    den *= Math.pow(c, coeff);
+                    totalCoeffR += coeff;
+                });
+
+                if (!isValid || den === 0) {
+                    setResult({ error: '請輸入有效的數值' });
+                    return;
+                }
+
+                const kc = num / den;
+                
+                // Calculate Unit
+                // Unit = (mol dm^-3)^(nP - nR)
+                const deltaN = totalCoeffP - totalCoeffR;
+                let unit = '';
+                
+                if (deltaN === 0) {
+                    unit = '無單位 (No Unit)';
+                } else if (deltaN === 1) {
+                    unit = 'mol dm⁻³';
+                } else if (deltaN === -1) {
+                    unit = 'mol⁻¹ dm³';
+                } else {
+                    unit = `mol^${deltaN} dm^${-3 * deltaN}`;
+                    // Format superscripts nicely for display? Let's stick to text representation or basic HTML
+                    // Better: mol^{deltaN} dm^{-3*deltaN}
+                    // Let's format for display:
+                    unit = `mol${toSuperscript(deltaN)} dm${toSuperscript(-3 * deltaN)}`;
+                }
+
+                setResult({ value: kc, unit, deltaN });
+            };
+
+            // Helper for superscript
+            const toSuperscript = (num) => {
+                const map = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+                return num.toString().split('').map(c => map[c] || c).join('');
+            };
+
+            // Live Equation Update for MathJax
+            useEffect(() => {
+                // Generate LaTeX for Kc
+                // Kc = [P1]^c1 [P2]^c2 / [R1]^c1 ...
+                const formatPart = (list) => {
+                    return list.map(item => {
+                        const name = item.name || '?';
+                        const exp = item.coeff == 1 ? '' : `^{${item.coeff}}`;
+                        return `[\\text{${name}}]${exp}`;
+                    }).join('');
+                };
+
+                const numerator = formatPart(products);
+                const denominator = formatPart(reactants);
+                
+                const latex = `K_c = \\frac{${numerator}}{${denominator}}`;
+                setKcExpression(latex);
+
+            }, [reactants, products]);
+
+            // Re-render MathJax
+            useEffect(() => {
+                if (window.MathJax) {
+                    window.MathJax.typesetPromise && window.MathJax.typesetPromise();
+                }
+            });
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="scale"></i> 平衡常數計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Equilibrium Constant (Kc) Calculator</p>
+                        </div>
+                        
+                        {/* Preset Buttons */}
+                        <div className="flex gap-2 overflow-x-auto pb-1 max-w-md">
+                            {Presets.map((p, idx) => (
+                                <button 
+                                    key={idx} 
+                                    onClick={() => loadPreset(p)}
+                                    className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-all whitespace-nowrap"
+                                >
+                                    {p.name.split(' ')[0]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow items-start">
+                        
+                        {/* Left: Inputs */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                            
+                            {/* Reactants */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-200">
+                                <h3 className="text-sm font-bold text-blue-600 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="flask-conical" size={16}/> 反應物 (Reactants)
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-400 uppercase font-bold px-2">
+                                        <div className="col-span-2">係數</div>
+                                        <div className="col-span-4">化學式</div>
+                                        <div className="col-span-5">平衡濃度 (M)</div>
+                                        <div className="col-span-1"></div>
+                                    </div>
+                                    {reactants.map(item => (
+                                        <div key={item.id} className="grid grid-cols-12 gap-2 items-center input-card p-2 rounded-lg border border-slate-100">
+                                            <div className="col-span-2">
+                                                <input type="number" value={item.coeff} onChange={(e) => updateRow('reactants', item.id, 'coeff', e.target.value)} className="w-full text-center font-bold outline-none bg-transparent border-b border-slate-300 focus:border-blue-500" min="1"/>
+                                            </div>
+                                            <div className="col-span-4">
+                                                <input type="text" value={item.name} onChange={(e) => updateRow('reactants', item.id, 'name', e.target.value)} className="w-full outline-none bg-transparent font-mono text-sm" placeholder="Name"/>
+                                            </div>
+                                            <div className="col-span-5 relative">
+                                                <input type="number" value={item.conc} onChange={(e) => updateRow('reactants', item.id, 'conc', e.target.value)} className="w-full p-1 bg-slate-50 rounded text-right font-mono font-bold text-blue-800 outline-none" placeholder="0.0"/>
+                                            </div>
+                                            <div className="col-span-1 flex justify-center">
+                                                <button onClick={() => removeRow('reactants', item.id)} className="text-slate-300 hover:text-red-500"><i data-lucide="x" size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => addRow('reactants')} className="w-full py-2 border-2 border-dashed border-blue-100 text-blue-400 rounded-xl hover:bg-blue-50 text-xs font-bold transition-all">+ 增加</button>
+                                </div>
+                            </div>
+
+                            {/* Products */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-green-200">
+                                <h3 className="text-sm font-bold text-green-600 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="flask-conical" size={16} className="transform rotate-180"/> 生成物 (Products)
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-400 uppercase font-bold px-2">
+                                        <div className="col-span-2">係數</div>
+                                        <div className="col-span-4">化學式</div>
+                                        <div className="col-span-5">平衡濃度 (M)</div>
+                                        <div className="col-span-1"></div>
+                                    </div>
+                                    {products.map(item => (
+                                        <div key={item.id} className="grid grid-cols-12 gap-2 items-center input-card p-2 rounded-lg border border-slate-100">
+                                            <div className="col-span-2">
+                                                <input type="number" value={item.coeff} onChange={(e) => updateRow('products', item.id, 'coeff', e.target.value)} className="w-full text-center font-bold outline-none bg-transparent border-b border-slate-300 focus:border-green-500" min="1"/>
+                                            </div>
+                                            <div className="col-span-4">
+                                                <input type="text" value={item.name} onChange={(e) => updateRow('products', item.id, 'name', e.target.value)} className="w-full outline-none bg-transparent font-mono text-sm" placeholder="Name"/>
+                                            </div>
+                                            <div className="col-span-5 relative">
+                                                <input type="number" value={item.conc} onChange={(e) => updateRow('products', item.id, 'conc', e.target.value)} className="w-full p-1 bg-slate-50 rounded text-right font-mono font-bold text-green-800 outline-none" placeholder="0.0"/>
+                                            </div>
+                                            <div className="col-span-1 flex justify-center">
+                                                <button onClick={() => removeRow('products', item.id)} className="text-slate-300 hover:text-red-500"><i data-lucide="x" size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => addRow('products')} className="w-full py-2 border-2 border-dashed border-green-100 text-green-400 rounded-xl hover:bg-green-50 text-xs font-bold transition-all">+ 增加</button>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={calculate}
+                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg hover:bg-indigo-500 transition-all text-lg flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <i data-lucide="calculator" /> 計算 Kc
+                            </button>
+
+                        </div>
+
+                        {/* Right: Equation & Result */}
+                        <div className="w-full lg:w-1/2 flex flex-col gap-6">
+                            
+                            {/* Expression Card */}
+                            <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-200 flex flex-col items-center justify-center min-h-[200px]">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest">Kc Expression</h3>
+                                <div className="text-2xl">
+                                    {`\\[ ${kcExpression} \\]`}
+                                </div>
+                            </div>
+
+                            {/* Result Card */}
+                            {result && !result.error && (
+                                <div className="bg-slate-800 text-white p-8 rounded-3xl shadow-xl text-center relative overflow-hidden border border-slate-700 animate-in slide-in-from-bottom-4 fade-in">
+                                    <div className="relative z-10">
+                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Calculated Value</div>
+                                        
+                                        <div className="flex flex-col items-center gap-2">
+                                            {/* Value */}
+                                            <div className="text-6xl font-mono font-black tracking-tighter text-indigo-400">
+                                                {result.value < 0.001 || result.value > 10000 ? result.value.toExponential(3) : parseFloat(result.value.toFixed(4))}
+                                            </div>
+                                            
+                                            {/* Unit */}
+                                            <div className="text-xl text-slate-300 font-mono mt-2 bg-slate-900/50 px-4 py-1 rounded-lg border border-slate-600 inline-block">
+                                                {result.unit}
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-6 pt-6 border-t border-slate-700 text-xs text-slate-400">
+                                            <p>Δn = (生成物係數總和) - (反應物係數總和) = <strong>{result.deltaN}</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {result && result.error && (
+                                <div className="bg-red-50 p-6 rounded-2xl border border-red-200 text-red-600 font-bold text-center animate-pulse">
+                                    <i data-lucide="alert-circle" className="mx-auto mb-2"/>
+                                    {result.error}
+                                </div>
+                            )}
+
+                        </div>
+
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic X
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
