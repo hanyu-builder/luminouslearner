@@ -46,6 +46,16 @@
         .plating-layer {
             transition: opacity 0.2s;
         }
+
+        /* Electron Flow Animation */
+        @keyframes electron-flow {
+            0% { stroke-dashoffset: 20; }
+            100% { stroke-dashoffset: 0; }
+        }
+        .wire-active {
+            stroke-dasharray: 5;
+            animation: electron-flow 0.5s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
@@ -92,22 +102,17 @@
                             const newTime = prev + 1;
                             
                             // Calculate Mass: m = (I * t * M) / (z * F)
-                            // I: current, t: time, M: molar mass, z: charge, F: Faraday
                             const m = (current * newTime * platingMetal.atomicMass) / (platingMetal.charge * FARADAY);
                             setMassDeposited(m);
                             
-                            // Anode loses same mass (assuming 100% efficiency for simplicity)
                             setAnodeMassLoss(m);
 
-                            // Visual Thickness (Arbitrary scale for visual: 1g = 100% opacity/thickness)
-                            // Adjust scale based on metal density approx
                             const visualScale = m * 100; 
                             setThickness(Math.min(100, visualScale));
 
                             return newTime;
                         });
-                    }, 100); // Speed up simulation: 100ms real time = 1s sim time? Or just fast tick.
-                    // Let's say 1 tick = 10 seconds of simulation for faster results
+                    }, 100); 
                 }
                 return () => clearInterval(interval);
             }, [isRunning, current, platingMetal]);
@@ -121,10 +126,12 @@
             };
 
             // Custom Icons Render
+            // FIX: Coin is now an SVG to properly use 'text-color' as fill via currentColor
             const ObjectIcon = ({ type, className, style }) => {
                 if (type === 'Key') return <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}><path d="M21 2l-2 2m-7.6 7.6l6.5-6.5a2 2 0 0 0-2.8-2.8l-6.5 6.5a2 2 0 0 0-.6 1.5l-.4 1.4-2 2-2-2-2 2 2 2 2 2 2 2-2 2-1.4.4a2 2 0 0 0-1.5.6l-2.6 2.6a2 2 0 0 0 2.8 2.8l2.6-2.6"/></svg>;
-                if (type === 'Spoon') return <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}><path d="M12 2a4 4 0 0 1 4 4c0 2-1.5 3.5-3.5 4L12 22 9.5 10C7.5 9.5 6 8 6 6a4 4 0 0 1 6-4z"/></svg>; // Simplified spoon shape
-                return <div className={`rounded-full w-12 h-12 ${className}`} style={style}></div>; // Coin
+                if (type === 'Spoon') return <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}><path d="M12 2a4 4 0 0 1 4 4c0 2-1.5 3.5-3.5 4L12 22 9.5 10C7.5 9.5 6 8 6 6a4 4 0 0 1 6-4z"/></svg>; 
+                if (type === 'Coin') return <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}><circle cx="12" cy="12" r="10"/></svg>;
+                return null;
             };
 
             return (
@@ -250,36 +257,61 @@
                             {/* Background Grid */}
                             <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
 
-                            {/* Circuit & Beaker */}
+                            {/* Circuit & Power Source - Added */}
                             <div className="relative w-full max-w-md h-96 flex flex-col items-center justify-end">
                                 
-                                {/* Power Source & Wires */}
-                                <div className="absolute top-0 w-64 h-20 border-x-4 border-t-4 border-slate-600 rounded-t-lg flex justify-center items-start -z-10">
-                                    <div className="bg-slate-800 text-white px-4 py-1 rounded-b-lg font-mono font-bold text-xs flex items-center gap-2 shadow-md">
-                                        <i data-lucide="zap" size={12} className="text-yellow-400"/> DC Power
+                                {/* Power Source & Wires (Top Section) */}
+                                <div className="absolute top-0 w-full flex justify-center z-10">
+                                    {/* Battery */}
+                                    <div className="relative bg-slate-800 text-white px-6 py-3 rounded-lg shadow-lg border-2 border-slate-600 flex flex-col items-center">
+                                        <div className="text-yellow-400 font-mono font-bold text-lg">DC {current.toFixed(1)}A</div>
+                                        <div className="text-[10px] text-slate-400 uppercase font-bold">Power Source</div>
+                                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-slate-800 rotate-45 z-0"></div>
                                     </div>
-                                    {/* Polarity Labels */}
-                                    <div className="absolute top-2 left-[-20px] text-red-600 font-black text-xl">+</div>
-                                    <div className="absolute top-2 right-[-20px] text-blue-600 font-black text-xl">-</div>
+                                    
+                                    {/* Wires SVG */}
+                                    <svg className="absolute top-8 w-full h-24 pointer-events-none overflow-visible" style={{zIndex: -1}}>
+                                        {/* Left Wire (Anode, +) */}
+                                        <path d="M 50% 10 H 15% V 100" fill="none" stroke="#ef4444" strokeWidth="4" className={isRunning ? 'wire-active' : ''} />
+                                        {/* Right Wire (Cathode, -) */}
+                                        <path d="M 50% 10 H 85% V 100" fill="none" stroke="#374151" strokeWidth="4" className={isRunning ? 'wire-active' : ''} />
+                                        
+                                        {/* Polarity Signs */}
+                                        <text x="15%" y="90" fill="#ef4444" fontSize="24" fontWeight="bold" textAnchor="middle">+</text>
+                                        <text x="85%" y="90" fill="#374151" fontSize="24" fontWeight="bold" textAnchor="middle">-</text>
+                                    </svg>
                                 </div>
 
                                 {/* Beaker */}
-                                <div className="w-80 h-64 border-4 border-slate-300 border-t-0 rounded-b-3xl bg-white/40 backdrop-blur-sm relative overflow-hidden shadow-xl">
+                                <div className="w-80 h-64 border-4 border-slate-300 border-t-0 rounded-b-3xl bg-white/40 backdrop-blur-sm relative overflow-hidden shadow-xl mt-16">
                                     {/* Electrolyte */}
                                     <div className={`absolute bottom-0 w-full h-[85%] ${platingMetal.liquidColor} liquid`}></div>
                                     
-                                    {/* Anode (Metal Bar) - Left */}
-                                    <div className={`absolute left-10 top-4 w-8 h-48 ${platingMetal.color} border-2 border-slate-600 rounded-b-md shadow-md transition-all`}
-                                         style={{ 
-                                             // Visualize erosion
-                                             clipPath: `polygon(0 0, 100% 0, 100% ${100 - anodeMassLoss*50}%, 80% 100%, 20% 100%, 0 ${100 - anodeMassLoss*50}%)`
-                                         }}>
-                                        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold text-white/80">Anode</div>
+                                    {/* Anode (Metal Bar) - Left - UPDATED LABEL POSITION */}
+                                    <div className="absolute left-12 top-0 w-12 h-full flex flex-col items-center">
+                                         {/* Wire Connection Point */}
+                                        <div className="w-1 h-4 bg-black absolute -top-4"></div>
+                                        
+                                        <div className={`w-8 h-48 ${platingMetal.color} border-2 border-slate-600 rounded-b-md shadow-md transition-all relative`}
+                                             style={{ 
+                                                 // Visualize erosion
+                                                 clipPath: `polygon(0 0, 100% 0, 100% ${100 - anodeMassLoss*50}%, 80% 100%, 20% 100%, 0 ${100 - anodeMassLoss*50}%)`
+                                             }}>
+                                        </div>
+                                        {/* Label Moved Up */}
+                                        <div className="absolute -top-8 bg-white/80 px-2 py-0.5 rounded text-[10px] font-bold text-red-600 shadow-sm border border-red-200">Anode (+)</div>
+                                        <div className="absolute top-2 text-[9px] font-bold text-white/90 pointer-events-none">{platingMetal.name.split(' ')[0]}</div>
                                     </div>
 
-                                    {/* Cathode (Object) - Right */}
-                                    <div className="absolute right-10 top-10 w-16 h-40 flex justify-center">
-                                        <div className="relative w-full h-full flex justify-center">
+                                    {/* Cathode (Object) - Right - UPDATED LABEL POSITION */}
+                                    <div className="absolute right-12 top-0 w-16 h-full flex flex-col items-center">
+                                        {/* Wire Connection Point */}
+                                        <div className="w-1 h-8 bg-black absolute -top-8"></div>
+                                        
+                                        {/* Label Moved Up */}
+                                        <div className="absolute -top-8 bg-white/80 px-2 py-0.5 rounded text-[10px] font-bold text-slate-800 shadow-sm border border-slate-300">Cathode (-)</div>
+
+                                        <div className="relative w-full h-40 flex justify-center mt-2">
                                             {/* Base Object */}
                                             <ObjectIcon type={targetObject.id} className={`w-16 h-32 ${targetObject.baseColor}`} />
                                             
@@ -293,8 +325,6 @@
                                                     filter: `drop-shadow(0 0 ${thickness/10}px ${platingMetal.platingColor})`
                                                 }} 
                                             />
-                                            
-                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-600 bg-white/80 px-1 rounded">Cathode</div>
                                         </div>
                                     </div>
 
@@ -306,7 +336,7 @@
                                                 <div key={i} className="absolute w-4 h-4 bg-white/80 rounded-full flex items-center justify-center text-[8px] font-bold text-slate-700 border border-slate-400 shadow-sm ion-anim"
                                                      style={{
                                                          left: '20%', top: '40%',
-                                                         '--tx': '200px', '--ty': `${(i-2)*20}px`,
+                                                         '--tx': '180px', '--ty': `${(i-2)*20}px`,
                                                          animationDelay: `${i * 0.5}s`,
                                                          animationDuration: `${3 - current * 0.4}s` // Speed depends on current
                                                      }}>
