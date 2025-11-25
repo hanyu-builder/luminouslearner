@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電解預測器 (Electrolysis Predictor)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* Ion Movement Animation */
+        @keyframes move-to-cathode {
+            0% { transform: translate(0, 0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { transform: translate(-80px, 0); opacity: 1; } /* Move Left to Cathode */
+            100% { transform: translate(-80px, 0); opacity: 0; }
+        }
+        @keyframes move-to-anode {
+            0% { transform: translate(0, 0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { transform: translate(80px, 0); opacity: 1; } /* Move Right to Anode */
+            100% { transform: translate(80px, 0); opacity: 0; }
+        }
+
+        .cation-anim { animation: move-to-cathode 2s infinite ease-in-out; }
+        .anion-anim { animation: move-to-anode 2s infinite ease-in-out; }
+
+        /* Bubbles */
+        @keyframes bubble-rise {
+            0% { bottom: 0; opacity: 0; }
+            50% { opacity: 1; }
+            100% { bottom: 100%; opacity: 0; }
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            animation: bubble-rise 1.5s infinite linear;
+        }
+
+        /* Electrode Erosion */
+        .eroding {
+            border-style: dashed !important;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Chemistry Logic ---
+
+        // Reactivity Series (Discharge ease: Bottom > Top for Cations)
+        // K Na Ca Mg Al Zn Fe Pb H Cu Ag
+        const CationEase = ['K', 'Na', 'Ca', 'Mg', 'Al', 'Zn', 'Fe', 'Pb', 'H', 'Cu', 'Ag'];
+
+        // Anion Discharge Ease (OH- > I- > Br- > Cl- > SO4/NO3)
+        const AnionEase = ['NO3', 'SO4', 'F', 'Cl', 'Br', 'I', 'OH'];
+
+        const Electrolytes = [
+            { id: 'molten_NaCl', name: '熔融氯化鈉 (Molten NaCl)', state: 'molten', ions: { cat: 'Na', an: 'Cl' } },
+            { id: 'dilute_NaCl', name: '稀氯化鈉溶液 (Dilute NaCl)', state: 'dilute', ions: { cat: 'Na', an: 'Cl' } },
+            { id: 'conc_NaCl', name: '濃氯化鈉溶液 (Conc. NaCl)', state: 'conc', ions: { cat: 'Na', an: 'Cl' } }, // Conc Cl wins over OH
+            { id: 'dilute_H2SO4', name: '稀硫酸 (Dilute H₂SO₄)', state: 'dilute', ions: { cat: 'H', an: 'SO4' } },
+            { id: 'CuSO4', name: '硫酸銅溶液 (CuSO₄)', state: 'dilute', ions: { cat: 'Cu', an: 'SO4' } },
+            { id: 'molten_PbBr2', name: '熔融溴化鉛 (Molten PbBr₂)', state: 'molten', ions: { cat: 'Pb', an: 'Br' } }
+        ];
+
+        const Electrodes = [
+            { id: 'inert', name: '惰性電極 (碳/鉑)', active: false },
+            { id: 'copper', name: '銅電極 (Copper)', active: true, metal: 'Cu' }
+            // Active electrodes participate in Anodic reaction
+        ];
+
+        const App = () => {
+            const [electrolyte, setElectrolyte] = useState(Electrolytes[1]); // Dilute NaCl
+            const [electrode, setElectrode] = useState(Electrodes[0]); // Inert
+            const [isRunning, setIsRunning] = useState(false);
+            const [result, setResult] = useState(null);
+
+            // Prediction Logic
+            useEffect(() => {
+                if (!isRunning) {
+                    setResult(null);
+                    return;
+                }
+
+                const { cat, an } = electrolyte.ions;
+                const state = electrolyte.state;
+
+                // --- Cathode (Negative Electrode) Reaction ---
+                // Attracts Cations (+). Reduction.
+                let cathodeProduct = '';
+                let cathodeEq = '';
+                
+                if (state === 'molten') {
+                    // Only one cation
+                    cathodeProduct = `${cat} 金屬`;
+                    cathodeEq = `${cat}⁺ + e⁻ → ${cat}`; // Simplified
+                } else {
+                    // Aqueous: Compare Metal vs H+
+                    // If Metal is higher than H in reactivity series (K to Pb), H+ discharges.
+                    // If Metal is lower (Cu, Ag), Metal discharges.
+                    // Exception: Mercury cathode (not covered here usually)
+                    
+                    const metalIndex = CationEase.indexOf(cat);
+                    const hIndex = CationEase.indexOf('H');
+
+                    if (metalIndex < hIndex) { // Metal is more reactive -> H+ discharges
+                        cathodeProduct = '氫氣 (Hydrogen Gas)';
+                        cathodeEq = '2H⁺(aq) + 2e⁻ → H₂(g)';
+                    } else {
+                         cathodeProduct = `${cat} 金屬 (Metal Deposit)`;
+                         cathodeEq = `${cat}²⁺(aq) + 2e⁻ → ${cat}(s)`;
+                    }
+                }
+
+                // --- Anode (Positive Electrode) Reaction ---
+                // Attracts Anions (-). Oxidation.
+                let anodeProduct = '';
+                let anodeEq = '';
+
+                // Check if Electrode is Active
+                if (electrode.active && electrode.metal) {
+                    // Active electrode dissolves!
+                    anodeProduct = `${electrode.metal} 電極溶解 (Dissolves)`;
+                    anodeEq = `${electrode.metal}(s) → ${electrode.metal}²⁺(aq) + 2e⁻`;
+                } else {
+                    // Inert Electrode: Anion discharges
+                    if (state === 'molten') {
+                        anodeProduct = `${an} 氣體 (Gas)`; // Simplified (Cl2, Br2)
+                        anodeEq = `2${an}⁻ → ${an}₂ + 2e⁻`;
+                    } else {
+                        // Aqueous: Compare Anion vs OH-
+                        // Order of DISCHARGE ease: SO4/NO3 < F < OH < Cl < Br < I
+                        // Exception: Conc. solution -> Cl- discharges over OH-
+                        
+                        const anIndex = AnionEase.indexOf(an);
+                        const ohIndex = AnionEase.indexOf('OH');
+                        
+                        // Special Case: Conc NaCl (Cl vs OH)
+                        if (state === 'conc' && an === 'Cl') {
+                            anodeProduct = '氯氣 (Chlorine Gas)';
+                            anodeEq = '2Cl⁻(aq) → Cl₂(g) + 2e⁻';
+                        } else if (anIndex < ohIndex) { // Harder to discharge than OH (e.g. SO4)
+                            anodeProduct = '氧氣 (Oxygen Gas from OH⁻)';
+                            anodeEq = '4OH⁻(aq) → O₂(g) + 2H₂O(l) + 4e⁻';
+                        } else {
+                            // Halides (Cl, Br, I) discharge easily
+                             anodeProduct = `${an === 'Cl' ? '氯' : an === 'Br' ? '溴' : '碘'}氣/液`;
+                             anodeEq = `2${an}⁻(aq) → ${an}₂ + 2e⁻`;
+                        }
+                    }
+                }
+
+                setResult({
+                    cathode: { product: cathodeProduct, eq: cathodeEq },
+                    anode: { product: anodeProduct, eq: anodeEq }
+                });
+
+            }, [isRunning, electrolyte, electrode]);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="zap"></i> 電解預測器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Electrolysis Predictor</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsRunning(!isRunning)}
+                            className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-md
+                                ${isRunning ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'}
+                            `}
+                        >
+                            {isRunning ? '停止電解' : '開始電解'}
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="settings-2" size={16}/> 實驗設定
+                                </h3>
+                                
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">電解質 (Electrolyte)</label>
+                                    <select 
+                                        value={electrolyte.id}
+                                        onChange={(e) => { setElectrolyte(Electrolytes.find(el => el.id === e.target.value)); setIsRunning(false); }}
+                                        className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                        {Electrolytes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="mb-2">
+                                    <label className="text-xs font-bold text-slate-700 block mb-1">電極材料 (Electrodes)</label>
+                                    <select 
+                                        value={electrode.id}
+                                        onChange={(e) => { setElectrode(Electrodes.find(el => el.id === e.target.value)); setIsRunning(false); }}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-slate-400"
+                                    >
+                                        {Electrodes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Principles Box */}
+                            <div className="bg-slate-800 p-5 rounded-2xl text-white shadow-lg">
+                                <h3 className="text-sm font-bold text-yellow-400 uppercase mb-2 flex items-center gap-2">
+                                    <i data-lucide="info" size={16}/> 優先放電規則
+                                </h3>
+                                <div className="text-xs space-y-2 opacity-90">
+                                    <p><strong>陰極 (Cathode -):</strong> 金屬 vs H⁺。位置較低者 (Ag > Cu > H > Pb...) 優先放電。</p>
+                                    <p><strong>陽極 (Anode +):</strong> 
+                                        <br/>1. 活性電極優先溶解。
+                                        <br/>2. 濃溶液中，鹵素離子 (Cl⁻) 優先於 OH⁻。
+                                        <br/>3. 稀溶液中，OH⁻ 優先放電生成 O₂。
+                                    </p>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Center: Visualization */}
+                        <div className="w-full lg:w-2/3 flex flex-col gap-6 items-center justify-center bg-slate-100 rounded-3xl border-4 border-slate-200 relative overflow-hidden min-h-[500px] p-8">
+                            
+                            <div className="relative w-full max-w-lg h-80 flex justify-center items-end">
+                                
+                                {/* Beaker */}
+                                <div className="w-64 h-56 border-x-4 border-b-4 border-slate-400 bg-white/60 backdrop-blur-sm rounded-b-3xl relative overflow-hidden">
+                                    {/* Liquid */}
+                                    <div className={`absolute bottom-0 w-full h-5/6 ${electrolyte.id.includes('Cu') ? 'bg-blue-400/50' : 'bg-sky-100/80'} transition-colors duration-500`}></div>
+
+                                    {/* Moving Ions Animation */}
+                                    {isRunning && (
+                                        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                            {/* Cations moving left to Cathode */}
+                                            <div className="absolute top-1/2 left-1/2 cation-anim text-red-500 font-bold text-xl">+</div>
+                                            <div className="absolute top-1/3 left-2/3 cation-anim text-red-500 font-bold text-lg" style={{animationDelay: '0.5s'}}>+</div>
+                                            
+                                            {/* Anions moving right to Anode */}
+                                            <div className="absolute top-1/2 left-1/2 anion-anim text-blue-600 font-bold text-xl">-</div>
+                                            <div className="absolute top-2/3 left-1/3 anion-anim text-blue-600 font-bold text-lg" style={{animationDelay: '0.8s'}}>-</div>
+                                        </div>
+                                    )}
+
+                                    {/* Bubbles @ Anode */}
+                                    {isRunning && result?.anode.product.includes('氣') && (
+                                        <div className="absolute right-6 bottom-0 w-8 h-full overflow-hidden">
+                                            {[...Array(5)].map((_, i) => <div key={i} className="bubble" style={{left: `${Math.random()*20}px`, width: '6px', height: '6px', animationDelay: `${i*0.3}s`}}></div>)}
+                                        </div>
+                                    )}
+
+                                    {/* Bubbles @ Cathode */}
+                                    {isRunning && result?.cathode.product.includes('氣') && (
+                                        <div className="absolute left-6 bottom-0 w-8 h-full overflow-hidden">
+                                            {[...Array(5)].map((_, i) => <div key={i} className="bubble" style={{left: `${Math.random()*20}px`, width: '6px', height: '6px', animationDelay: `${i*0.3}s`}}></div>)}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Cathode (Left, -) */}
+                                <div className="absolute left-16 top-0 h-64 w-8 bg-slate-500 rounded-b-md border-2 border-slate-600 flex flex-col items-center shadow-xl z-10">
+                                    <div className="absolute -top-8 font-bold text-slate-700 text-lg">-</div>
+                                    <div className="absolute top-2 text-[10px] text-white font-bold">Cathode</div>
+                                    {isRunning && result?.cathode.product.includes('金屬') && (
+                                        <div className="absolute bottom-0 w-full h-1/3 bg-orange-400 opacity-80 rounded-b-md animate-pulse"></div>
+                                    )}
+                                </div>
+
+                                {/* Anode (Right, +) */}
+                                <div className={`absolute right-16 top-0 h-64 w-8 ${electrode.active ? 'bg-orange-500' : 'bg-slate-800'} rounded-b-md border-2 border-slate-600 flex flex-col items-center shadow-xl z-10 ${isRunning && result?.anode.product.includes('溶解') ? 'eroding' : ''}`}>
+                                    <div className="absolute -top-8 font-bold text-slate-700 text-lg">+</div>
+                                    <div className="absolute top-2 text-[10px] text-white font-bold">Anode</div>
+                                </div>
+
+                                {/* Power Source */}
+                                <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-24 h-12 bg-slate-800 rounded border-2 border-slate-600 flex items-center justify-center">
+                                    <div className="text-green-400 font-mono font-bold">DC Power</div>
+                                </div>
+                                {/* Wires */}
+                                <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" style={{top: '-64px'}}>
+                                    <path d="M 110 64 V 20 H 220" fill="none" stroke="#334155" strokeWidth="4" />
+                                    <path d="M 300 64 V 20 H 410" fill="none" stroke="#334155" strokeWidth="4" />
+                                </svg>
+
+                            </div>
+
+                            {/* Result Panel */}
+                            {result ? (
+                                <div className="grid grid-cols-2 gap-4 w-full mt-4 animate-in slide-in-from-bottom-4">
+                                    <div className="bg-blue-50 p-4 rounded-xl border-l-4 border-blue-500">
+                                        <h4 className="font-bold text-blue-800 text-xs uppercase mb-1">陰極 (Cathode -) 還原</h4>
+                                        <div className="text-lg font-bold text-slate-800 mb-2">{result.cathode.product}</div>
+                                        <div className="font-mono text-xs bg-white p-2 rounded border border-blue-200 text-slate-600">{result.cathode.eq}</div>
+                                    </div>
+                                    <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-500">
+                                        <h4 className="font-bold text-red-800 text-xs uppercase mb-1">陽極 (Anode +) 氧化</h4>
+                                        <div className="text-lg font-bold text-slate-800 mb-2">{result.anode.product}</div>
+                                        <div className="font-mono text-xs bg-white p-2 rounded border border-red-200 text-slate-600">{result.anode.eq}</div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center text-slate-400 py-8">
+                                    點擊「開始電解」以查看結果
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
