@@ -18,13 +18,13 @@
         @keyframes move-to-cathode {
             0% { transform: translate(0, 0); opacity: 0; }
             10% { opacity: 1; }
-            90% { transform: translate(-80px, 0); opacity: 1; } /* Move Left to Cathode */
+            90% { transform: translate(-80px, 0); opacity: 1; }
             100% { transform: translate(-80px, 0); opacity: 0; }
         }
         @keyframes move-to-anode {
             0% { transform: translate(0, 0); opacity: 0; }
             10% { opacity: 1; }
-            90% { transform: translate(80px, 0); opacity: 1; } /* Move Right to Anode */
+            90% { transform: translate(80px, 0); opacity: 1; }
             100% { transform: translate(80px, 0); opacity: 0; }
         }
 
@@ -61,7 +61,6 @@
         // --- Chemistry Logic ---
 
         // Reactivity Series (Discharge ease: Bottom > Top for Cations)
-        // K Na Ca Mg Al Zn Fe Pb H Cu Ag
         const CationEase = ['K', 'Na', 'Ca', 'Mg', 'Al', 'Zn', 'Fe', 'Pb', 'H', 'Cu', 'Ag'];
 
         // Anion Discharge Ease (OH- > I- > Br- > Cl- > SO4/NO3)
@@ -70,7 +69,7 @@
         const Electrolytes = [
             { id: 'molten_NaCl', name: '熔融氯化鈉 (Molten NaCl)', state: 'molten', ions: { cat: 'Na', an: 'Cl' } },
             { id: 'dilute_NaCl', name: '稀氯化鈉溶液 (Dilute NaCl)', state: 'dilute', ions: { cat: 'Na', an: 'Cl' } },
-            { id: 'conc_NaCl', name: '濃氯化鈉溶液 (Conc. NaCl)', state: 'conc', ions: { cat: 'Na', an: 'Cl' } }, // Conc Cl wins over OH
+            { id: 'conc_NaCl', name: '濃氯化鈉溶液 (Conc. NaCl)', state: 'conc', ions: { cat: 'Na', an: 'Cl' } },
             { id: 'dilute_H2SO4', name: '稀硫酸 (Dilute H₂SO₄)', state: 'dilute', ions: { cat: 'H', an: 'SO4' } },
             { id: 'CuSO4', name: '硫酸銅溶液 (CuSO₄)', state: 'dilute', ions: { cat: 'Cu', an: 'SO4' } },
             { id: 'molten_PbBr2', name: '熔融溴化鉛 (Molten PbBr₂)', state: 'molten', ions: { cat: 'Pb', an: 'Br' } }
@@ -79,7 +78,6 @@
         const Electrodes = [
             { id: 'inert', name: '惰性電極 (碳/鉑)', active: false },
             { id: 'copper', name: '銅電極 (Copper)', active: true, metal: 'Cu' }
-            // Active electrodes participate in Anodic reaction
         ];
 
         const App = () => {
@@ -98,25 +96,18 @@
                 const { cat, an } = electrolyte.ions;
                 const state = electrolyte.state;
 
-                // --- Cathode (Negative Electrode) Reaction ---
-                // Attracts Cations (+). Reduction.
+                // Cathode
                 let cathodeProduct = '';
                 let cathodeEq = '';
                 
                 if (state === 'molten') {
-                    // Only one cation
                     cathodeProduct = `${cat} 金屬`;
-                    cathodeEq = `${cat}⁺ + e⁻ → ${cat}`; // Simplified
+                    cathodeEq = `${cat}⁺ + e⁻ → ${cat}`; 
                 } else {
-                    // Aqueous: Compare Metal vs H+
-                    // If Metal is higher than H in reactivity series (K to Pb), H+ discharges.
-                    // If Metal is lower (Cu, Ag), Metal discharges.
-                    // Exception: Mercury cathode (not covered here usually)
-                    
                     const metalIndex = CationEase.indexOf(cat);
                     const hIndex = CationEase.indexOf('H');
 
-                    if (metalIndex < hIndex) { // Metal is more reactive -> H+ discharges
+                    if (metalIndex < hIndex) { 
                         cathodeProduct = '氫氣 (Hydrogen Gas)';
                         cathodeEq = '2H⁺(aq) + 2e⁻ → H₂(g)';
                     } else {
@@ -125,38 +116,28 @@
                     }
                 }
 
-                // --- Anode (Positive Electrode) Reaction ---
-                // Attracts Anions (-). Oxidation.
+                // Anode
                 let anodeProduct = '';
                 let anodeEq = '';
 
-                // Check if Electrode is Active
                 if (electrode.active && electrode.metal) {
-                    // Active electrode dissolves!
                     anodeProduct = `${electrode.metal} 電極溶解 (Dissolves)`;
                     anodeEq = `${electrode.metal}(s) → ${electrode.metal}²⁺(aq) + 2e⁻`;
                 } else {
-                    // Inert Electrode: Anion discharges
                     if (state === 'molten') {
-                        anodeProduct = `${an} 氣體 (Gas)`; // Simplified (Cl2, Br2)
+                        anodeProduct = `${an} 氣體 (Gas)`;
                         anodeEq = `2${an}⁻ → ${an}₂ + 2e⁻`;
                     } else {
-                        // Aqueous: Compare Anion vs OH-
-                        // Order of DISCHARGE ease: SO4/NO3 < F < OH < Cl < Br < I
-                        // Exception: Conc. solution -> Cl- discharges over OH-
-                        
                         const anIndex = AnionEase.indexOf(an);
                         const ohIndex = AnionEase.indexOf('OH');
                         
-                        // Special Case: Conc NaCl (Cl vs OH)
                         if (state === 'conc' && an === 'Cl') {
                             anodeProduct = '氯氣 (Chlorine Gas)';
                             anodeEq = '2Cl⁻(aq) → Cl₂(g) + 2e⁻';
-                        } else if (anIndex < ohIndex) { // Harder to discharge than OH (e.g. SO4)
+                        } else if (anIndex < ohIndex) {
                             anodeProduct = '氧氣 (Oxygen Gas from OH⁻)';
                             anodeEq = '4OH⁻(aq) → O₂(g) + 2H₂O(l) + 4e⁻';
                         } else {
-                            // Halides (Cl, Br, I) discharge easily
                              anodeProduct = `${an === 'Cl' ? '氯' : an === 'Br' ? '溴' : '碘'}氣/液`;
                              anodeEq = `2${an}⁻(aq) → ${an}₂ + 2e⁻`;
                         }
@@ -181,14 +162,6 @@
                             </h1>
                             <p className="text-slate-400 text-sm">Electrolysis Predictor</p>
                         </div>
-                        <button 
-                            onClick={() => setIsRunning(!isRunning)}
-                            className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-md
-                                ${isRunning ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'}
-                            `}
-                        >
-                            {isRunning ? '停止電解' : '開始電解'}
-                        </button>
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
@@ -212,7 +185,7 @@
                                     </select>
                                 </div>
 
-                                <div className="mb-2">
+                                <div className="mb-6">
                                     <label className="text-xs font-bold text-slate-700 block mb-1">電極材料 (Electrodes)</label>
                                     <select 
                                         value={electrode.id}
@@ -222,6 +195,17 @@
                                         {Electrodes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                     </select>
                                 </div>
+
+                                {/* Moved Start Button Here */}
+                                <button 
+                                    onClick={() => setIsRunning(!isRunning)}
+                                    className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2
+                                        ${isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}
+                                    `}
+                                >
+                                    {isRunning ? <i data-lucide="square" size={18} fill="white" /> : <i data-lucide="play" size={18} fill="white" />}
+                                    {isRunning ? '停止電解 (Stop)' : '開始電解 (Start)'}
+                                </button>
                             </div>
 
                             {/* Principles Box */}
@@ -244,7 +228,7 @@
                         {/* Center: Visualization */}
                         <div className="w-full lg:w-2/3 flex flex-col gap-6 items-center justify-center bg-slate-100 rounded-3xl border-4 border-slate-200 relative overflow-hidden min-h-[500px] p-8">
                             
-                            <div className="relative w-full max-w-lg h-80 flex justify-center items-end">
+                            <div className="relative w-full max-w-lg h-96 flex justify-center items-end mt-8">
                                 
                                 {/* Beaker */}
                                 <div className="w-64 h-56 border-x-4 border-b-4 border-slate-400 bg-white/60 backdrop-blur-sm rounded-b-3xl relative overflow-hidden">
@@ -280,49 +264,70 @@
                                 </div>
 
                                 {/* Cathode (Left, -) */}
-                                <div className="absolute left-16 top-0 h-64 w-8 bg-slate-500 rounded-b-md border-2 border-slate-600 flex flex-col items-center shadow-xl z-10">
-                                    <div className="absolute -top-8 font-bold text-slate-700 text-lg">-</div>
-                                    <div className="absolute top-2 text-[10px] text-white font-bold">Cathode</div>
-                                    {isRunning && result?.cathode.product.includes('金屬') && (
-                                        <div className="absolute bottom-0 w-full h-1/3 bg-orange-400 opacity-80 rounded-b-md animate-pulse"></div>
-                                    )}
+                                <div className="absolute left-16 top-10 h-64 flex flex-col items-center z-10">
+                                    {/* Rod */}
+                                    <div className="w-8 h-56 bg-slate-500 rounded-b-md border-2 border-slate-600 shadow-xl relative">
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 font-bold text-slate-700 text-2xl">-</div>
+                                        {isRunning && result?.cathode.product.includes('金屬') && (
+                                            <div className="absolute bottom-0 w-full h-1/3 bg-orange-400 opacity-80 rounded-b-md animate-pulse"></div>
+                                        )}
+                                    </div>
+                                    {/* Label Box */}
+                                    <div className="mt-2 bg-slate-800 text-white px-3 py-1 rounded shadow-md text-xs font-bold border border-slate-600">
+                                        Cathode (陰極)
+                                    </div>
                                 </div>
 
                                 {/* Anode (Right, +) */}
-                                <div className={`absolute right-16 top-0 h-64 w-8 ${electrode.active ? 'bg-orange-500' : 'bg-slate-800'} rounded-b-md border-2 border-slate-600 flex flex-col items-center shadow-xl z-10 ${isRunning && result?.anode.product.includes('溶解') ? 'eroding' : ''}`}>
-                                    <div className="absolute -top-8 font-bold text-slate-700 text-lg">+</div>
-                                    <div className="absolute top-2 text-[10px] text-white font-bold">Anode</div>
+                                <div className="absolute right-16 top-10 h-64 flex flex-col items-center z-10">
+                                    {/* Rod */}
+                                    <div className={`w-8 h-56 ${electrode.active ? 'bg-orange-500' : 'bg-slate-800'} rounded-b-md border-2 border-slate-600 shadow-xl relative ${isRunning && result?.anode.product.includes('溶解') ? 'eroding' : ''}`}>
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 font-bold text-slate-700 text-2xl">+</div>
+                                    </div>
+                                    {/* Label Box */}
+                                    <div className="mt-2 bg-slate-800 text-white px-3 py-1 rounded shadow-md text-xs font-bold border border-slate-600">
+                                        Anode (陽極)
+                                    </div>
                                 </div>
 
                                 {/* Power Source */}
-                                <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-24 h-12 bg-slate-800 rounded border-2 border-slate-600 flex items-center justify-center">
-                                    <div className="text-green-400 font-mono font-bold">DC Power</div>
+                                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-32 h-16 bg-slate-800 rounded-lg border-4 border-slate-600 flex flex-col items-center justify-center shadow-lg z-20">
+                                    <div className="text-green-400 font-mono font-bold text-lg">DC Power</div>
+                                    <div className="text-slate-400 text-[10px] uppercase tracking-wider">Source</div>
                                 </div>
-                                {/* Wires */}
-                                <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" style={{top: '-64px'}}>
-                                    <path d="M 110 64 V 20 H 220" fill="none" stroke="#334155" strokeWidth="4" />
-                                    <path d="M 300 64 V 20 H 410" fill="none" stroke="#334155" strokeWidth="4" />
+                                
+                                {/* Wires (Corrected Paths) */}
+                                <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none" style={{top: '-80px'}}>
+                                    {/* Left Wire: From Power Left to Cathode Top */}
+                                    {/* Power Left is roughly center-16px, Cathode is left-16+width/2 approx */}
+                                    {/* Using percentage approximations for responsiveness within the container */}
+                                    
+                                    {/* Path from Battery Left to Cathode */}
+                                    <path d="M 200 80 V 40 H 112 V 120" fill="none" stroke="#334155" strokeWidth="4" strokeLinecap="round" />
+                                    
+                                    {/* Path from Battery Right to Anode */}
+                                    <path d="M 312 80 V 40 H 400 V 120" fill="none" stroke="#334155" strokeWidth="4" strokeLinecap="round" />
                                 </svg>
 
                             </div>
 
                             {/* Result Panel */}
                             {result ? (
-                                <div className="grid grid-cols-2 gap-4 w-full mt-4 animate-in slide-in-from-bottom-4">
-                                    <div className="bg-blue-50 p-4 rounded-xl border-l-4 border-blue-500">
+                                <div className="grid grid-cols-2 gap-4 w-full mt-8 animate-in slide-in-from-bottom-4">
+                                    <div className="bg-blue-50 p-4 rounded-xl border-l-4 border-blue-500 shadow-sm">
                                         <h4 className="font-bold text-blue-800 text-xs uppercase mb-1">陰極 (Cathode -) 還原</h4>
                                         <div className="text-lg font-bold text-slate-800 mb-2">{result.cathode.product}</div>
                                         <div className="font-mono text-xs bg-white p-2 rounded border border-blue-200 text-slate-600">{result.cathode.eq}</div>
                                     </div>
-                                    <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-500">
+                                    <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-500 shadow-sm">
                                         <h4 className="font-bold text-red-800 text-xs uppercase mb-1">陽極 (Anode +) 氧化</h4>
                                         <div className="text-lg font-bold text-slate-800 mb-2">{result.anode.product}</div>
                                         <div className="font-mono text-xs bg-white p-2 rounded border border-red-200 text-slate-600">{result.anode.eq}</div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center text-slate-400 py-8">
-                                    點擊「開始電解」以查看結果
+                                <div className="text-center text-slate-400 py-8 mt-8 italic">
+                                    選擇電解質並點擊「開始電解」以查看結果...
                                 </div>
                             )}
 
