@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反應速率實驗工具箱 (Rate Experiment Toolkit)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* Disappearing Cross Animations */
+        .cloudy-layer {
+            transition: background-color 0.2s;
+        }
+        
+        /* Syringe Animation */
+        .plunger {
+            transition: width 0.1s linear;
+        }
+
+        /* Bubbles */
+        @keyframes bubble-rise {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        .bubble {
+            position: absolute;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+            animation: bubble-rise 1s infinite linear;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [mode, setMode] = useState('cross'); // 'cross' or 'gas'
+            
+            // Common State
+            const [isRunning, setIsRunning] = useState(false);
+            const [time, setTime] = useState(0);
+            const [concentration, setConcentration] = useState(1.0); // M
+            const [temperature, setTemperature] = useState(25); // Celsius
+            
+            // Cross Experiment State
+            const [opacity, setOpacity] = useState(0);
+            const [crossResults, setCrossResults] = useState([]);
+            
+            // Gas Experiment State
+            const [volume, setVolume] = useState(0);
+            const [surfaceArea, setSurfaceArea] = useState('chips'); // chips or powder
+            const [gasDataPoints, setGasDataPoints] = useState([]);
+
+            // Chart Ref
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // --- Logic: Disappearing Cross ---
+            // Reaction: Na2S2O3 + 2HCl -> 2NaCl + S(s) + SO2 + H2O
+            // Rate depends on [Na2S2O3] and Temp
+            useEffect(() => {
+                let interval;
+                if (mode === 'cross' && isRunning) {
+                    // Simplified Rate Law Simulation
+                    // Rate ~ [Conc] * 2^((T-25)/10)
+                    const tempFactor = Math.pow(2, (temperature - 25) / 10);
+                    const rate = 0.02 * concentration * tempFactor; 
+                    
+                    interval = setInterval(() => {
+                        setTime(t => t + 0.1);
+                        setOpacity(prev => {
+                            const next = prev + rate;
+                            if (next >= 1) {
+                                setIsRunning(false);
+                                return 1;
+                            }
+                            return next;
+                        });
+                    }, 100);
+                }
+                return () => clearInterval(interval);
+            }, [mode, isRunning, concentration, temperature]);
+
+            // --- Logic: Gas Collection ---
+            // Reaction: Mg + 2HCl -> MgCl2 + H2
+            useEffect(() => {
+                let interval;
+                if (mode === 'gas' && isRunning) {
+                    const tempFactor = Math.pow(1.5, (temperature - 25) / 10);
+                    const surfaceFactor = surfaceArea === 'powder' ? 3 : 1;
+                    // Initial rate is high, decreases as reactants used up
+                    // dV/dt = k * (V_max - V)
+                    const maxVolume = 100;
+                    const k = 0.01 * concentration * tempFactor * surfaceFactor;
+
+                    interval = setInterval(() => {
+                        setTime(prevTime => {
+                            const newTime = prevTime + 0.1;
+                            setVolume(prevVol => {
+                                const rate = k * (maxVolume - prevVol);
+                                const newVol = Math.min(maxVolume, prevVol + rate);
+                                
+                                // Update chart data periodically
+                                if (Math.floor(newTime * 10) % 5 === 0) { // Every 0.5s
+                                     setGasDataPoints(current => [...current, {x: newTime, y: newVol}]);
+                                }
+                                
+                                if (newVol >= 99.5) {
+                                    setIsRunning(false);
+                                    return 100;
+                                }
+                                return newVol;
+                            });
+                            return newTime;
+                        });
+                    }, 100);
+                }
+                return () => clearInterval(interval);
+            }, [mode, isRunning, concentration, temperature, surfaceArea]);
+
+            // Chart Effect
+            useEffect(() => {
+                if (mode === 'gas' && chartRef.current) {
+                    if (chartInstance.current) chartInstance.current.destroy();
+                    
+                    const ctx = chartRef.current.getContext('2d');
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: 'Volume of H₂ (cm³)',
+                                data: gasDataPoints,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                                x: { type: 'linear', title: { display: true, text: 'Time (s)' }, min: 0 },
+                                y: { title: { display: true, text: 'Volume (cm³)' }, min: 0, max: 100 }
+                            }
+                        }
+                    });
+                }
+            }, [mode, gasDataPoints]); // Re-render on data update is heavy, usually optimize, but fine for simple demo
+
+            const reset = () => {
+                setIsRunning(false);
+                setTime(0);
+                setOpacity(0);
+                setVolume(0);
+                setGasDataPoints([{x:0, y:0}]);
+            };
+
+            const recordResult = () => {
+                if (mode === 'cross') {
+                    setCrossResults([...crossResults, { 
+                        conc: concentration, temp: temperature, time: time.toFixed(1) 
+                    }]);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b border-slate-200 pb-4 gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="timer"></i> 反應速率實驗工具箱
+                            </h1>
+                            <p className="text-slate-400 text-sm">Rate of Reaction: Experiment Simulations</p>
+                        </div>
+                        
+                        <div className="flex bg-slate-100 p-1 rounded-xl">
+                            <button 
+                                onClick={() => { setMode('cross'); reset(); }}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'cross' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                <i data-lucide="x" size={16}/> 十字圖實驗
+                            </button>
+                            <button 
+                                onClick={() => { setMode('gas'); reset(); }}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'gas' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                <i data-lucide="syringe" size={16}/> 集氣法
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="sliders" size={16}/> 實驗參數
+                                </h3>
+
+                                <div className="mb-4">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-blue-600">濃度 (Conc.)</label>
+                                        <span className="text-xs font-mono font-bold">{concentration} M</span>
+                                    </div>
+                                    <input type="range" min="0.1" max="2.0" step="0.1" value={concentration} onChange={(e) => setConcentration(Number(e.target.value))} disabled={isRunning} className="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                </div>
+
+                                <div className="mb-4">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-red-600">溫度 (Temp.)</label>
+                                        <span className="text-xs font-mono font-bold">{temperature} °C</span>
+                                    </div>
+                                    <input type="range" min="20" max="60" step="5" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} disabled={isRunning} className="w-full h-2 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-500" />
+                                </div>
+
+                                {mode === 'gas' && (
+                                    <div className="mb-6">
+                                        <label className="text-xs font-bold text-slate-600 block mb-2">金屬形態 (Surface Area)</label>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setSurfaceArea('chips')} className={`flex-1 py-2 text-xs font-bold rounded border ${surfaceArea === 'chips' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white text-slate-500'}`}>
+                                                鎂帶 (Ribbon/Chips)
+                                            </button>
+                                            <button onClick={() => setSurfaceArea('powder')} className={`flex-1 py-2 text-xs font-bold rounded border ${surfaceArea === 'powder' ? 'bg-slate-600 text-white border-slate-600' : 'bg-white text-slate-500'}`}>
+                                                鎂粉 (Powder)
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2 mt-6">
+                                    <button 
+                                        onClick={() => setIsRunning(!isRunning)}
+                                        className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2
+                                            ${isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}
+                                        `}
+                                    >
+                                        {isRunning ? '停止計時' : '開始實驗'}
+                                    </button>
+                                    <button onClick={reset} className="px-4 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200"><i data-lucide="rotate-ccw" size={20}/></button>
+                                </div>
+                            </div>
+
+                            {/* Result Table (Cross Mode Only) */}
+                            {mode === 'cross' && crossResults.length > 0 && (
+                                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex-grow">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">實驗記錄</h4>
+                                    <div className="overflow-y-auto max-h-40 text-xs">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 text-slate-500">
+                                                <tr>
+                                                    <th className="p-2">Conc.</th>
+                                                    <th className="p-2">Temp.</th>
+                                                    <th className="p-2">Time (s)</th>
+                                                    <th className="p-2">Rate (1/t)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {crossResults.map((r, i) => (
+                                                    <tr key={i} className="border-b border-slate-100">
+                                                        <td className="p-2">{r.conc}M</td>
+                                                        <td className="p-2">{r.temp}°C</td>
+                                                        <td className="p-2 font-bold">{r.time}</td>
+                                                        <td className="p-2 font-mono">{(1/r.time).toFixed(3)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right: Visualization */}
+                        <div className="w-full lg:w-2/3 flex flex-col gap-6">
+                            
+                            {/* Visual Area */}
+                            <div className="bg-slate-100 rounded-3xl border-4 border-slate-200 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center p-8">
+                                
+                                <div className="absolute top-4 right-4 font-mono text-3xl font-black text-slate-700 bg-white/80 px-4 py-2 rounded-xl shadow-sm border border-slate-200">
+                                    {time.toFixed(1)} s
+                                </div>
+
+                                {mode === 'cross' ? (
+                                    /* Disappearing Cross Visual */
+                                    <div className="relative flex flex-col items-center">
+                                        {/* Top View (Circle) */}
+                                        <div className="w-64 h-64 rounded-full border-8 border-white bg-white shadow-xl relative overflow-hidden flex items-center justify-center mb-8">
+                                            {/* The Cross */}
+                                            <div className="absolute text-slate-900 font-black text-8xl opacity-80 select-none">X</div>
+                                            {/* Solution (Cloudy Layer) */}
+                                            <div 
+                                                className="absolute inset-0 bg-yellow-100 cloudy-layer"
+                                                style={{ opacity: opacity }}
+                                            ></div>
+                                            {/* Bubbles (SO2) */}
+                                            {isRunning && opacity < 1 && (
+                                                <div className="absolute inset-0">
+                                                    {[...Array(5)].map((_,i) => <div key={i} className="bubble" style={{left: `${20+Math.random()*60}%`, width:'8px', height:'8px', animationDelay: `${i*0.2}s`}}></div>)}
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {/* End Button */}
+                                        {opacity >= 1 && !isRunning && (
+                                            <div className="bg-white px-6 py-3 rounded-xl shadow-lg border border-green-200 text-green-700 font-bold flex items-center gap-2 animate-bounce cursor-pointer" onClick={recordResult}>
+                                                <i data-lucide="check-circle"/> 實驗完成！點擊記錄
+                                            </div>
+                                        )}
+                                        
+                                        <div className="text-slate-400 text-sm mt-4 text-center">
+                                            俯視圖 (Top View)<br/>
+                                            當你看不到 "X" 時，實驗結束。
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Gas Collection Visual */
+                                    <div className="w-full h-full flex flex-col items-center justify-between">
+                                        <div className="flex items-center justify-center gap-4 w-full mb-4">
+                                            {/* Flask */}
+                                            <div className="relative w-24 h-32">
+                                                <div className="absolute bottom-0 w-full h-24 bg-white/60 border-4 border-slate-400 rounded-b-xl backdrop-blur-sm overflow-hidden">
+                                                    <div className="absolute bottom-0 w-full h-1/2 bg-slate-200"></div>
+                                                    {isRunning && (
+                                                        <div className="absolute bottom-0 w-full h-full">
+                                                             {[...Array(8)].map((_,i) => <div key={i} className="bubble" style={{left: `${Math.random()*80+10}%`, width:'6px', height:'6px', animationDelay: `${Math.random()}s`}}></div>)}
+                                                        </div>
+                                                    )}
+                                                    {/* Metal */}
+                                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-600 w-12 h-4 rounded"></div>
+                                                </div>
+                                                <div className="absolute top-8 w-4 h-24 bg-transparent border-r-4 border-slate-400 right-[-4px]"></div> {/* Tube */}
+                                            </div>
+
+                                            {/* Syringe */}
+                                            <div className="relative w-64 h-16 bg-white/80 border-4 border-slate-400 rounded-lg flex items-center px-2 shadow-md">
+                                                {/* Graduations */}
+                                                <div className="absolute bottom-0 w-full h-2 flex justify-between px-4">
+                                                    {[...Array(11)].map((_,i) => <div key={i} className="w-px h-2 bg-slate-400"></div>)}
+                                                </div>
+                                                {/* Plunger */}
+                                                <div 
+                                                    className="h-10 bg-slate-700 rounded plunger relative"
+                                                    style={{ width: '10px', marginLeft: `${volume}%` }}
+                                                >
+                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-full bg-blue-100/50 h-full border-r-2 border-slate-500" style={{width: `${volume*2.5}px`}}></div>
+                                                </div>
+                                                <div className="absolute right-4 font-mono font-bold text-blue-600">{volume.toFixed(1)} cm³</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Graph */}
+                                        <div className="w-full h-48 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                                            <canvas ref={chartRef}></canvas>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-200 pt-4">
+                        Luminous Learner Science Tools | HKDSE Topic IX
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
