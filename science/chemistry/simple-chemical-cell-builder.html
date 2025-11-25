@@ -14,26 +14,6 @@
         body { font-family: 'Noto Sans HK', sans-serif; }
         .font-mono { font-family: 'Roboto Mono', monospace; }
 
-        /* Electron Animation */
-        @keyframes flow-right {
-            0% { offset-distance: 0%; opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { offset-distance: 100%; opacity: 0; }
-        }
-        
-        .electron {
-            width: 8px;
-            height: 8px;
-            background-color: #facc15; /* Yellow */
-            border-radius: 50%;
-            position: absolute;
-            box-shadow: 0 0 5px #facc15;
-            offset-path: path("M 60 200 V 50 H 240 V 200"); /* Default path, will be overridden by JS logic if needed or CSS relative */
-            /* CSS Motion Path is tricky with responsive, using JS translation is safer for simple lines */
-            transition: transform 0.1s linear;
-        }
-
         /* Bulb Glow Animation */
         @keyframes glow {
             0% { box-shadow: 0 0 10px var(--glow-color); }
@@ -42,6 +22,7 @@
         }
         .bulb-glow {
             animation: glow 1.5s infinite ease-in-out;
+            transition: all 0.5s ease;
         }
 
         /* Bubble Animation */
@@ -65,7 +46,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Metals Data (E values are approximate standard potentials for comparison)
+        // Metals Data
         const Metals = [
             { id: 'Mg', name: '鎂 (Magnesium)', symbol: 'Mg', E: -2.37, color: 'bg-gray-300 border-gray-400' },
             { id: 'Zn', name: '鋅 (Zinc)', symbol: 'Zn', E: -0.76, color: 'bg-slate-400 border-slate-500' },
@@ -74,81 +55,102 @@
             { id: 'Ag', name: '銀 (Silver)', symbol: 'Ag', E: 0.80, color: 'bg-slate-200 border-slate-300' }
         ];
 
+        // Electrolytes Data with Conductivity Factor
         const Electrolytes = [
-            { id: 'NaCl', name: '稀食鹽水 (Dilute NaCl)', type: 'neutral', color: 'bg-sky-100/80' },
-            { id: 'HCl', name: '稀鹽酸 (Dilute HCl)', type: 'acid', color: 'bg-yellow-50/80' },
-            { id: 'Lemon', name: '檸檬汁 (Lemon Juice)', type: 'acid', color: 'bg-yellow-200/80' },
-            { id: 'Vinegar', name: '醋 (Vinegar)', type: 'acid', color: 'bg-orange-50/80' }
+            { id: 'HCl', name: '稀鹽酸 (Dilute HCl)', type: 'acid', color: 'bg-yellow-50/80', conductivity: 1.0, desc: '強電解質 (Strong Electrolyte)' },
+            { id: 'NaCl', name: '稀食鹽水 (Dilute NaCl)', type: 'neutral', color: 'bg-sky-100/80', conductivity: 0.9, desc: '強電解質 (Strong Electrolyte)' },
+            { id: 'Lemon', name: '檸檬汁 (Lemon Juice)', type: 'acid', color: 'bg-yellow-200/80', conductivity: 0.4, desc: '弱電解質 (Weak Electrolyte)' },
+            { id: 'Vinegar', name: '醋 (Vinegar)', type: 'acid', color: 'bg-orange-50/80', conductivity: 0.3, desc: '弱電解質 (Weak Electrolyte)' },
+            { id: 'Water', name: '蒸餾水 (Distilled Water)', type: 'neutral', color: 'bg-blue-50/50', conductivity: 0.01, desc: '非電解質 (Non-electrolyte)' } // Almost 0
         ];
 
         const App = () => {
             const [electrodeL, setElectrodeL] = useState(Metals[1]); // Zn
             const [electrodeR, setElectrodeR] = useState(Metals[3]); // Cu
-            const [electrolyte, setElectrolyte] = useState(Electrolytes[1]); // HCl
+            const [electrolyte, setElectrolyte] = useState(Electrolytes[0]); // HCl
             
             const [voltage, setVoltage] = useState(0);
+            const [current, setCurrent] = useState(0); // Simulated current for brightness
             const [anode, setAnode] = useState(null); // 'left' or 'right'
             const [electrons, setElectrons] = useState([]);
-            const [showVoltmeter, setShowVoltmeter] = useState(false); // Toggle between Bulb/Voltmeter
+            const [showVoltmeter, setShowVoltmeter] = useState(false);
 
             useEffect(() => {
-                // Calculate Voltage difference (Absolute value for simple cell potential magnitude)
-                // Real cells are complex, but for simple cell model: V proportional to delta E
+                // 1. Calculate Potential Difference (Voltage)
                 const diff = Math.abs(electrodeR.E - electrodeL.E);
                 setVoltage(diff);
 
-                // Determine flow direction
-                if (electrodeL.E < electrodeR.E) {
-                    // Left is more reactive (more negative E) -> Anode (-)
+                // 2. Calculate Simulated Current (Voltage * Conductivity)
+                // If voltage is 0 (same metal) or conductivity is 0 (distilled water), current is 0.
+                const simulatedCurrent = diff * electrolyte.conductivity;
+                setCurrent(simulatedCurrent);
+
+                // 3. Determine Anode (Source of electrons)
+                if (diff < 0.01) {
+                    setAnode(null); // No reaction if same metal
+                } else if (electrodeL.E < electrodeR.E) {
                     setAnode('left');
-                } else if (electrodeR.E < electrodeL.E) {
-                    // Right is more reactive -> Anode (-)
-                    setAnode('right');
                 } else {
-                    setAnode(null); // No reaction
+                    setAnode('right');
                 }
 
-            }, [electrodeL, electrodeR]);
+            }, [electrodeL, electrodeR, electrolyte]);
 
             // Electron Animation Loop
             useEffect(() => {
                 let interval;
-                if (voltage > 0) {
+                // Only spawn electrons if there is significant current
+                if (current > 0.05) {
+                    // Speed of spawning relates to current
+                    const spawnRate = Math.max(100, 500 - (current * 200)); 
+                    
                     interval = setInterval(() => {
                         setElectrons(prev => {
                             const newE = { id: Date.now(), progress: 0 };
-                            // Keep max 5 electrons to avoid clutter
+                            // Limit max electrons to avoid lag
                             const next = [...prev, newE].filter(e => e.progress < 100); 
                             return next;
                         });
-                    }, 300); // Spawn rate
+                    }, spawnRate);
                 } else {
                     setElectrons([]);
                 }
                 return () => clearInterval(interval);
-            }, [voltage]);
+            }, [current]);
 
             // Animation Frame for movement
             useEffect(() => {
                 let animFrame;
                 const updatePos = () => {
-                    setElectrons(prev => prev.map(e => ({ ...e, progress: e.progress + 2 }))); // Speed
+                    // Speed of movement relates to current
+                    const speed = Math.max(0.5, current * 1.5);
+                    setElectrons(prev => prev.map(e => ({ ...e, progress: e.progress + speed })));
                     animFrame = requestAnimationFrame(updatePos);
                 };
-                if (voltage > 0) {
+                if (current > 0.05) {
                     animFrame = requestAnimationFrame(updatePos);
                 }
                 return () => cancelAnimationFrame(animFrame);
-            }, [voltage]);
+            }, [current]);
 
             const getBulbStyle = () => {
-                if (voltage === 0) return { opacity: 0.2, filter: 'grayscale(100%)' };
-                // Map voltage 0-3.2 to opacity/brightness
-                const intensity = Math.min(1, voltage / 2.0); 
+                if (current < 0.05) return { opacity: 0.3, filter: 'grayscale(100%) brightness(0.5)' };
+                
+                // Map current to brightness visual
+                // Current ranges roughly from 0 to ~3.0
+                const brightness = 1 + (current * 0.8);
+                const dropShadow = Math.min(50, current * 20);
+                const colorIntensity = Math.min(1, current / 1.5);
+                
+                // Interpolate color from dim yellow to bright white-yellow
+                // Dim: 250, 204, 21 (Yellow)
+                // Bright: 255, 255, 200 (Whiteish)
+                
                 return { 
                     opacity: 1, 
-                    filter: `drop-shadow(0 0 ${intensity * 30}px #facc15) brightness(${1 + intensity})`,
-                    '--glow-color': `rgba(250, 204, 21, ${intensity})`
+                    filter: `drop-shadow(0 0 ${dropShadow}px rgba(250, 204, 21, ${colorIntensity})) brightness(${brightness})`,
+                    '--glow-color': `rgba(250, 204, 21, ${colorIntensity})`,
+                    transform: `scale(${1 + current * 0.05})` // Slight pulse size
                 };
             };
 
@@ -224,18 +226,28 @@
                                     >
                                         {Electrolytes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                     </select>
+                                    <p className="text-[10px] text-slate-400 mt-1 text-right">{electrolyte.desc}</p>
                                 </div>
                             </div>
 
                             {/* Info Box */}
                             <div className="bg-slate-800 p-5 rounded-2xl text-white shadow-lg">
                                 <h3 className="text-sm font-bold text-yellow-400 uppercase mb-2 flex items-center gap-2">
-                                    <i data-lucide="info" size={16}/> 實驗原理
+                                    <i data-lucide="info" size={16}/> 觀察重點
                                 </h3>
                                 <div className="text-sm space-y-2 opacity-90">
-                                    <p>• 活潑金屬 (較高 E.C.S. 位置) 失去電子，成為<strong>負極 (Anode)</strong>。</p>
-                                    <p>• 電子經導線流向較不活潑金屬，即<strong>正極 (Cathode)</strong>。</p>
-                                    <p>• 兩個金屬的活性差異越大，電壓越高，燈泡越亮。</p>
+                                    <div className="flex justify-between border-b border-slate-600 pb-1">
+                                        <span>電壓 (Voltage):</span>
+                                        <span className="font-mono text-yellow-300">{voltage.toFixed(2)} V</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-slate-600 pb-1">
+                                        <span>導電性 (Conductivity):</span>
+                                        <span className="font-mono text-blue-300">{electrolyte.conductivity}</span>
+                                    </div>
+                                    <div className="flex justify-between pt-1">
+                                        <span>亮度 (Brightness):</span>
+                                        <span className="font-bold">{current > 1.5 ? '⭐⭐⭐' : current > 0.5 ? '⭐⭐' : current > 0.05 ? '⭐' : '⚫'}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -249,20 +261,21 @@
 
                             {/* Circuit Top */}
                             <div className="relative w-full max-w-md h-32 flex justify-center items-center mb-4">
-                                {/* Wire Path (Simplified SVG) */}
+                                {/* Wire Path (Corrected to align with 25% and 75%) */}
                                 <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
-                                    {/* Left Wire vertical */}
-                                    <line x1="20%" y1="100%" x2="20%" y2="50%" stroke="#374151" strokeWidth="4" />
-                                    {/* Right Wire vertical */}
-                                    <line x1="80%" y1="100%" x2="80%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                    {/* Left Wire vertical (25%) */}
+                                    <line x1="25%" y1="100%" x2="25%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                    {/* Right Wire vertical (75%) */}
+                                    <line x1="75%" y1="100%" x2="75%" y2="50%" stroke="#374151" strokeWidth="4" />
                                     {/* Top Wire horizontal */}
-                                    <line x1="20%" y1="50%" x2="80%" y2="50%" stroke="#374151" strokeWidth="4" />
+                                    <line x1="25%" y1="50%" x2="75%" y2="50%" stroke="#374151" strokeWidth="4" />
                                 </svg>
 
                                 {/* Device (Bulb or Voltmeter) */}
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-white p-2 rounded-full shadow-md border-2 border-slate-300">
                                     {showVoltmeter ? (
                                         <div className="w-24 h-16 bg-slate-800 rounded-lg border-4 border-slate-600 flex items-center justify-center font-mono text-green-400 font-bold text-xl shadow-inner">
+                                            {/* Voltmeter shows Voltage potential, usually independent of current unless loaded, but let's show the potential difference */}
                                             {voltage.toFixed(2)} V
                                         </div>
                                     ) : (
@@ -275,22 +288,23 @@
                                 {/* Moving Electrons */}
                                 {electrons.map(e => {
                                     // Calculate position based on progress 0-100
-                                    // Path: Up Left (0-20) -> Across (20-80) -> Down Right (80-100)
-                                    // Or Reverse: Up Right (0-20) -> Across (20-80) -> Down Left (80-100)
-                                    
+                                    // Path coordinates match the SVG: 25% -> 75%
                                     let x, y;
                                     const p = e.progress;
                                     
                                     if (anode === 'left') {
-                                        // Left to Right
-                                        if (p < 20) { x = 20; y = 100 - (p/20)*50; }
-                                        else if (p < 80) { x = 20 + ((p-20)/60)*60; y = 50; }
-                                        else { x = 80; y = 50 + ((p-80)/20)*50; }
+                                        // Left (25%) to Right (75%)
+                                        // Up: (25, 100) -> (25, 50) [0-20%]
+                                        // Across: (25, 50) -> (75, 50) [20-80%]
+                                        // Down: (75, 50) -> (75, 100) [80-100%]
+                                        if (p < 20) { x = 25; y = 100 - (p/20)*50; }
+                                        else if (p < 80) { x = 25 + ((p-20)/60)*50; y = 50; }
+                                        else { x = 75; y = 50 + ((p-80)/20)*50; }
                                     } else {
-                                        // Right to Left
-                                        if (p < 20) { x = 80; y = 100 - (p/20)*50; }
-                                        else if (p < 80) { x = 80 - ((p-20)/60)*60; y = 50; }
-                                        else { x = 20; y = 50 + ((p-80)/20)*50; }
+                                        // Right (75%) to Left (25%)
+                                        if (p < 20) { x = 75; y = 100 - (p/20)*50; }
+                                        else if (p < 80) { x = 75 - ((p-20)/60)*50; y = 50; }
+                                        else { x = 25; y = 50 + ((p-80)/20)*50; }
                                     }
 
                                     return (
@@ -299,7 +313,7 @@
                                 })}
 
                                 {/* Flow Label */}
-                                {anode && (
+                                {anode && current > 0.05 && (
                                     <div className="absolute top-0 bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full font-bold border border-yellow-300 animate-pulse">
                                         e⁻ Flow {anode === 'left' ? '→' : '←'}
                                     </div>
@@ -307,13 +321,13 @@
                             </div>
 
                             {/* Beaker & Electrodes */}
-                            <div className="relative">
+                            <div className="relative w-full max-w-md flex justify-center">
                                 <div className="w-64 h-48 border-x-4 border-b-4 border-slate-400 bg-white/60 backdrop-blur-sm rounded-b-3xl relative overflow-hidden">
                                     {/* Liquid */}
                                     <div className={`absolute bottom-0 w-full h-3/4 ${electrolyte.color} transition-colors duration-500`}></div>
                                     
-                                    {/* Bubbles Animation (If reaction occurring) */}
-                                    {anode && electrolyte.type === 'acid' && (
+                                    {/* Bubbles Animation (If reaction occurring & electrolyte allows) */}
+                                    {anode && current > 0.05 && electrolyte.type === 'acid' && (
                                         <div className="absolute bottom-0 w-full h-3/4 overflow-hidden">
                                             {/* Bubbles at Cathode (Positive Electrode) */}
                                             <div className={`absolute w-1/2 h-full ${anode === 'left' ? 'right-0' : 'left-0'}`}>
@@ -331,24 +345,35 @@
                                     )}
                                 </div>
                                 
-                                {/* Left Electrode */}
-                                <div className={`absolute top-[-20px] left-8 w-12 h-40 ${electrodeL.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
+                                {/* Left Electrode (at 25% of SVG wrapper = 25% of this flex container approx? No, absolute pos) */}
+                                {/* The wire SVG is full width of parent. The beaker is centered. 
+                                    We need electrodes to align with wires at 25% and 75% of PARENT width.
+                                    The beaker is narrower. 
+                                    Correction: Let's place electrodes relative to the Beaker to ensure they are inside, 
+                                    and adjust Wire SVG to match Beaker positions.
+                                */}
+                                {/* Adjusted Layout: Beaker is 16rem (64 tailwind). Electrodes are inside. 
+                                    Let's space electrodes 50% apart inside the beaker.
+                                    Left: 25% of beaker. Right: 75% of beaker.
+                                    And the wire SVG above needs to match this width.
+                                */}
+                                
+                                <div className={`absolute top-[-20px] left-[25%] -translate-x-1/2 w-12 h-40 ${electrodeL.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
                                     <span className="font-bold text-slate-700">{electrodeL.symbol}</span>
-                                    {anode === 'left' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
-                                    {anode === 'right' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
+                                    {current > 0.05 && anode === 'left' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
+                                    {current > 0.05 && anode === 'right' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
                                 </div>
 
-                                {/* Right Electrode */}
-                                <div className={`absolute top-[-20px] right-8 w-12 h-40 ${electrodeR.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
+                                <div className={`absolute top-[-20px] left-[75%] -translate-x-1/2 w-12 h-40 ${electrodeR.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
                                     <span className="font-bold text-slate-700">{electrodeR.symbol}</span>
-                                    {anode === 'right' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
-                                    {anode === 'left' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
+                                    {current > 0.05 && anode === 'right' && <div className="absolute -top-8 text-red-500 font-bold text-lg">-</div>}
+                                    {current > 0.05 && anode === 'left' && <div className="absolute -top-8 text-green-600 font-bold text-lg">+</div>}
                                 </div>
                             </div>
 
                             {/* Result Text */}
                             <div className="bg-white px-6 py-3 rounded-xl shadow-sm border border-slate-200 text-center mt-4">
-                                {anode ? (
+                                {current > 0.05 ? (
                                     <>
                                         <div className="text-sm text-slate-500 mb-1">電流方向 (Current Direction)</div>
                                         <div className="font-bold text-lg text-slate-800">
@@ -359,14 +384,16 @@
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-slate-400 font-bold">無反應 (No Reaction)</div>
+                                    <div className="text-slate-400 font-bold">
+                                        {voltage === 0 ? '無反應 (同種金屬)' : '導電性極低 / 無電流'}
+                                    </div>
                                 )}
                             </div>
 
                         </div>
                     </div>
                     
-                    <div className="text-center text-slate-400 text-xs mt-8">
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-800 pt-4">
                         Luminous Learner Science Tools | HKDSE Topic VII
                     </div>
                 </div>
