@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
         body { font-family: 'Noto Sans HK', sans-serif; }
@@ -46,6 +45,15 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // --- Internal Icons (Fix for disappearing icons) ---
+        const Icons = {
+            Battery: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="10" x="2" y="7" rx="2" ry="2"/><line x1="22" x2="22" y1="11" y2="13"/><line x1="6" x2="6" y1="11" y2="13"/><line x1="10" x2="10" y1="11" y2="13"/><line x1="14" x2="14" y1="11" y2="13"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>,
+            Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+            Lightbulb: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-1 1.5-2.4 1.5-3.8 0-3.2-2.5-5.7-5.7-5.7C9 2 6.6 4.1 6.3 7c-.2 2.2 1 4.3 2.7 5.5.6.5 1.1 1.2 1.1 2"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>,
+            ArrowRight: ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        };
+
         // Metals Data
         const Metals = [
             { id: 'Mg', name: '鎂 (Magnesium)', symbol: 'Mg', E: -2.37, color: 'bg-gray-300 border-gray-400' },
@@ -61,7 +69,7 @@
             { id: 'NaCl', name: '稀食鹽水 (Dilute NaCl)', type: 'neutral', color: 'bg-sky-100/80', conductivity: 0.9, desc: '強電解質 (Strong Electrolyte)' },
             { id: 'Lemon', name: '檸檬汁 (Lemon Juice)', type: 'acid', color: 'bg-yellow-200/80', conductivity: 0.4, desc: '弱電解質 (Weak Electrolyte)' },
             { id: 'Vinegar', name: '醋 (Vinegar)', type: 'acid', color: 'bg-orange-50/80', conductivity: 0.3, desc: '弱電解質 (Weak Electrolyte)' },
-            { id: 'Water', name: '蒸餾水 (Distilled Water)', type: 'neutral', color: 'bg-blue-50/50', conductivity: 0.01, desc: '非電解質 (Non-electrolyte)' } // Almost 0
+            { id: 'Water', name: '蒸餾水 (Distilled Water)', type: 'neutral', color: 'bg-blue-50/50', conductivity: 0.01, desc: '非電解質 (Non-electrolyte)' }
         ];
 
         const App = () => {
@@ -70,44 +78,36 @@
             const [electrolyte, setElectrolyte] = useState(Electrolytes[0]); // HCl
             
             const [voltage, setVoltage] = useState(0);
-            const [current, setCurrent] = useState(0); // Simulated current for brightness
+            const [current, setCurrent] = useState(0);
             const [anode, setAnode] = useState(null); // 'left' or 'right'
             const [electrons, setElectrons] = useState([]);
             const [showVoltmeter, setShowVoltmeter] = useState(false);
 
             useEffect(() => {
-                // 1. Calculate Potential Difference (Voltage)
                 const diff = Math.abs(electrodeR.E - electrodeL.E);
                 setVoltage(diff);
 
-                // 2. Calculate Simulated Current (Voltage * Conductivity)
-                // If voltage is 0 (same metal) or conductivity is 0 (distilled water), current is 0.
                 const simulatedCurrent = diff * electrolyte.conductivity;
                 setCurrent(simulatedCurrent);
 
-                // 3. Determine Anode (Source of electrons)
                 if (diff < 0.01) {
-                    setAnode(null); // No reaction if same metal
+                    setAnode(null);
                 } else if (electrodeL.E < electrodeR.E) {
-                    setAnode('left');
+                    setAnode('left'); // Left is Anode (Oxidation, loses e-)
                 } else {
-                    setAnode('right');
+                    setAnode('right'); // Right is Anode
                 }
 
             }, [electrodeL, electrodeR, electrolyte]);
 
-            // Electron Animation Loop
+            // Electron Animation
             useEffect(() => {
                 let interval;
-                // Only spawn electrons if there is significant current
                 if (current > 0.05) {
-                    // Speed of spawning relates to current
                     const spawnRate = Math.max(100, 500 - (current * 200)); 
-                    
                     interval = setInterval(() => {
                         setElectrons(prev => {
                             const newE = { id: Date.now(), progress: 0 };
-                            // Limit max electrons to avoid clutter
                             const next = [...prev, newE].filter(e => e.progress < 100); 
                             return next;
                         });
@@ -118,11 +118,9 @@
                 return () => clearInterval(interval);
             }, [current]);
 
-            // Animation Frame for movement
             useEffect(() => {
                 let animFrame;
                 const updatePos = () => {
-                    // Speed of movement relates to current
                     const speed = Math.max(0.5, current * 1.5);
                     setElectrons(prev => prev.map(e => ({ ...e, progress: e.progress + speed })));
                     animFrame = requestAnimationFrame(updatePos);
@@ -133,7 +131,6 @@
                 return () => cancelAnimationFrame(animFrame);
             }, [current]);
 
-            // Helper to get voltage color class based on magnitude
             const getVoltageColor = (v) => {
                 if (v > 2.0) return 'text-red-600 bg-red-50 border-red-200';
                 if (v > 1.0) return 'text-orange-600 bg-orange-50 border-orange-200';
@@ -143,12 +140,9 @@
             
             const getBulbStyle = () => {
                 if (current < 0.05) return { opacity: 0.3, filter: 'grayscale(100%) brightness(0.5)' };
-                
-                // Map current to brightness visual
                 const brightness = 1 + (current * 0.8);
                 const dropShadow = Math.min(50, current * 20);
                 const colorIntensity = Math.min(1, current / 1.5);
-                
                 return { 
                     opacity: 1, 
                     filter: `drop-shadow(0 0 ${dropShadow}px rgba(250, 204, 21, ${colorIntensity})) brightness(${brightness})`,
@@ -164,24 +158,14 @@
                     <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-yellow-600 flex items-center gap-2">
-                                <i data-lucide="battery-charging"></i> 簡易電池組裝器
+                                <Icons.Battery /> 簡易電池組裝器
                             </h1>
                             <p className="text-slate-400 text-sm">Simple Chemical Cell Builder</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-slate-500">顯示模式:</span>
-                            <button 
-                                onClick={() => setShowVoltmeter(false)}
-                                className={`px-3 py-1 rounded text-xs font-bold border ${!showVoltmeter ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-slate-400'}`}
-                            >
-                                燈泡
-                            </button>
-                            <button 
-                                onClick={() => setShowVoltmeter(true)}
-                                className={`px-3 py-1 rounded text-xs font-bold border ${showVoltmeter ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-slate-400'}`}
-                            >
-                                電壓計
-                            </button>
+                            <button onClick={() => setShowVoltmeter(false)} className={`px-3 py-1 rounded text-xs font-bold border ${!showVoltmeter ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-white text-slate-400'}`}>燈泡</button>
+                            <button onClick={() => setShowVoltmeter(true)} className={`px-3 py-1 rounded text-xs font-bold border ${showVoltmeter ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-slate-400'}`}>電壓計</button>
                         </div>
                     </div>
 
@@ -189,123 +173,83 @@
                         
                         {/* Left: Configuration */}
                         <div className="w-full lg:w-1/3 flex flex-col gap-6">
-                            
                             <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200">
                                 <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
-                                    <i data-lucide="settings-2" size={16}/> 電池設定
+                                    <Icons.Settings /> 電池設定
                                 </h3>
                                 
-                                {/* Left Electrode */}
                                 <div className="mb-4">
                                     <label className="text-xs font-bold text-slate-700 block mb-1">電極 A (左)</label>
-                                    <select 
-                                        value={electrodeL.symbol}
-                                        onChange={(e) => setElectrodeL(Metals.find(m => m.symbol === e.target.value))}
-                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400"
-                                    >
+                                    <select value={electrodeL.symbol} onChange={(e) => setElectrodeL(Metals.find(m => m.symbol === e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400">
                                         {Metals.map(m => <option key={m.symbol} value={m.symbol}>{m.name}</option>)}
                                     </select>
                                 </div>
-
-                                {/* Right Electrode */}
                                 <div className="mb-4">
                                     <label className="text-xs font-bold text-slate-700 block mb-1">電極 B (右)</label>
-                                    <select 
-                                        value={electrodeR.symbol}
-                                        onChange={(e) => setElectrodeR(Metals.find(m => m.symbol === e.target.value))}
-                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400"
-                                    >
+                                    <select value={electrodeR.symbol} onChange={(e) => setElectrodeR(Metals.find(m => m.symbol === e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-yellow-400">
                                         {Metals.map(m => <option key={m.symbol} value={m.symbol}>{m.name}</option>)}
                                     </select>
                                 </div>
-
-                                {/* Electrolyte */}
                                 <div className="mb-2">
                                     <label className="text-xs font-bold text-slate-700 block mb-1">電解質 (Electrolyte)</label>
-                                    <select 
-                                        value={electrolyte.id}
-                                        onChange={(e) => setElectrolyte(Electrolytes.find(el => el.id === e.target.value))}
-                                        className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
+                                    <select value={electrolyte.id} onChange={(e) => setElectrolyte(Electrolytes.find(el => el.id === e.target.value))} className="w-full p-3 bg-blue-50 border border-blue-200 rounded-xl font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-400">
                                         {Electrolytes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                     </select>
                                     <p className="text-[10px] text-slate-400 mt-1 text-right">{electrolyte.desc}</p>
                                 </div>
                             </div>
 
-                            {/* Info Box (Simplified) */}
                             <div className="bg-slate-800 p-5 rounded-2xl text-white shadow-lg">
                                 <h3 className="text-sm font-bold text-yellow-400 uppercase mb-2 flex items-center gap-2">
-                                    <i data-lucide="info" size={16}/> 實驗原理
+                                    <Icons.Info /> 實驗原理
                                 </h3>
                                 <div className="text-sm space-y-2 opacity-90">
                                     <p>• 活潑金屬 (較高 E.C.S. 位置) 失去電子，成為<strong>負極 (Anode)</strong>。</p>
                                     <p>• 電子經導線流向較不活潑金屬，即<strong>正極 (Cathode)</strong>。</p>
                                 </div>
                             </div>
-
                         </div>
 
                         {/* Right: Visualization */}
                         <div className="w-full lg:w-2/3 flex flex-col gap-6 items-center justify-center bg-slate-100 rounded-3xl border-4 border-slate-200 relative overflow-hidden min-h-[500px] p-8">
-                            
-                            {/* Background Grid */}
                             <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
 
                             {/* Circuit Top */}
                             <div className="relative w-full max-w-md h-32 flex justify-center items-center mb-4">
-                                {/* Wire Path (Corrected to align with 25% and 75%) */}
                                 <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none">
-                                    {/* Left Wire vertical (25%) */}
                                     <line x1="25%" y1="100%" x2="25%" y2="50%" stroke="#374151" strokeWidth="4" />
-                                    {/* Right Wire vertical (75%) */}
                                     <line x1="75%" y1="100%" x2="75%" y2="50%" stroke="#374151" strokeWidth="4" />
-                                    {/* Top Wire horizontal */}
                                     <line x1="25%" y1="50%" x2="75%" y2="50%" stroke="#374151" strokeWidth="4" />
                                 </svg>
 
-                                {/* Device (Bulb or Voltmeter) */}
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-white p-2 rounded-full shadow-md border-2 border-slate-300">
                                     {showVoltmeter ? (
                                         <div className="w-24 h-16 bg-slate-800 rounded-lg border-4 border-slate-600 flex items-center justify-center font-mono text-green-400 font-bold text-xl shadow-inner">
-                                            {/* Voltmeter shows Voltage potential, usually independent of current unless loaded, but let's show the potential difference */}
                                             {voltage.toFixed(2)} V
                                         </div>
                                     ) : (
                                         <div className={`bulb-glow transition-all duration-500`} style={getBulbStyle()}>
-                                            <i data-lucide="lightbulb" size={64} className="text-yellow-400 fill-yellow-400" />
+                                            <Icons.Lightbulb className="text-yellow-400 fill-yellow-400" />
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Moving Electrons */}
+                                {/* Electrons */}
                                 {electrons.map(e => {
-                                    // Calculate position based on progress 0-100
-                                    // Path coordinates match the SVG: 25% -> 75%
                                     let x, y;
                                     const p = e.progress;
-                                    
                                     if (anode === 'left') {
-                                        // Left (25%) to Right (75%)
-                                        // Up: (25, 100) -> (25, 50) [0-20%]
-                                        // Across: (25, 50) -> (75, 50) [20-80%]
-                                        // Down: (75, 50) -> (75, 100) [80-100%]
                                         if (p < 20) { x = 25; y = 100 - (p/20)*50; }
                                         else if (p < 80) { x = 25 + ((p-20)/60)*50; y = 50; }
                                         else { x = 75; y = 50 + ((p-80)/20)*50; }
                                     } else {
-                                        // Right (75%) to Left (25%)
                                         if (p < 20) { x = 75; y = 100 - (p/20)*50; }
                                         else if (p < 80) { x = 75 - ((p-20)/60)*50; y = 50; }
                                         else { x = 25; y = 50 + ((p-80)/20)*50; }
                                     }
-
-                                    return (
-                                        <div key={e.id} className="electron z-20" style={{ left: `${x}%`, top: `${y}%` }}></div>
-                                    );
+                                    return <div key={e.id} className="electron z-20" style={{ left: `${x}%`, top: `${y}%` }}></div>;
                                 })}
 
-                                {/* Flow Label */}
                                 {anode && current > 0.05 && (
                                     <div className="absolute top-0 bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full font-bold border border-yellow-300 animate-pulse">
                                         e⁻ Flow {anode === 'left' ? '→' : '←'}
@@ -316,40 +260,17 @@
                             {/* Beaker & Electrodes */}
                             <div className="relative w-full max-w-md flex justify-center">
                                 <div className="w-64 h-48 border-x-4 border-b-4 border-slate-400 bg-white/60 backdrop-blur-sm rounded-b-3xl relative overflow-hidden">
-                                    {/* Liquid */}
                                     <div className={`absolute bottom-0 w-full h-3/4 ${electrolyte.color} transition-colors duration-500`}></div>
-                                    
-                                    {/* Bubbles Animation (If reaction occurring & electrolyte allows) */}
                                     {anode && current > 0.05 && electrolyte.type === 'acid' && (
                                         <div className="absolute bottom-0 w-full h-3/4 overflow-hidden">
-                                            {/* Bubbles at Cathode (Positive Electrode) */}
                                             <div className={`absolute w-1/2 h-full ${anode === 'left' ? 'right-0' : 'left-0'}`}>
                                                 {[...Array(6)].map((_, i) => (
-                                                    <div key={i} className="bubble" 
-                                                         style={{
-                                                            left: `${Math.random()*60 + 20}%`, 
-                                                            bottom: `${Math.random()*20}%`,
-                                                            width: `${Math.random()*6+4}px`, height: `${Math.random()*6+4}px`,
-                                                            animationDelay: `${Math.random()}s`
-                                                         }}></div>
+                                                    <div key={i} className="bubble" style={{left: `${Math.random()*60 + 20}%`, bottom: `${Math.random()*20}%`, width: `${Math.random()*6+4}px`, height: `${Math.random()*6+4}px`, animationDelay: `${Math.random()}s`}}></div>
                                                 ))}
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                
-                                {/* Left Electrode (at 25% of SVG wrapper = 25% of this flex container approx? No, absolute pos) */}
-                                {/* The wire SVG is full width of parent. The beaker is centered. 
-                                    We need electrodes to align with wires at 25% and 75% of PARENT width.
-                                    The beaker is narrower. 
-                                    Correction: Let's place electrodes relative to the Beaker to ensure they are inside, 
-                                    and adjust Wire SVG to match Beaker positions.
-                                */}
-                                {/* Adjusted Layout: Beaker is 16rem (64 tailwind). Electrodes are inside. 
-                                    Let's space electrodes 50% apart inside the beaker.
-                                    Left: 25% of beaker. Right: 75% of beaker.
-                                    And the wire SVG above needs to match this width.
-                                */}
                                 
                                 <div className={`absolute top-[-20px] left-[25%] -translate-x-1/2 w-12 h-40 ${electrodeL.color} border-2 rounded-md shadow-md flex items-end justify-center pb-2 transition-all`}>
                                     <span className="font-bold text-slate-700">{electrodeL.symbol}</span>
@@ -364,18 +285,18 @@
                                 </div>
                             </div>
 
-                            {/* Combined Result Display (Direction + Voltage) */}
+                            {/* Combined Result Display */}
                             <div className="bg-white px-6 py-3 rounded-xl shadow-sm border border-slate-200 text-center mt-2 w-full max-w-sm">
                                 {current > 0.001 ? (
                                     <div className="flex items-center justify-between gap-4">
                                         <div className="flex-1 text-left">
-                                            <div className="text-xs text-slate-400 uppercase font-bold mb-1">Current Direction</div>
+                                            <div className="text-xs text-slate-400 uppercase font-bold mb-1">電子流向 (Electron Flow)</div>
                                             <div className="font-bold text-xl text-slate-800 flex items-center gap-2">
                                                 {anode === 'left' ? electrodeL.symbol : electrodeR.symbol} 
-                                                <i data-lucide="arrow-right" className="text-blue-500" /> 
+                                                <Icons.ArrowRight className="text-blue-500 w-6 h-6" />
                                                 {anode === 'left' ? electrodeR.symbol : electrodeL.symbol}
                                             </div>
-                                            <div className="text-[10px] text-slate-400">Electron Flow</div>
+                                            <div className="text-[10px] text-slate-400">From Anode to Cathode</div>
                                         </div>
                                         
                                         <div className={`flex-1 text-right p-2 rounded-xl border-2 ${getVoltageColor(voltage)}`}>
@@ -400,7 +321,6 @@
             );
         };
 
-        lucide.createIcons();
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
