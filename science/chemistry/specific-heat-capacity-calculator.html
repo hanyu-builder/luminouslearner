@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比熱容計算機 (Specific Heat Capacity Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        /* Heat Animation */
+        @keyframes heat-wave {
+            0% { transform: translateY(0) scale(1); opacity: 0.6; }
+            50% { opacity: 0.3; }
+            100% { transform: translateY(-20px) scale(1.2); opacity: 0; }
+        }
+        .heat-wave {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(to top, rgba(239, 68, 68, 0.5), transparent);
+            animation: heat-wave 1s infinite linear;
+        }
+
+        /* Thermometer Liquid */
+        .thermometer-liquid {
+            transition: height 1s ease-out, background-color 1s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Specific Heat Capacities (J g^-1 K^-1)
+        // Note: Standard unit is often J kg^-1 K^-1, but in lab we often use g.
+        // Let's standardise inputs to g and J for typical school experiments, 
+        // but show conversion note.
+        const Materials = [
+            { name: '水 (Water)', c: 4.18, color: 'bg-blue-400/50', type: 'liquid' },
+            { name: '乙醇 (Ethanol)', c: 2.44, color: 'bg-transparent', type: 'liquid' },
+            { name: '鋁 (Aluminium)', c: 0.90, color: 'bg-gray-300', type: 'solid' },
+            { name: '鐵 (Iron)', c: 0.45, color: 'bg-gray-500', type: 'solid' },
+            { name: '銅 (Copper)', c: 0.39, color: 'bg-orange-400', type: 'solid' },
+            { name: '鉛 (Lead)', c: 0.13, color: 'bg-slate-600', type: 'solid' }
+        ];
+
+        const App = () => {
+            // State
+            const [target, setTarget] = useState('Q'); // Q, m, c, dt
+            
+            const [Q, setQ] = useState('');
+            const [m, setM] = useState('');
+            const [c, setC] = useState('');
+            const [dt, setDt] = useState('');
+            const [t1, setT1] = useState(''); // Initial Temp
+            const [t2, setT2] = useState(''); // Final Temp
+
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState('');
+            const [isHeating, setIsHeating] = useState(false);
+            const [materialColor, setMaterialColor] = useState('bg-blue-400/50');
+
+            // Handle Preset Selection
+            const handleMaterialSelect = (mat) => {
+                setC(mat.c);
+                setMaterialColor(mat.color);
+                // Reset result if inputs change
+                setResult(null);
+            };
+
+            // Auto-calculate Delta T
+            useEffect(() => {
+                if (t1 !== '' && t2 !== '') {
+                    setDt((parseFloat(t2) - parseFloat(t1)).toFixed(1));
+                }
+            }, [t1, t2]);
+
+            // Main Calculation
+            const calculate = () => {
+                setError('');
+                setResult(null);
+                setIsHeating(false);
+
+                const valQ = parseFloat(Q);
+                const valM = parseFloat(m);
+                const valC = parseFloat(c);
+                const valDt = parseFloat(dt);
+
+                let res = 0;
+                let formulaStr = '';
+
+                try {
+                    if (target === 'Q') {
+                        if (!m || !c || !dt) throw new Error('請填寫質量 (m), 比熱容 (c) 和 溫差 (ΔT)');
+                        res = valM * valC * valDt;
+                        formulaStr = `${valM} × ${valC} × ${valDt}`;
+                    } else if (target === 'm') {
+                        if (!Q || !c || !dt) throw new Error('請填寫能量 (Q), 比熱容 (c) 和 溫差 (ΔT)');
+                        res = valQ / (valC * valDt);
+                        formulaStr = `${valQ} ÷ (${valC} × ${valDt})`;
+                    } else if (target === 'c') {
+                        if (!Q || !m || !dt) throw new Error('請填寫能量 (Q), 質量 (m) 和 溫差 (ΔT)');
+                        res = valQ / (valM * valDt);
+                        formulaStr = `${valQ} ÷ (${valM} × ${valDt})`;
+                    } else if (target === 'dt') {
+                        if (!Q || !m || !c) throw new Error('請填寫能量 (Q), 質量 (m) 和 比熱容 (c)');
+                        res = valQ / (valM * valC);
+                        formulaStr = `${valQ} ÷ (${valM} × ${valC})`;
+                    }
+
+                    if (!isFinite(res) || isNaN(res)) throw new Error('數值錯誤 (除以零?)');
+
+                    setIsHeating(true);
+                    setTimeout(() => {
+                        setResult({ value: res, formula: formulaStr });
+                        setIsHeating(false);
+                    }, 1000); // Animation delay
+
+                } catch (e) {
+                    setError(e.message);
+                }
+            };
+
+            const reset = () => {
+                setQ(''); setM(''); setC(''); setDt('');
+                setT1(''); setT2('');
+                setResult(null); setError('');
+                setIsHeating(false);
+            };
+
+            // Visual Helpers
+            const getTempColor = (temp) => {
+                // -10 (Blue) to 100 (Red)
+                const t = parseFloat(temp) || 25;
+                if (t <= 0) return '#3b82f6';
+                if (t >= 100) return '#ef4444';
+                // Simple gradient logic not easily done in inline style without lerp function
+                return t > 50 ? '#f97316' : '#3b82f6';
+            };
+            
+            const tempHeight = () => {
+                // Map -10~110 to 0~100%
+                let tempVal = 25;
+                if (target === 'dt' && result) {
+                    // If solving for dT, assume start at 25
+                     tempVal = 25 + result.value;
+                } else if (t2) {
+                    tempVal = parseFloat(t2);
+                } else if (dt) {
+                     tempVal = (parseFloat(t1)||25) + parseFloat(dt);
+                }
+                
+                return Math.min(100, Math.max(0, (tempVal + 10) / 120 * 100));
+            };
+
+            const isDisabled = (field) => target === field;
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-rose-600 flex items-center gap-2">
+                                <i data-lucide="thermometer"></i> 比熱容計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Specific Heat Capacity Calculator (Q = mcΔT)</p>
+                        </div>
+                        <button onClick={reset} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 重置
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-5/12 flex flex-col gap-6">
+                            
+                            {/* Target Selection */}
+                            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                                <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">你想計算什麼？(Target)</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {['Q', 'm', 'c', 'dt'].map(t => (
+                                        <button
+                                            key={t}
+                                            onClick={() => { setTarget(t); setResult(null); }}
+                                            className={`py-2 rounded-lg font-bold text-sm border-2 transition-all
+                                                ${target === t ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500 hover:border-rose-200'}
+                                            `}
+                                        >
+                                            {t === 'dt' ? 'ΔT' : t}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Input Form */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-rose-100 flex flex-col gap-4">
+                                
+                                {/* Q Input */}
+                                <div className={`relative group ${isDisabled('Q') ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <label className="text-xs font-bold text-rose-500 uppercase mb-1 flex justify-between">
+                                        <span>能量 (Energy, Q)</span>
+                                        <span>Joules (J)</span>
+                                    </label>
+                                    <input type="number" value={Q} onChange={(e) => setQ(e.target.value)} 
+                                        className="w-full p-3 rounded-xl border border-slate-300 font-mono font-bold focus:ring-2 focus:ring-rose-300 outline-none" placeholder={isDisabled('Q') ? '?' : 'e.g. 4200'} />
+                                </div>
+
+                                {/* Mass Input */}
+                                <div className={`relative group ${isDisabled('m') ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <label className="text-xs font-bold text-blue-500 uppercase mb-1 flex justify-between">
+                                        <span>質量 (Mass, m)</span>
+                                        <span>grams (g)</span>
+                                    </label>
+                                    <input type="number" value={m} onChange={(e) => setM(e.target.value)} 
+                                        className="w-full p-3 rounded-xl border border-slate-300 font-mono font-bold focus:ring-2 focus:ring-blue-300 outline-none" placeholder={isDisabled('m') ? '?' : 'e.g. 100'} />
+                                </div>
+
+                                {/* c Input & Presets */}
+                                <div className={`relative group ${isDisabled('c') ? 'opacity-50' : ''}`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-xs font-bold text-green-500 uppercase">比熱容 (c)</label>
+                                        <span className="text-[10px] text-slate-400">J g⁻¹ K⁻¹</span>
+                                    </div>
+                                    
+                                    {/* Preset Chips (Only show if c is editable) */}
+                                    {!isDisabled('c') && (
+                                        <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide">
+                                            {Materials.map(mat => (
+                                                <button 
+                                                    key={mat.name} 
+                                                    onClick={() => handleMaterialSelect(mat)}
+                                                    className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] rounded-md whitespace-nowrap hover:bg-green-100 hover:text-green-700 transition-colors"
+                                                >
+                                                    {mat.name.split(' ')[0]}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <input type="number" value={c} onChange={(e) => setC(e.target.value)} 
+                                        className="w-full p-3 rounded-xl border border-slate-300 font-mono font-bold focus:ring-2 focus:ring-green-300 outline-none" placeholder={isDisabled('c') ? '?' : 'e.g. 4.18'} disabled={isDisabled('c')} />
+                                </div>
+
+                                {/* Delta T Input */}
+                                <div className={`relative group ${isDisabled('dt') ? 'opacity-50' : ''}`}>
+                                    <label className="text-xs font-bold text-orange-500 uppercase mb-1 flex justify-between">
+                                        <span>溫差 (ΔT)</span>
+                                        <span>°C or K</span>
+                                    </label>
+                                    
+                                    {!isDisabled('dt') && (
+                                        <div className="flex gap-2 mb-2">
+                                            <input type="number" value={t1} onChange={(e) => setT1(e.target.value)} className="w-1/2 p-2 rounded border text-sm" placeholder="T1 (Initial)" />
+                                            <input type="number" value={t2} onChange={(e) => setT2(e.target.value)} className="w-1/2 p-2 rounded border text-sm" placeholder="T2 (Final)" />
+                                        </div>
+                                    )}
+
+                                    <input type="number" value={dt} onChange={(e) => { setDt(e.target.value); setT1(''); setT2(''); }} 
+                                        className="w-full p-3 rounded-xl border border-slate-300 font-mono font-bold focus:ring-2 focus:ring-orange-300 outline-none" placeholder={isDisabled('dt') ? '?' : '或者直接輸入差值'} disabled={isDisabled('dt')} />
+                                </div>
+
+                                {error && (
+                                    <div className="p-3 bg-red-50 text-red-600 text-sm font-bold rounded-lg flex items-center gap-2 animate-pulse">
+                                        <i data-lucide="alert-circle" size={16}/> {error}
+                                    </div>
+                                )}
+
+                                <button onClick={calculate} disabled={isHeating} className="w-full py-4 bg-rose-600 text-white rounded-xl font-bold shadow-lg hover:bg-rose-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2 disabled:bg-rose-400">
+                                    {isHeating ? <i data-lucide="loader-2" className="animate-spin" /> : <i data-lucide="calculator" />}
+                                    計算結果
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Right: Visualization & Result */}
+                        <div className="w-full lg:w-7/12 flex flex-col gap-6">
+                            
+                            {/* Visualization */}
+                            <div className="bg-white p-8 rounded-3xl shadow-md border border-slate-200 flex items-center justify-center min-h-[350px] relative overflow-hidden">
+                                <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+
+                                {/* Heater Base */}
+                                <div className="absolute bottom-10 w-40 h-6 bg-slate-700 rounded-sm flex justify-center items-center">
+                                    <div className="text-[10px] text-white uppercase font-bold tracking-widest">Heater</div>
+                                </div>
+                                {/* Heat Waves */}
+                                {(isHeating || result) && (
+                                    <div className="absolute bottom-16 w-40 h-20 flex justify-center gap-4 overflow-hidden pointer-events-none">
+                                        <div className="heat-wave" style={{left: '20%', animationDelay: '0s'}}></div>
+                                        <div className="heat-wave" style={{left: '50%', animationDelay: '0.3s'}}></div>
+                                        <div className="heat-wave" style={{left: '80%', animationDelay: '0.6s'}}></div>
+                                    </div>
+                                )}
+
+                                {/* Beaker */}
+                                <div className="relative w-48 h-56 border-4 border-slate-300 border-t-0 rounded-b-2xl bg-white/30 backdrop-blur-sm flex items-end justify-center mb-6 overflow-visible">
+                                    {/* Liquid/Block */}
+                                    <div className={`w-full h-3/4 ${materialColor} rounded-b-xl transition-all duration-1000 relative`}>
+                                        <div className="absolute inset-0 flex items-center justify-center font-bold text-slate-600 opacity-50 text-2xl">
+                                            {m ? `${m} g` : ''}
+                                        </div>
+                                    </div>
+
+                                    {/* Thermometer */}
+                                    <div className="absolute right-4 bottom-4 w-4 h-64 bg-white border-2 border-slate-400 rounded-full flex flex-col justify-end overflow-hidden shadow-lg">
+                                        <div className="thermometer-liquid w-full bg-red-500" 
+                                             style={{ 
+                                                 height: `${tempHeight()}%`,
+                                                 backgroundColor: getTempColor(tempHeight())
+                                             }}></div>
+                                        {/* Ticks */}
+                                        <div className="absolute right-0 top-0 h-full w-2 flex flex-col justify-between py-2">
+                                            {[...Array(10)].map((_, i) => <div key={i} className="h-px w-full bg-slate-300"></div>)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Labels */}
+                                <div className="absolute top-4 right-4 bg-white/90 p-2 rounded-lg border border-slate-200 text-xs font-mono shadow-sm">
+                                    <div>c = {c || '?'} J g⁻¹ K⁻¹</div>
+                                    <div>ΔT = {dt || '?'} °C</div>
+                                </div>
+
+                            </div>
+
+                            {/* Result Card */}
+                            {result && (
+                                <div className="bg-slate-800 p-6 rounded-3xl shadow-lg text-white animate-in slide-in-from-bottom-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="text-sm font-bold text-rose-400 uppercase tracking-wider">
+                                            計算結果 ({target})
+                                        </div>
+                                        <i data-lucide="check-circle" className="text-green-400" />
+                                    </div>
+                                    
+                                    <div className="text-5xl font-mono font-black mb-2">
+                                        {parseFloat(result.value.toFixed(2))}
+                                        <span className="text-xl ml-2 font-sans font-normal text-slate-400">
+                                            {target === 'Q' ? 'J' : target === 'm' ? 'g' : target === 'c' ? 'J g⁻¹ K⁻¹' : '°C'}
+                                        </span>
+                                    </div>
+
+                                    <div className="mt-4 pt-4 border-t border-slate-600">
+                                        <div className="text-xs text-slate-500 mb-1 uppercase font-bold">Calculation Step</div>
+                                        <div className="font-mono text-sm text-slate-300">
+                                            {target} = {result.formula}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VIII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
