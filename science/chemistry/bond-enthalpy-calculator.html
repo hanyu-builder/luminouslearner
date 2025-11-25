@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鍵焓計算機 (Bond Enthalpy Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
+        .bond-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Bond Enthalpy Data (kJ/mol) - Simplified DSE Values
+        const BondData = {
+            'C-H': 413, 'C-C': 347, 'C=C': 612, 'C-O': 358, 'C=O': 799, // C=O in CO2 is 805 usually, but general is 743-799. Using 799 (DSE common)
+            'O=O': 498, 'O-H': 464, 'H-H': 436, 'H-Cl': 432, 'Cl-Cl': 243,
+            'N-H': 391, 'N≡N': 945, 'C-Cl': 327
+        };
+
+        // Presets
+        const Presets = [
+            {
+                name: '甲烷燃燒 (CH4 + 2O2 -> CO2 + 2H2O)',
+                reactants: [ { bond: 'C-H', count: 4 }, { bond: 'O=O', count: 2 } ],
+                products: [ { bond: 'C=O', count: 2 }, { bond: 'O-H', count: 4 } ]
+            },
+            {
+                name: '乙烯氫化 (C2H4 + H2 -> C2H6)',
+                reactants: [ { bond: 'C=C', count: 1 }, { bond: 'C-H', count: 4 }, { bond: 'H-H', count: 1 } ],
+                products: [ { bond: 'C-C', count: 1 }, { bond: 'C-H', count: 6 } ]
+            },
+            {
+                name: '氫氣燃燒 (2H2 + O2 -> 2H2O)',
+                reactants: [ { bond: 'H-H', count: 2 }, { bond: 'O=O', count: 1 } ],
+                products: [ { bond: 'O-H', count: 4 } ]
+            }
+        ];
+
+        const App = () => {
+            const [reactants, setReactants] = useState([{ id: 1, bond: 'C-H', count: 1 }]);
+            const [products, setProducts] = useState([{ id: 1, bond: 'C=O', count: 1 }]);
+            const [result, setResult] = useState(null);
+            
+            // Calculate
+            const calculate = () => {
+                let energyIn = 0;
+                let energyOut = 0;
+
+                reactants.forEach(r => {
+                    if (r.bond && BondData[r.bond]) energyIn += BondData[r.bond] * parseFloat(r.count);
+                });
+
+                products.forEach(p => {
+                    if (p.bond && BondData[p.bond]) energyOut += BondData[p.bond] * parseFloat(p.count);
+                });
+
+                const deltaH = energyIn - energyOut;
+                setResult({ energyIn, energyOut, deltaH });
+            };
+
+            // Handlers for dynamic lists
+            const addRow = (type) => {
+                const newItem = { id: Date.now(), bond: Object.keys(BondData)[0], count: 1 };
+                if (type === 'reactants') setReactants([...reactants, newItem]);
+                else setProducts([...products, newItem]);
+            };
+            
+            const removeRow = (type, id) => {
+                if (type === 'reactants' && reactants.length > 1) setReactants(reactants.filter(i => i.id !== id));
+                else if (type === 'products' && products.length > 1) setProducts(products.filter(i => i.id !== id));
+            };
+
+            const updateRow = (type, id, field, value) => {
+                const list = type === 'reactants' ? reactants : products;
+                const newList = list.map(item => item.id === id ? { ...item, [field]: value } : item);
+                if (type === 'reactants') setReactants(newList);
+                else setProducts(newList);
+            };
+
+            const loadPreset = (preset) => {
+                setReactants(preset.reactants.map((r, i) => ({ ...r, id: `r-${i}` })));
+                setProducts(preset.products.map((p, i) => ({ ...p, id: `p-${i}` })));
+                setResult(null);
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-slate-200 pb-4 gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-pink-600 flex items-center gap-2">
+                                <i data-lucide="link-2"></i> 鍵焓計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Bond Enthalpy Calculator</p>
+                        </div>
+                        
+                        <div className="flex gap-2 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+                            {Presets.map((p, idx) => (
+                                <button 
+                                    key={idx} 
+                                    onClick={() => loadPreset(p)}
+                                    className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-pink-50 hover:text-pink-600 rounded-lg transition-all"
+                                >
+                                    {p.name.split(' ')[0]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Input Panel */}
+                        <div className="w-full lg:w-5/12 flex flex-col gap-6">
+                            
+                            {/* Reactants (Bonds Broken) */}
+                            <div className="bg-white p-6 rounded-3xl shadow-md border-l-4 border-red-400">
+                                <h3 className="text-sm font-bold text-red-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="scissors" size={16}/> 斷裂鍵 (Bonds Broken) - 吸熱
+                                </h3>
+                                <div className="space-y-2">
+                                    {reactants.map(item => (
+                                        <div key={item.id} className="flex gap-2">
+                                            <select 
+                                                value={item.bond} 
+                                                onChange={(e) => updateRow('reactants', item.id, 'bond', e.target.value)}
+                                                className="flex-grow p-2 bg-slate-50 border rounded-lg text-sm font-mono font-bold bond-select"
+                                            >
+                                                {Object.keys(BondData).map(b => <option key={b} value={b}>{b}</option>)}
+                                            </select>
+                                            <input 
+                                                type="number" 
+                                                value={item.count} 
+                                                onChange={(e) => updateRow('reactants', item.id, 'count', e.target.value)}
+                                                className="w-20 p-2 bg-slate-50 border rounded-lg text-sm text-center font-bold"
+                                                min="1"
+                                            />
+                                            <button onClick={() => removeRow('reactants', item.id)} className="text-slate-400 hover:text-red-500 px-2"><i data-lucide="trash" size={16}/></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => addRow('reactants')} className="w-full py-2 border-2 border-dashed border-slate-200 text-slate-400 rounded-lg hover:border-red-200 hover:text-red-500 text-sm font-bold transition-all">+ 增加鍵</button>
+                                </div>
+                            </div>
+
+                            {/* Products (Bonds Formed) */}
+                            <div className="bg-white p-6 rounded-3xl shadow-md border-l-4 border-green-400">
+                                <h3 className="text-sm font-bold text-green-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="link" size={16}/> 形成鍵 (Bonds Formed) - 放熱
+                                </h3>
+                                <div className="space-y-2">
+                                    {products.map(item => (
+                                        <div key={item.id} className="flex gap-2">
+                                            <select 
+                                                value={item.bond} 
+                                                onChange={(e) => updateRow('products', item.id, 'bond', e.target.value)}
+                                                className="flex-grow p-2 bg-slate-50 border rounded-lg text-sm font-mono font-bold bond-select"
+                                            >
+                                                {Object.keys(BondData).map(b => <option key={b} value={b}>{b}</option>)}
+                                            </select>
+                                            <input 
+                                                type="number" 
+                                                value={item.count} 
+                                                onChange={(e) => updateRow('products', item.id, 'count', e.target.value)}
+                                                className="w-20 p-2 bg-slate-50 border rounded-lg text-sm text-center font-bold"
+                                                min="1"
+                                            />
+                                            <button onClick={() => removeRow('products', item.id)} className="text-slate-400 hover:text-red-500 px-2"><i data-lucide="trash" size={16}/></button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => addRow('products')} className="w-full py-2 border-2 border-dashed border-slate-200 text-slate-400 rounded-lg hover:border-green-200 hover:text-green-500 text-sm font-bold transition-all">+ 增加鍵</button>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={calculate}
+                                className="w-full py-4 bg-pink-600 text-white rounded-2xl font-bold shadow-lg hover:bg-pink-500 transition-all text-lg flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <i data-lucide="calculator" /> 計算 ΔH
+                            </button>
+
+                        </div>
+
+                        {/* Right: Result & Diagram */}
+                        <div className="w-full lg:w-7/12 flex flex-col gap-6">
+                            
+                            {result ? (
+                                <div className="h-full flex flex-col animate-in slide-in-from-right duration-500">
+                                    
+                                    {/* Result Card */}
+                                    <div className="bg-slate-800 text-white p-8 rounded-3xl shadow-lg text-center relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Enthalpy Change (ΔH)</div>
+                                            <div className={`text-6xl font-mono font-black ${result.deltaH < 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                {result.deltaH > 0 ? '+' : ''}{result.deltaH}
+                                            </div>
+                                            <div className="text-xl mt-2 font-bold opacity-80">kJ mol⁻¹</div>
+                                            <div className={`mt-4 inline-block px-4 py-1 rounded-full text-xs font-bold uppercase ${result.deltaH < 0 ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-red-900/50 text-red-300 border border-red-700'}`}>
+                                                {result.deltaH < 0 ? '放熱反應 (Exothermic)' : '吸熱反應 (Endothermic)'}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Energy Level Diagram (Simplified CSS Visual) */}
+                                    <div className="bg-white p-8 rounded-3xl border border-slate-200 flex-grow relative min-h-[300px] flex items-center justify-center">
+                                        <div className="w-full max-w-md h-64 relative border-l-2 border-b-2 border-slate-300">
+                                            <div className="absolute top-2 left-2 text-xs text-slate-400 font-bold">Energy (H)</div>
+                                            
+                                            {/* Reactants Level (Start) - Arbitrary middle if unknown, but let's fix Reactants at 50% */}
+                                            <div className="absolute left-4 top-[40%] w-24 border-b-4 border-slate-700"></div>
+                                            <div className="absolute left-4 top-[32%] text-xs font-bold text-slate-600">Reactants</div>
+
+                                            {/* Intermediate (Atoms) - Always higher */}
+                                            <div className="absolute left-1/2 -translate-x-1/2 top-[10%] w-24 border-b-2 border-dashed border-slate-400"></div>
+                                            <div className="absolute left-1/2 -translate-x-1/2 top-[2%] text-[10px] text-slate-400 text-center">Gaseous Atoms<br/>(Max Energy)</div>
+
+                                            {/* Products Level */}
+                                            {/* If Exo, Products lower. If Endo, higher. */}
+                                            <div className="absolute right-4 w-24 border-b-4 border-slate-700"
+                                                 style={{ top: result.deltaH < 0 ? '70%' : '20%' }}></div>
+                                            <div className="absolute right-4 text-xs font-bold text-slate-600"
+                                                 style={{ top: result.deltaH < 0 ? '62%' : '12%' }}>Products</div>
+
+                                            {/* Arrows */}
+                                            {/* Up (Break) */}
+                                            <div className="absolute left-16 top-[10%] h-[30%] w-0.5 bg-red-400"></div>
+                                            <div className="absolute left-16 top-[10%] text-xs text-red-500 font-bold pl-2">+{result.energyIn}</div>
+
+                                            {/* Down (Form) */}
+                                            <div className="absolute right-16 top-[10%] w-0.5 bg-green-500" style={{ height: result.deltaH < 0 ? '60%' : '10%' }}></div>
+                                            <div className="absolute right-16 top-[10%] text-xs text-green-500 font-bold pr-2 text-right" style={{transform: 'translateX(-100%)'}}>-{result.energyOut}</div>
+
+                                            {/* Delta H Arrow */}
+                                            <div className="absolute right-24 w-0.5 bg-blue-500" 
+                                                 style={{ 
+                                                     top: result.deltaH < 0 ? '40%' : '20%', 
+                                                     height: result.deltaH < 0 ? '30%' : '20%',
+                                                 }}></div>
+                                            <div className="absolute right-28 top-[50%] text-blue-600 font-bold text-sm">ΔH</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Formula Display */}
+                                    <div className="bg-slate-100 p-4 rounded-xl text-center font-mono text-sm text-slate-600">
+                                        ΔH = Σ(Bond Breaking) - Σ(Bond Forming)<br/>
+                                        = {result.energyIn} - {result.energyOut} = <strong>{result.deltaH}</strong>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="flex-grow flex flex-col items-center justify-center text-slate-400 border-4 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 p-12 min-h-[400px]">
+                                    <i data-lucide="bar-chart-2" size={64} className="mb-6 opacity-30" />
+                                    <p className="text-xl text-center font-medium mb-2">等待計算...</p>
+                                    <p className="text-sm text-center opacity-70">輸入鍵的數量以計算焓變。</p>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VIII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
