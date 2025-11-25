@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>能量分佈模擬器 (Maxwell-Boltzmann Sim)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .slider-thumb::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            // State
+            const [temperature, setTemperature] = useState(300); // Kelvin
+            const [activationEnergy, setActivationEnergy] = useState(50); // Arbitrary energy unit (scaled)
+            const [fraction, setFraction] = useState(0); // % of particles with E > Ea
+            
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Maxwell-Boltzmann Distribution Function Approximation
+            // y = x^0.5 * exp(-x/T)
+            const calculateCurve = (temp) => {
+                const data = [];
+                const labels = [];
+                // Scale T to make the curve look nice in our x-axis range (0-120)
+                const T = temp / 20; 
+                
+                for (let x = 0; x <= 120; x += 1) {
+                    // Factor 1000 is just for scaling Y axis to readable numbers
+                    const y = 1000 * Math.sqrt(x) * Math.exp(-x / T) / Math.pow(T, 1.5);
+                    data.push(y);
+                    labels.push(x);
+                }
+                return { labels, data };
+            };
+
+            useEffect(() => {
+                if (!chartRef.current) return;
+
+                const { labels, data } = calculateCurve(temperature);
+                
+                // Calculate Fraction (Area > Ea)
+                // Simple Riemann sum approximation
+                let totalArea = 0;
+                let effectiveArea = 0;
+                
+                data.forEach((y, x) => {
+                    totalArea += y;
+                    if (x >= activationEnergy) effectiveArea += y;
+                });
+                
+                // Avoid division by zero
+                const percent = totalArea > 0 ? (effectiveArea / totalArea) * 100 : 0;
+                setFraction(percent.toFixed(2));
+
+                // Chart Colors based on Ea
+                // We use a bar chart with very thin bars to simulate a filled area curve
+                // Bars >= Ea get green color
+                const backgroundColors = labels.map(x => x >= activationEnergy ? 'rgba(34, 197, 94, 0.6)' : 'rgba(99, 102, 241, 0.2)');
+                const borderColors = labels.map(x => x >= activationEnergy ? '#16a34a' : '#4f46e5');
+
+                const ctx = chartRef.current.getContext('2d');
+
+                if (chartInstance.current) {
+                    chartInstance.current.data.labels = labels;
+                    chartInstance.current.data.datasets[0].data = data;
+                    chartInstance.current.data.datasets[0].backgroundColor = backgroundColors;
+                    chartInstance.current.data.datasets[0].borderColor = borderColors;
+                    
+                    // Manually draw the Ea line using a plugin or just update dataset properties if using annotation plugin
+                    // Here we redraw everything to be safe with simple config
+                    chartInstance.current.update();
+                } else {
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'bar', // Bar chart to easily color segments
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '粒子數目',
+                                data: data,
+                                backgroundColor: backgroundColors,
+                                borderColor: borderColors,
+                                borderWidth: 1,
+                                barPercentage: 1.0,
+                                categoryPercentage: 1.0,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { intersect: false, mode: 'index' },
+                            scales: {
+                                x: { 
+                                    type: 'linear',
+                                    title: { display: true, text: '動能 (Kinetic Energy)', font: { weight: 'bold', size: 14 } },
+                                    min: 0, max: 120,
+                                    grid: { display: false },
+                                    ticks: { display: false } // Hide numbers for conceptual view
+                                },
+                                y: { 
+                                    title: { display: true, text: '粒子分量 (Fraction of Molecules)', font: { weight: 'bold', size: 14 } },
+                                    display: true,
+                                    min: 0,
+                                    ticks: { display: false },
+                                    grid: { borderDash: [5, 5] }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: { 
+                                    enabled: true,
+                                    callbacks: {
+                                        title: () => '',
+                                        label: (context) => `能量: ${context.raw > 0 ? context.dataIndex : 0}`
+                                    }
+                                },
+                                annotation: {
+                                    // Placeholder if plugin not loaded, but custom plugin below handles drawing
+                                }
+                            },
+                            animation: { duration: 0 } // Disable animation for smooth slider response
+                        },
+                        plugins: [{
+                            id: 'custom-ea-line',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                const yAxis = chart.scales.y;
+                                
+                                // Ensure Ea is within visible range
+                                if (activationEnergy > xAxis.max) return;
+
+                                const xPos = xAxis.getPixelForValue(activationEnergy);
+                                
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.moveTo(xPos, yAxis.top);
+                                ctx.lineTo(xPos, yAxis.bottom);
+                                ctx.lineWidth = 3;
+                                ctx.strokeStyle = '#ef4444'; // Red line
+                                ctx.setLineDash([6, 6]);
+                                ctx.stroke();
+                                
+                                // Draw Label "Ea"
+                                ctx.fillStyle = '#ef4444';
+                                ctx.font = 'bold 16px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('Ea', xPos, yAxis.top + 20);
+                                ctx.fillText('(活化能)', xPos, yAxis.top + 40);
+                                
+                                ctx.restore();
+                            }
+                        }]
+                    });
+                }
+            }, [temperature, activationEnergy]);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-8 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="activity"></i> 能量分佈模擬器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Maxwell-Boltzmann Distribution Simulation</p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            {/* Temperature Control */}
+                            <div className="bg-white p-6 rounded-2xl shadow-lg border-l-8 border-red-500">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                        <i data-lucide="thermometer" className="text-red-500"/> 溫度 (T)
+                                    </h3>
+                                    <span className="font-mono font-bold text-red-600 text-2xl">{temperature} K</span>
+                                </div>
+                                <input 
+                                    type="range" min="100" max="1000" step="10"
+                                    value={temperature}
+                                    onChange={(e) => setTemperature(Number(e.target.value))}
+                                    className="w-full h-2 bg-red-100 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                />
+                                <div className="flex justify-between text-xs text-slate-400 mt-2 font-bold">
+                                    <span>低溫 (Low T)</span>
+                                    <span>高溫 (High T)</span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded border border-slate-100">
+                                    👉 試著升高溫度，觀察曲線如何「變矮變胖」並向右移動。
+                                </p>
+                            </div>
+
+                            {/* Activation Energy Control */}
+                            <div className="bg-white p-6 rounded-2xl shadow-lg border-l-8 border-amber-500">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                                        <i data-lucide="zap" className="text-amber-500"/> 活化能 (Ea)
+                                    </h3>
+                                    <span className="font-mono font-bold text-amber-600 text-2xl">{activationEnergy}</span>
+                                </div>
+                                <input 
+                                    type="range" min="20" max="100" step="1"
+                                    value={activationEnergy}
+                                    onChange={(e) => setActivationEnergy(Number(e.target.value))}
+                                    className="w-full h-2 bg-amber-100 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                />
+                                <div className="flex justify-between text-xs text-slate-400 mt-2 font-bold">
+                                    <span>低 Ea (催化)</span>
+                                    <span>高 Ea</span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-3 bg-slate-50 p-2 rounded border border-slate-100">
+                                    👉 向左滑動 Ea 線，模擬加入<strong>催化劑</strong>的效果。
+                                </p>
+                            </div>
+
+                            {/* Stats Panel */}
+                            <div className="bg-slate-800 p-6 rounded-2xl shadow-xl text-white border border-slate-700">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 tracking-widest border-b border-slate-600 pb-2">
+                                    有效粒子比例 (Effective Particles)
+                                </h3>
+                                
+                                <div className="flex items-baseline gap-2 mb-4">
+                                    <span className={`text-6xl font-mono font-black tracking-tighter ${fraction > 10 ? 'text-green-400' : 'text-slate-200'}`}>
+                                        {fraction}%
+                                    </span>
+                                    <span className="text-sm text-slate-400">particles with E &ge; Ea</span>
+                                </div>
+                                
+                                {/* Progress Bar */}
+                                <div className="w-full bg-slate-700 h-4 rounded-full overflow-hidden border border-slate-600 mb-2">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-300" 
+                                        style={{width: `${Math.min(
