@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>氧化數計算機 (Oxidation Number Calculator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .atom-badge {
+            transition: all 0.3s ease;
+        }
+        .atom-badge:hover {
+            transform: scale(1.1);
+        }
+
+        /* Fade in animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Fixed Oxidation Rules (Priority Order)
+        const Rules = {
+            F: -1,
+            Li: 1, Na: 1, K: 1, Rb: 1, Cs: 1,
+            Be: 2, Mg: 2, Ca: 2, Sr: 2, Ba: 2,
+            Al: 3,
+            H: 1, // Usually +1 (except metal hydrides, simplified here)
+            O: -2, // Usually -2 (except peroxides/F compounds, simplified here)
+            Cl: -1, Br: -1, I: -1 // Usually -1 (except with O or F)
+        };
+
+        // Common Examples
+        const Examples = [
+            { f: 'KMnO4', name: '高錳酸鉀' },
+            { f: 'Cr2O7^2-', name: '重鉻酸根離子' },
+            { f: 'SO4^2-', name: '硫酸根離子' },
+            { f: 'Fe2(SO4)3', name: '硫酸鐵(III)' },
+            { f: 'H2O2', name: '過氧化氫' }, // Special case logic needed or manual override
+            { f: 'NH4+', name: '銨離子' }
+        ];
+
+        const App = () => {
+            const [input, setInput] = useState('');
+            const [result, setResult] = useState(null);
+            const [error, setError] = useState('');
+            const [steps, setSteps] = useState([]);
+
+            // Helper: Parse Formula String
+            // Supports simple nesting like Fe2(SO4)3, and charge like ^2- or 2-
+            const parseFormula = (formula) => {
+                // 1. Extract Charge
+                let charge = 0;
+                let cleanFormula = formula.trim();
+                
+                // Check for ^ charge notation or trailing charge
+                const chargeMatch = cleanFormula.match(/(\^)?(\d*)([\+\-])$/);
+                if (chargeMatch) {
+                    const num = chargeMatch[2] ? parseInt(chargeMatch[2]) : 1;
+                    const sign = chargeMatch[3] === '+' ? 1 : -1;
+                    charge = num * sign;
+                    // Remove charge part from string
+                    cleanFormula = cleanFormula.replace(/(\^)?(\d*)([\+\-])$/, '');
+                }
+
+                // 2. Parse Atoms (Simple flattening)
+                // Complex parser needed for parenthesis expansion: Fe2(SO4)3 -> Fe2 S3 O12
+                const expandFormula = (str) => {
+                    // Handle parenthesis
+                    // Regex to find (Group)N
+                    const groupRegex = /\(([A-Za-z0-9]+)\)(\d*)/g;
+                    let expanded = str;
+                    
+                    // Simple recursive expansion
+                    // Note: This is a basic implementation, might not handle nested parens perfectly
+                    while (expanded.match(groupRegex)) {
+                        expanded = expanded.replace(groupRegex, (match, content, countStr) => {
+                            const count = countStr ? parseInt(countStr) : 1;
+                            let inner = '';
+                            // Repeat content atoms
+                            // We need to parse content atoms and multiply their counts
+                            const atomRegex = /([A-Z][a-z]?)(\d*)/g;
+                            let m;
+                            while ((m = atomRegex.exec(content)) !== null) {
+                                const el = m[1];
+                                const c = m[2] ? parseInt(m[2]) : 1;
+                                inner += el + (c * count);
+                            }
+                            return inner;
+                        });
+                    }
+                    return expanded;
+                };
+
+                const finalStr = expandFormula(cleanFormula);
+                
+                // 3. Count Atoms
+                const atoms = {};
+                const atomRegex = /([A-Z][a-z]?)(\d*)/g;
+                let match;
+                while ((match = atomRegex.exec(finalStr)) !== null) {
+                    const el = match[1];
+                    const count = match[2] ? parseInt(match[2]) : 1;
+                    atoms[el] = (atoms[el] || 0) + count;
+                }
+
+                return { atoms, charge };
+            };
+
+            const calculateON = () => {
+                setError('');
+                setResult(null);
+                setSteps([]);
+
+                if (!input) return;
+
+                try {
+                    const { atoms, charge } = parseFormula(input);
+                    const elements = Object.keys(atoms);
+                    const assignments = {};
+                    const unknown = [];
+
+                    // 1. Assign Known Rules
+                    // Logic: Group 1/2/F always fixed. H/O usually fixed unless special context.
+                    // Simple logic: Assign highest priority rules first.
+                    
+                    // Priority 1: F, Group 1, Group 2, Al
+                    elements.forEach(el => {
+                        if (['F', 'Li', 'Na', 'K', 'Rb', 'Cs', 'Be', 'Mg', 'Ca', 'Sr', 'Ba', 'Al'].includes(el)) {
+                            assignments[el] = Rules[el];
+                        }
+                    });
+
+                    // Priority 2: H (usually +1)
+                    if (atoms['H'] && assignments['H'] === undefined) {
+                        // Exception check: Metal Hydrides? (e.g. NaH) - simple check if only metals present + H
+                        // For simplicity, assume +1 unless bound to metal only (future improvement)
+                        assignments['H'] = 1;
+                    }
+
+                    // Priority 3: O (usually -2)
+                    if (atoms['O'] && assignments['O'] === undefined) {
+                        // Exception: Peroxides (H2O2, Na2O2) - usually O is -1
+                        // Check if formula is H2O2 or similar structure. 
+                        // Simple logic: assume -2 unless forced otherwise later? 
+                        // Better: Assign -2 unless F is present (OF2).
+                        if (atoms['F']) {
+                            // O is unknown, let F dictate
+                            unknown.push('O'); 
+                        } else {
+                            assignments['O'] = -2;
+                        }
+                    }
+
+                    // Priority 4: Halogens (Cl, Br, I) -> -1 usually, unless with O or F
+                    elements.forEach(el => {
+                        if (['Cl', 'Br', 'I'].includes(el) && assignments[el] === undefined) {
+                            if (atoms['O'] || atoms['F']) {
+                                // With O/F, halogen is positive (unknown)
+                                unknown.push(el);
+                            } else {
+                                assignments[el] = -1;
+                            }
+                        }
+                    });
+
+                    // 2. Identify Unknowns
+                    elements.forEach(el => {
+                        if (assignments[el] === undefined && !unknown.includes(el)) {
+                            unknown.push(el);
+                        }
+                    });
+
+                    // 3. Solve
+                    // Case A: No unknowns (Check consistency)
+                    if (unknown.length === 0) {
+                        // Check if sum matches charge
+                        let sum = 0;
+                        elements.forEach(el => sum += atoms[el] * assignments[el]);
+                        
+                        // Special handling for Peroxides if sum mismatch (e.g. H2O2: H=+1, O=-2 -> sum=-2 != 0)
+                        // Simple heuristic: If O is present and sum mismatch, adjust O.
+                        if (sum !== charge && atoms['O']) {
+                             // Try adjusting O
+                             // total - (O contribution) + (O new * count) = charge
+                             // (sum - atoms.O * -2) + (atoms.O * x) = charge
+                             const x = (charge - (sum - atoms['O'] * -2)) / atoms['O'];
+                             if (Number.isInteger(x) || x === -0.5 || x === -1) { // Common peroxide/superoxide values
+                                 assignments['O'] = x;
+                                 setSteps(prev => [...prev, `注意：根據電荷平衡，氧的氧化數調整為 ${x} (過氧化物/超氧化物)`]);
+                             } else {
+                                // Maybe it's H in hydride?
+                                if (atoms['H']) {
+                                     const y = (charge - (sum - atoms['H'] * 1)) / atoms['H'];
+                                     assignments['H'] = y;
+                                }
+                             }
+                        }
+                    } 
+                    // Case B: 1 Unknown (Standard Algebra)
+                    else if (unknown.length === 1) {
+                        const target = unknown[0];
+                        let currentSum = 0;
+                        elements.forEach(el => {
+                            if (el !== target) currentSum += atoms[el] * assignments[el];
+                        });
+                        // currentSum + atoms[target] * x = charge
+                        // x = (charge - currentSum) / atoms[target]
+                        const x = (charge - currentSum) / atoms[target];
+                        assignments[target] = x;
+                    }
+                    // Case C: Multiple Unknowns (e.g. Fe3O4 - mixed valency, or Organic)
+                    else {
+                        // Too complex for simple logic, assume typical rules failed or mixed.
+                        // For simple inorganic, usually only 1 variable metal.
+                        // Fallback: Try to apply -1 to remaining halogens or similar rules
+                        setError('無法自動確定，可能包含多個變價元素或非標準結構。');
+                        return;
+                    }
+
+                    setResult({ atoms, assignments, charge });
+                    
+                    // Generate Steps Text
+                    const stepList = [];
+                    let equationLeft = [];
+                    let knownSum = 0;
+                    
+                    elements.forEach(el => {
+                        const count = atoms[el];
+                        const on = assignments[el];
+                        const isCalc = unknown.includes(el);
+                        
+                        if (!isCalc) {
+                            equationLeft.push(`${count}(${on})`);
+                            knownSum += count * on;
+                        } else {
+                            equationLeft.push(`${count}(x)`);
+                        }
+                    });
+                    
+                    stepList.push(`設未知元素的氧化數為 x`);
+                    stepList.push(`總氧化數之和 = 離子電荷 (${charge})`);
+                    stepList.push(`方程式: ${equationLeft.join(' + ')} = ${charge}`);
+                    
+                    if (unknown.length > 0) {
+                         const target = unknown[0];
+                         const count = atoms[target];
+                         stepList.push(`${count}x + (${knownSum}) = ${charge}`);
+                         stepList.push(`${count}x = ${charge - knownSum}`);
+                         stepList.push(`x = ${(charge - knownSum) / count}`);
+                         stepList.push(`所以，${target} 的氧化數為 ${(charge - knownSum) / count > 0 ? '+' : ''}${(charge - knownSum) / count}`);
+                    } else {
+                        stepList.push(`驗證: ${knownSum} = ${charge} (符合)`);
+                    }
+                    
+                    setSteps(stepList);
+
+                } catch (e) {
+                    setError('無法解析化學式，請檢查格式 (e.g. KMnO4, SO4^2-)。');
+                    console.error(e);
+                }
+            };
+
+            const loadExample = (ex) => {
+                setInput(ex);
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-4xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="hash"></i> 氧化數計算機
+                            </h1>
+                            <p className="text-slate-400 text-sm">Oxidation Number Calculator</p>
+                        </div>
+                        <button onClick={() => { setInput(''); setResult(null); setSteps([]); }} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold text-sm flex items-center gap-2 transition-colors">
+                            <i data-lucide="rotate-ccw" size={16}></i> 清除
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        
+                        {/* Left: Input */}
+                        <div className="space-y-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                    輸入化學式 (Formula)
+                                </label>
+                                <div className="relative">
+                                    <input 
+                                        type="text" 
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="e.g. KMnO4 or Cr2O7^2-"
+                                        className="w-full p-4 rounded-xl border-2 border-slate-200 font-mono text-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all"
+                                        onKeyPress={(e) => e.key === 'Enter' && calculateON()}
+                                    />
+                                    <button 
+                                        onClick={calculateON}
+                                        className="absolute right-2 top-2 bottom-2 px-4 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors flex items-center"
+                                    >
+                                        計算
+                                    </button>
+                                </div>
+                                {error && (
+                                    <p className="mt-2 text-red-500 text-sm flex items-center gap-1">
+                                        <i data-lucide="alert-circle" size={14}/> {error}
+                                    </p>
+                                )}
+
+                                <div className="mt-6">
+                                    <p className="text-xs font-bold text-slate-400 uppercase mb-2">快速範例 (Quick Examples)</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Examples.map((ex, i) => (
+                                            <button 
+                                                key={i}
+                                                onClick={() => loadExample(ex.f)}
+                                                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all"
+                                                title={ex.name}
+                                            >
+                                                {ex.f}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 text-sm text-blue-800">
+                                <h4 className="font-bold flex items-center gap-2 mb-2">
+                                    <i data-lucide="book-open" size={16}/> 優先規則 (Priority Rules)
+                                </h4>
+                                <ol className="list-decimal list-inside space-y-1 opacity-90">
+                                    <li>元素態氧化數為 0。</li>
+                                    <li>單原子離子氧化數 = 電荷。</li>
+                                    <li>F 永遠是 -1。</li>
+                                    <li>H 通常是 +1 (除金屬氫化物)。</li>
+                                    <li>O 通常是 -2 (除過氧化物)。</li>
+                                    <li>化合物中氧化數總和 = 0；多原子離子 = 電荷。</li>
+                                </ol>
+                            </div>
+                        </div>
+
+                        {/* Right: Result */}
+                        <div className="space-y-6">
+                            {result ? (
+                                <div className="animate-fade-in">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+                                        {Object.keys(result.assignments).map((el) => (
+                                            <div key={el} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center atom-badge relative overflow-hidden">
+                                                <div className={`absolute top-0 w-full h-1 ${result.assignments[el] > 0 ? 'bg-red-400' : result.assignments[el] < 0 ? 'bg-blue-400' : 'bg-slate-300'}`}></div>
+                                                <div className="text-2xl font-bold text-slate-800">{el}</div>
+                                                <div className={`text-lg font-mono font-black ${result.assignments[el] > 0 ? 'text-red-500' : result.assignments[el] < 0 ? 'text-blue-500' : 'text-slate-500'}`}>
+                                                    {result.assignments[el] > 0 ? '+' : ''}{result.assignments[el]}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="bg-slate-800 text-slate-200 p-6 rounded-2xl shadow-lg">
+                                        <h4 className="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                                            <i data-lucide="terminal" size={16}/> 計算過程 (Calculation Steps)
+                                        </h4>
+                                        <div className="font-mono space-y-2 text-sm">
+                                            {steps.map((step, i) => (
+                                                <div key={i} className="flex gap-3">
+                                                    <span className="text-slate-500 select-none">{i+1}.</span>
+                                                    <span>{step}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-slate-100/50 rounded-2xl border-2 border-dashed border-slate-200 min-h-[300px]">
+                                    <i data-lucide="atom" size={64} className="mb-4 opacity-20" />
+                                    <p>輸入化學式以開始計算</p>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
