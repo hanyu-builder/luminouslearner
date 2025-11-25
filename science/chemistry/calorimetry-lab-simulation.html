@@ -185,20 +185,6 @@
                             </h1>
                             <p className="text-slate-400 text-sm">Calorimetry Lab Simulation</p>
                         </div>
-                        <div className="flex bg-slate-100 p-1 rounded-lg">
-                            <button 
-                                onClick={() => { setMode('combustion'); reset(); }}
-                                className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${mode === 'combustion' ? 'bg-white text-rose-600 shadow' : 'text-slate-500'}`}
-                            >
-                                燃燒焓
-                            </button>
-                            <button 
-                                onClick={() => { setMode('neutralization'); reset(); }}
-                                className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${mode === 'neutralization' ? 'bg-white text-blue-600 shadow' : 'text-slate-500'}`}
-                            >
-                                中和焓
-                            </button>
-                        </div>
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-8 flex-grow">
@@ -206,6 +192,23 @@
                         {/* Left: Settings */}
                         <div className="w-full lg:w-1/3 flex flex-col gap-6">
                             <div className="bg-white p-5 rounded-2xl shadow-md border border-slate-200">
+                                
+                                {/* Mode Selection Tabs (Moved Here) */}
+                                <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                                    <button 
+                                        onClick={() => { setMode('combustion'); reset(); }}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${mode === 'combustion' ? 'bg-white text-rose-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <i data-lucide="flame" size={16}/> 燃燒焓
+                                    </button>
+                                    <button 
+                                        onClick={() => { setMode('neutralization'); reset(); }}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${mode === 'neutralization' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <i data-lucide="droplets" size={16}/> 中和焓
+                                    </button>
+                                </div>
+
                                 <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
                                     <i data-lucide="settings-2" size={16}/> 實驗設定
                                 </h3>
@@ -217,14 +220,14 @@
                                             <select 
                                                 value={selectedFuel.formula}
                                                 onChange={(e) => setSelectedFuel(Modes.COMBUSTION.fuel.find(f => f.formula === e.target.value))}
-                                                className="w-full p-2 border rounded font-bold text-rose-600 bg-rose-50 border-rose-200"
+                                                className="w-full p-2 border rounded-lg font-bold text-rose-600 bg-rose-50 border-rose-200 outline-none focus:ring-2 focus:ring-rose-300"
                                             >
                                                 {Modes.COMBUSTION.fuel.map(f => <option key={f.formula} value={f.formula}>{f.name}</option>)}
                                             </select>
                                         </div>
                                         <div className="mb-4">
                                             <label className="text-xs font-bold text-slate-700 block mb-1">防熱流失措施 (Heat Loss Prevention)</label>
-                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                            <label className="flex items-center gap-2 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                                                 <input type="checkbox" checked={hasShield} onChange={(e) => setHasShield(e.target.checked)} className="accent-rose-500 w-4 h-4" />
                                                 <span className="text-sm">加裝防風罩 (Draught Shield)</span>
                                             </label>
@@ -237,18 +240,18 @@
                                             <select 
                                                 value={selectedReactant.name}
                                                 onChange={(e) => setSelectedReactant(Modes.NEUTRALIZATION.reactants.find(r => r.name === e.target.value))}
-                                                className="w-full p-2 border rounded font-bold text-blue-600 bg-blue-50 border-blue-200"
+                                                className="w-full p-2 border rounded-lg font-bold text-blue-600 bg-blue-50 border-blue-200 outline-none focus:ring-2 focus:ring-blue-300"
                                             >
                                                 {Modes.NEUTRALIZATION.reactants.map(r => <option key={r.name} value={r.name}>{r.name}</option>)}
                                             </select>
                                         </div>
                                         <div className="mb-4 space-y-2">
                                             <label className="text-xs font-bold text-slate-700 block mb-1">儀器設定 (Setup)</label>
-                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                            <label className="flex items-center gap-2 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                                                 <input type="checkbox" checked={usePolystyrene} onChange={(e) => setUsePolystyrene(e.target.checked)} className="accent-blue-500 w-4 h-4" />
                                                 <span className="text-sm">使用保麗龍杯 (Polystyrene Cup)</span>
                                             </label>
-                                            <label className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+                                            <label className="flex items-center gap-2 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
                                                 <input type="checkbox" checked={hasLid} onChange={(e) => setHasLid(e.target.checked)} className="accent-blue-500 w-4 h-4" />
                                                 <span className="text-sm">加蓋 (Lid)</span>
                                             </label>
@@ -259,7 +262,7 @@
                                 <button 
                                     onClick={startExperiment}
                                     disabled={isRunning}
-                                    className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50
+                                    className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2
                                         ${mode === 'combustion' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-500 hover:bg-blue-600'}
                                     `}
                                 >
@@ -409,8 +412,8 @@
                                             <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                                                 <div className={`h-full ${result.efficiency < 50 ? 'bg-red-400' : 'bg-green-400'}`} style={{width: `${result.efficiency}%`}}></div>
                                             </div>
-                                            <p className="text-[10px] text-slate-400 mt-1">
-                                                {result.efficiency < 60 ? '⚠️ 大量熱能流失 (Significant Heat Loss)' : '✅ 隔熱良好 (Good Insulation)'}
+                                            <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                                {result.efficiency < 60 ? <><i data-lucide="alert-circle" size={10} /> 大量熱能流失 (Significant Heat Loss)</> : <><i data-lucide="check-circle" size={10} /> 隔熱良好 (Good Insulation)</>}
                                             </p>
                                         </div>
                                     </div>
