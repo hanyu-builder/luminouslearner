@@ -127,10 +127,6 @@
                 } else if (deltaN === -1) {
                     unit = 'mol⁻¹ dm³';
                 } else {
-                    unit = `mol^${deltaN} dm^${-3 * deltaN}`;
-                    // Format superscripts nicely for display? Let's stick to text representation or basic HTML
-                    // Better: mol^{deltaN} dm^{-3*deltaN}
-                    // Let's format for display:
                     unit = `mol${toSuperscript(deltaN)} dm${toSuperscript(-3 * deltaN)}`;
                 }
 
@@ -174,25 +170,32 @@
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
                     
                     {/* Header */}
-                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                    <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
                                 <i data-lucide="scale"></i> 平衡常數計算機
                             </h1>
                             <p className="text-slate-400 text-sm">Equilibrium Constant (Kc) Calculator</p>
                         </div>
-                        
-                        {/* Preset Buttons */}
-                        <div className="flex gap-2 overflow-x-auto pb-1 max-w-md">
-                            {Presets.map((p, idx) => (
-                                <button 
-                                    key={idx} 
-                                    onClick={() => loadPreset(p)}
-                                    className="px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-all whitespace-nowrap"
-                                >
-                                    {p.name.split(' ')[0]}
-                                </button>
-                            ))}
+                    </div>
+
+                    {/* Preset Buttons (Centered & Prominent) */}
+                    <div className="flex justify-center mb-8">
+                        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-3 px-4">
+                            <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1 whitespace-nowrap">
+                                <i data-lucide="zap" size={14}/> 快速載入例子:
+                            </span>
+                            <div className="flex gap-2 flex-wrap justify-center">
+                                {Presets.map((p, idx) => (
+                                    <button 
+                                        key={idx} 
+                                        onClick={() => loadPreset(p)}
+                                        className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-lg transition-all shadow-sm"
+                                    >
+                                        {p.name.split(' ')[0]}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
