@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>能線圖繪製器 (Energy Profile Diagram Maker)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            // State
+            const [reactionType, setReactionType] = useState('exothermic'); // exothermic, endothermic
+            const [deltaH, setDeltaH] = useState(-50);
+            const [activationEnergy, setActivationEnergy] = useState(100);
+            const [showCatalyst, setShowCatalyst] = useState(false);
+            
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Validate Inputs
+            useEffect(() => {
+                if (reactionType === 'exothermic' && deltaH > 0) setDeltaH(-deltaH);
+                if (reactionType === 'endothermic' && deltaH < 0) setDeltaH(-deltaH);
+                
+                // Ea must be > deltaH for endo, and > 0 always
+                // For simplicity, keep Ea independent positive value relative to reactants
+            }, [reactionType]);
+
+            // Draw Chart
+            useEffect(() => {
+                if (!canvasRef.current) return;
+                
+                const ctx = canvasRef.current.getContext('2d');
+                if (chartInstance.current) chartInstance.current.destroy();
+
+                // Coordinates Logic
+                // X axis: 0 to 100 (Progress)
+                // Y axis: Energy
+                
+                const reactantY = 50; // Base line
+                const productY = reactantY + deltaH; // Higher or lower
+                const transitionY = reactantY + activationEnergy; // Peak
+                const catalystY = reactantY + (activationEnergy * 0.6); // Lower peak
+
+                // Generate Curve Points (Gaussian-like or Cubic Bezier approximation via points)
+                // We use a scatter plot with lines to draw custom shapes
+                
+                const generateCurve = (peakY) => {
+                    const points = [];
+                    // Reactants flat
+                    for(let x=0; x<=20; x+=2) points.push({x, y: reactantY});
+                    
+                    // Rise to peak (Sigmoid-ish)
+                    for(let x=21; x<=50; x+=1) {
+                        // Simple sine curve up
+                        const progress = (x - 20) / 30;
+                        const y = reactantY + (peakY - reactantY) * Math.sin(progress * Math.PI / 2);
+                        points.push({x, y});
+                    }
+                    
+                    // Fall to products
+                    for(let x=51; x<=80; x+=1) {
+                        const progress = (x - 50) / 30;
+                        const y = peakY - (peakY - productY) * (1 - Math.cos(progress * Math.PI / 2)); // Ease out
+                        points.push({x, y});
+                    }
+
+                    // Products flat
+                    for(let x=81; x<=100; x+=2) points.push({x, y: productY});
+                    
+                    return points;
+                };
+
+                const uncatalysedData = generateCurve(transitionY);
+                const catalysedData = showCatalyst ? generateCurve(catalystY) : [];
+
+                // Annotations (Using Chart.js annotation plugin approach or simple datasets)
+                // We will use scatter points for labels to keep it simple without heavy plugins
+                
+                chartInstance.current = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Uncatalysed Path',
+                                data: uncatalysedData,
+                                showLine: true,
+                                borderColor: '#3b82f6', // Blue
+                                borderWidth: 3,
+                                pointRadius: 0,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Catalysed Path',
+                                data: catalysedData,
+                                showLine: true,
+                                borderColor: '#22c55e', // Green
+                                borderWidth: 3,
+                                borderDash: [5, 5],
+                                pointRadius: 0,
+                                tension: 0.4
+                            },
+                            // Markers for Labels (Invisible points, used for tooltips/visuals if needed, or just labels)
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0, max: 100,
+                                title: { display: true, text: '反應進程 (Reaction Coordinate)', font: { weight: 'bold' } },
+                                ticks: { display: false },
+                                grid: { display: false }
+                            },
+                            y: {
+                                // Dynamic range based on values
+                                min: Math.min(productY, reactantY) - 20,
+                                max: Math.max(transitionY, catalystY) + 20,
+                                title: { display: true, text: '勢能 (Potential Energy)', font: { weight: 'bold' } },
+                                ticks: { display: false } // Hide numbers for generic diagram
+                            }
+                        },
+                        plugins: {
+                            legend: { 
+                                position: 'top',
+                                labels: { usePointStyle: true }
+                            },
+                            tooltip: { enabled: false } // Disable standard tooltips
+                        },
+                        animation: { duration: 1000 }
+                    },
+                    plugins: [{
+                        id: 'customLabels',
+                        afterDraw: (chart) => {
+                            const ctx = chart.ctx;
+                            const xAxis = chart.scales.x;
+                            const yAxis = chart.scales.y;
+
+                            ctx.save();
+                            ctx.font = 'bold 12px "Roboto Mono", sans-serif';
+                            ctx.textAlign = 'center';
+                            
+                            // Draw Arrows Helper
+                            const drawArrow = (x, y1, y2, color, label, offset) => {
+                                ctx.beginPath();
+                                ctx.strokeStyle = color;
+                                ctx.lineWidth = 2;
+                                ctx.moveTo(x, y1);
+                                ctx.lineTo(x, y2);
+                                ctx.stroke();
+                                
+                                // Arrowhead
+                                const headSize = 5;
+                                const angle = Math.atan2(y2 - y1, 0); // Vertical
+                                ctx.beginPath();
+                                if (y2 > y1) { // Up
+                                     ctx.moveTo(x, y2);
+                                     ctx.lineTo(x - headSize, y2 - headSize);
+                                     ctx.lineTo(x + headSize, y2 - headSize);
+                                } else { // Down
+                                     ctx.moveTo(x, y2);
+                                     ctx.lineTo(x - headSize, y2 + headSize);
+                                     ctx.lineTo(x + headSize, y2 + headSize);
+                                }
+                                ctx.fillStyle = color;
+                                ctx.fill();
+
+                                // Label
+                                ctx.fillStyle = color;
+                                ctx.textAlign = 'left';
+                                ctx.fillText(label, x + 5, (y1 + y2) / 2);
+                            };
+
+                            // Reactants Label
+                            ctx.fillStyle = '#1e293b';
+                            ctx.fillText('反應物 (R)', xAxis.getPixelForValue(10), yAxis.getPixelForValue(reactantY) - 10);
+                            
+                            // Products Label
+                            ctx.fillText('生成物 (P)', xAxis.getPixelForValue(90), yAxis.getPixelForValue(productY) - 10);
+
+                            // Ea Arrow (Reactants to Peak)
+                            const arrowX = xAxis.getPixelForValue(35);
+                            const rY = yAxis.getPixelForValue(reactantY);
+                            const peakY = yAxis.getPixelForValue(transitionY);
+                            drawArrow(arrowX, rY, peakY, '#f59e0b', 'Ea (活化能)', 0);
+
+                            // Delta H Arrow (Reactants to Products)
+                            const dhX = xAxis.getPixelForValue(85);
+                            const pY = yAxis.getPixelForValue(productY);
+                            drawArrow(dhX, rY, pY, '#ec4899', 'ΔH', 0);
+                            
+                            if (showCatalyst) {
+                                const catPeakY = yAxis.getPixelForValue(catalystY);
+                                const catArrowX = xAxis.getPixelForValue(45);
+                                drawArrow(catArrowX, rY, catPeakY, '#15803d', "Ea'", 0);
+                            }
+
+                            ctx.restore();
+                        }
+                    }]
+                });
+            }, [reactionType, deltaH, activationEnergy, showCatalyst]);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-5xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
+                                <i data-lucide="activity"></i> 能線圖繪製器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Energy Profile Diagram Maker</p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="settings-2" size={16}/> 參數設定
+                                </h3>
+
+                                {/* Reaction Type */}
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-700 block mb-2">反應類型 (Reaction Type)</label>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                                        <button 
+                                            onClick={() => setReactionType('exothermic')}
+                                            className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${reactionType === 'exothermic' ? 'bg-white text-red-600 shadow' : 'text-slate-500'}`}
+                                        >
+                                            放熱 (Exothermic)
+                                        </button>
+                                        <button 
+                                            onClick={() => setReactionType('endothermic')}
+                                            className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${reactionType === 'endothermic' ? 'bg-white text-blue-600 shadow' : 'text-slate-500'}`}
+                                        >
+                                            吸熱 (Endothermic)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Sliders */}
+                                <div className="mb-4">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-pink-600">焓變 (ΔH)</label>
+                                        <span className="text-xs font-mono font-bold">{deltaH} kJ</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min={reactionType === 'exothermic' ? -200 : 10} 
+                                        max={reactionType === 'exothermic' ? -10 : 200} 
+                                        value={deltaH} 
+                                        onChange={(e) => setDeltaH(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-pink-100 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                                    />
+                                </div>
+
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-amber-600">活化能 (Ea)</label>
+                                        <span className="text-xs font-mono font-bold">{activationEnergy} kJ</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="20" 
+                                        max="300" 
+                                        value={activationEnergy} 
+                                        onChange={(e) => setActivationEnergy(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-amber-100 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                </div>
+
+                                {/* Catalyst Toggle */}
+                                <button 
+                                    onClick={() => setShowCatalyst(!showCatalyst)}
+                                    className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm border-2
+                                        ${showCatalyst ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}
+                                    `}
+                                >
+                                    <i data-lucide={showCatalyst ? 'check-square' : 'square'} size={18} />
+                                    顯示催化劑路徑 (Show Catalyst)
+                                </button>
+                            </div>
+
+                            {/* Legend / Explanation */}
+                            <div className="bg-slate-800 p-5 rounded-2xl text-white shadow-lg">
+                                <h3 className="text-sm font-bold text-yellow-400 uppercase mb-2 flex items-center gap-2">
+                                    <i data-lucide="info" size={16}/> 圖表解讀
+                                </h3>
+                                <ul className="text-xs space-y-2 opacity-90 list-disc list-inside">
+                                    <li><span className="text-amber-400 font-bold">Ea</span>: 反應所需的最小能量。</li>
+                                    <li><span className="text-pink-400 font-bold">ΔH</span>: 反應前後的總能量變化 (與路徑無關)。</li>
+                                    <li><span className="text-green-400 font-bold">催化劑</span>: 提供一條 Ea 較低的路徑，加快反應速率。</li>
+                                </ul>
+                            </div>
+
+                        </div>
+
+                        {/* Right: Diagram */}
+                        <div className="w-full lg:w-2/3 bg-white rounded-3xl border-4 border-slate-200 p-4 shadow-xl flex flex-col">
+                            <div className="flex-grow chart-container relative">
+                                <canvas ref={canvasRef}></canvas>
+                            </div>
+                            <div className="mt-4 text-center text-xs text-slate-400 font-mono">
+                                {reactionType === 'exothermic' ? '放熱反應: 生成物能量較低，ΔH 為負' : '吸熱反應: 生成物能量較高，ΔH 為正'}
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8">
+                        Luminous Learner Science Tools | HKDSE Topic VIII & IX
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
