@@ -33,6 +33,15 @@
         .thermometer-liquid {
             transition: height 1s ease-out, background-color 1s ease;
         }
+
+        /* Custom Button Hover */
+        .material-btn {
+            transition: all 0.2s;
+        }
+        .material-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
@@ -43,16 +52,13 @@
         const { useState, useEffect } = React;
 
         // Specific Heat Capacities (J g^-1 K^-1)
-        // Note: Standard unit is often J kg^-1 K^-1, but in lab we often use g.
-        // Let's standardise inputs to g and J for typical school experiments, 
-        // but show conversion note.
         const Materials = [
-            { name: '水 (Water)', c: 4.18, color: 'bg-blue-400/50', type: 'liquid' },
-            { name: '乙醇 (Ethanol)', c: 2.44, color: 'bg-transparent', type: 'liquid' },
-            { name: '鋁 (Aluminium)', c: 0.90, color: 'bg-gray-300', type: 'solid' },
-            { name: '鐵 (Iron)', c: 0.45, color: 'bg-gray-500', type: 'solid' },
-            { name: '銅 (Copper)', c: 0.39, color: 'bg-orange-400', type: 'solid' },
-            { name: '鉛 (Lead)', c: 0.13, color: 'bg-slate-600', type: 'solid' }
+            { name: '水 (Water)', c: 4.18, color: 'bg-blue-400/50', type: 'liquid', icon: '💧' },
+            { name: '乙醇 (Ethanol)', c: 2.44, color: 'bg-transparent', type: 'liquid', icon: '🧪' },
+            { name: '鋁 (Aluminium)', c: 0.90, color: 'bg-gray-300', type: 'solid', icon: '⚪' },
+            { name: '鐵 (Iron)', c: 0.45, color: 'bg-gray-500', type: 'solid', icon: '🔩' },
+            { name: '銅 (Copper)', c: 0.39, color: 'bg-orange-400', type: 'solid', icon: '🟤' },
+            { name: '鉛 (Lead)', c: 0.13, color: 'bg-slate-600', type: 'solid', icon: '⬛' }
         ];
 
         const App = () => {
@@ -145,7 +151,7 @@
                 const t = parseFloat(temp) || 25;
                 if (t <= 0) return '#3b82f6';
                 if (t >= 100) return '#ef4444';
-                // Simple gradient logic not easily done in inline style without lerp function
+                // Simple gradient approximation
                 return t > 50 ? '#f97316' : '#3b82f6';
             };
             
@@ -228,23 +234,25 @@
                                         className="w-full p-3 rounded-xl border border-slate-300 font-mono font-bold focus:ring-2 focus:ring-blue-300 outline-none" placeholder={isDisabled('m') ? '?' : 'e.g. 100'} />
                                 </div>
 
-                                {/* c Input & Presets */}
+                                {/* c Input & Presets (UPDATED UI HERE) */}
                                 <div className={`relative group ${isDisabled('c') ? 'opacity-50' : ''}`}>
-                                    <div className="flex justify-between items-center mb-1">
+                                    <div className="flex justify-between items-center mb-2">
                                         <label className="text-xs font-bold text-green-500 uppercase">比熱容 (c)</label>
                                         <span className="text-[10px] text-slate-400">J g⁻¹ K⁻¹</span>
                                     </div>
                                     
-                                    {/* Preset Chips (Only show if c is editable) */}
+                                    {/* Enhanced Preset Buttons Grid */}
                                     {!isDisabled('c') && (
-                                        <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide">
+                                        <div className="grid grid-cols-3 gap-2 mb-3">
                                             {Materials.map(mat => (
                                                 <button 
                                                     key={mat.name} 
                                                     onClick={() => handleMaterialSelect(mat)}
-                                                    className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] rounded-md whitespace-nowrap hover:bg-green-100 hover:text-green-700 transition-colors"
+                                                    className="material-btn flex flex-col items-center justify-center py-2 px-1 bg-slate-50 border border-slate-200 rounded-xl hover:bg-green-50 hover:border-green-300 hover:text-green-700 text-slate-600 transition-all"
                                                 >
-                                                    {mat.name.split(' ')[0]}
+                                                    <span className="text-lg">{mat.icon}</span>
+                                                    <span className="text-[10px] font-bold mt-0.5">{mat.name.split(' ')[0]}</span>
+                                                    <span className="text-[9px] font-mono text-slate-400">{mat.c}</span>
                                                 </button>
                                             ))}
                                         </div>
