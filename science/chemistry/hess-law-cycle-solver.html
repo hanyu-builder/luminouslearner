@@ -72,6 +72,7 @@
                 bottom: '燃燒產物 (Oxides)'
             });
             
+            // Edges: 1=Top->Right, 2=Top->Bottom, 3=Right->Bottom (default directions for generic)
             const [edges, setEdges] = useState({
                 e1: { val: '', dir: 1, name: 'ΔH1', label: '反應焓變' }, 
                 e2: { val: '', dir: 1, name: 'ΔH2', label: '反應物燃燒焓' }, 
@@ -81,31 +82,91 @@
             const [result, setResult] = useState(null);
             const [pathHighlight, setPathHighlight] = useState([]);
 
-            useEffect(() => {
-                if (mode === 'formation') {
-                    setNodes({ top: '反應物 (Reactants)', right: '生成物 (Products)', bottom: '構成元素 (Elements)' });
-                    setEdges({
-                        e1: { ...edges.e1, val: '', dir: 1, label: '反應焓變 (ΔHr)' },
-                        e2: { ...edges.e2, val: '', dir: -1, label: '反應物生成焓 (ΔHf[R])' }, 
-                        e3: { ...edges.e3, val: '', dir: -1, label: '生成物生成焓 (ΔHf[P])' }  
-                    });
-                } else if (mode === 'combustion') {
-                    setNodes({ top: '反應物 (Reactants)', right: '生成物 (Products)', bottom: '燃燒產物 (Combustion Products)' });
-                    setEdges({
-                        e1: { ...edges.e1, val: '', dir: 1, label: '反應焓變 (ΔHr)' },
-                        e2: { ...edges.e2, val: '', dir: 1, label: '反應物燃燒焓 (ΔHc[R])' }, 
-                        e3: { ...edges.e3, val: '', dir: 1, label: '生成物燃燒焓 (ΔHc[P])' }  
-                    });
-                } else {
-                    setNodes({ top: '物質 A', right: '物質 B', bottom: '物質 C' });
-                    setEdges({
-                        e1: { ...edges.e1, val: '', dir: 1, label: 'ΔH1 (A → B)' },
-                        e2: { ...edges.e2, val: '', dir: 1, label: 'ΔH2 (A → C)' },
-                        e3: { ...edges.e3, val: '', dir: -1, label: 'ΔH3 (C → B)' } 
-                    });
-                }
+            // Preset Examples Data
+            const loadExample = (type) => {
                 setResult(null);
                 setPathHighlight([]);
+
+                if (type === 'methane') {
+                    // Methane Combustion Cycle
+                    // CH4 + 2O2 -> CO2 + 2H2O
+                    // Given Hf values, find Hr? Or Given Hc values?
+                    // Let's do Formation: C + 2H2 -> CH4 (Find Hf given Hc)
+                    // Top: C + 2H2, Right: CH4
+                    // Bottom: CO2 + 2H2O
+                    
+                    setMode('combustion');
+                    setNodes({
+                        top: 'C(s) + 2H₂(g)',
+                        right: 'CH₄(g)',
+                        bottom: 'CO₂(g) + 2H₂O(l)'
+                    });
+                    setEdges({
+                        e1: { val: '', dir: 1, name: 'ΔHf', label: '生成焓 (Target)' }, // Target
+                        e2: { val: '-393.5 + 2(-285.8)', dir: 1, name: 'ΔHc[R]', label: '反應物燃燒' }, // C + H2 combustion
+                        e3: { val: '-890.3', dir: 1, name: 'ΔHc[P]', label: '生成物燃燒' }  // CH4 combustion
+                    });
+                    // Note: e2 val is complex, let's pre-calc for simplicity or allow text
+                    // Simplification: -393.5 - 571.6 = -965.1
+                     setEdges({
+                        e1: { val: '', dir: 1, name: 'ΔHf', label: '生成焓 (Target)' },
+                        e2: { val: '-965.1', dir: 1, name: 'ΔHc[R]', label: '反應物燃燒' },
+                        e3: { val: '-890.3', dir: 1, name: 'ΔHc[P]', label: '生成物燃燒' }
+                    });
+
+                } else if (type === 'ethene') {
+                    // Hydrogenation of Ethene: C2H4 + H2 -> C2H6
+                    // Using Combustion data
+                    setMode('combustion');
+                    setNodes({
+                        top: 'C₂H₄ + H₂',
+                        right: 'C₂H₆',
+                        bottom: '2CO₂ + 3H₂O'
+                    });
+                    setEdges({
+                        e1: { val: '', dir: 1, name: 'ΔHr', label: '氫化焓 (Target)' },
+                        // Hc(C2H4) = -1411, Hc(H2) = -286. Total = -1697
+                        e2: { val: '-1697', dir: 1, name: 'ΔHc[R]', label: '反應物燃燒' },
+                        e3: { val: '-1560', dir: 1, name: 'ΔHc[P]', label: '生成物燃燒' }
+                    });
+
+                } else if (type === 'caco3') {
+                    // Decomposition: CaCO3 -> CaO + CO2
+                    // Using Formation data
+                    setMode('formation');
+                    setNodes({
+                        top: 'CaCO₃(s)',
+                        right: 'CaO(s) + CO₂(g)',
+                        bottom: 'Ca + C + 1.5O₂'
+                    });
+                    setEdges({
+                        e1: { val: '', dir: 1, name: 'ΔHr', label: '分解焓 (Target)' },
+                        e2: { val: '-1207', dir: -1, name: 'ΔHf[R]', label: '反應物生成' }, // Elements -> Reactant
+                        // Hf(CaO) = -635, Hf(CO2) = -394. Total = -1029
+                        e3: { val: '-1029', dir: -1, name: 'ΔHf[P]', label: '生成物生成' }  // Elements -> Products
+                    });
+                }
+            };
+
+            // Update Labels when mode changes (only if not custom loaded)
+            useEffect(() => {
+                if (result) return; // Don't reset if showing result
+                
+                if (mode === 'formation') {
+                    setNodes(prev => ({ top: '反應物 (R)', right: '生成物 (P)', bottom: '構成元素 (Elements)' }));
+                    setEdges(prev => ({
+                        e1: { ...prev.e1, label: '反應焓變 (ΔHr)' },
+                        e2: { ...prev.e2, dir: -1, label: '反應物生成焓 (ΔHf[R])' }, 
+                        e3: { ...prev.e3, dir: -1, label: '生成物生成焓 (ΔHf[P])' }  
+                    }));
+                } else if (mode === 'combustion') {
+                    setNodes(prev => ({ top: '反應物 (R)', right: '生成物 (P)', bottom: '燃燒產物 (Oxides)' }));
+                    setEdges(prev => ({
+                        e1: { ...prev.e1, label: '反應焓變 (ΔHr)' },
+                        e2: { ...prev.e2, dir: 1, label: '反應物燃燒焓 (ΔHc[R])' }, 
+                        e3: { ...prev.e3, dir: 1, label: '生成物燃燒焓 (ΔHc[P])' }  
+                    }));
+                }
             }, [mode]);
 
             const toggleDirection = (edgeKey) => {
@@ -146,7 +207,6 @@
                 const getVal = (key) => parseFloat(edges[key].val);
                 const getDir = (key) => edges[key].dir; 
 
-                // Path finding logic based on vector addition
                 if (unknownKey === 'e1') { // Target: Top -> Right
                     const v2 = getVal('e2') * getDir('e2'); 
                     const v3 = -(getVal('e3') * getDir('e3')); 
@@ -188,36 +248,61 @@
             return (
                 <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-7xl space-y-6">
                     
+                    {/* Quick Load & Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="recycle"></i> 赫斯定律循環解題器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Hess's Law Cycle Solver</p>
+                        </div>
+                        
+                        <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex gap-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase self-center mr-2">快速載入:</span>
+                            <button onClick={() => loadExample('methane')} className="px-3 py-1 bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 rounded text-xs font-bold transition-colors">
+                                甲烷生成 (Formation)
+                            </button>
+                            <button onClick={() => loadExample('ethene')} className="px-3 py-1 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded text-xs font-bold transition-colors">
+                                乙烯氫化 (Reaction)
+                            </button>
+                            <button onClick={() => loadExample('caco3')} className="px-3 py-1 bg-slate-100 hover:bg-green-50 text-slate-600 hover:text-green-600 rounded text-xs font-bold transition-colors">
+                                分解 CaCO₃
+                            </button>
+                        </div>
+                    </div>
+
                     {/* 1. Diagram Section (Full Width) */}
                     <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 relative min-h-[600px] flex flex-col">
                         
-                        {/* Header & Tabs */}
-                        <div className="flex flex-col md:flex-row justify-between items-center mb-6 z-30 relative">
-                            <div>
-                                <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
-                                    <i data-lucide="recycle"></i> 赫斯定律循環解題器
-                                </h1>
-                            </div>
-                            <div className="flex bg-slate-100 p-1 rounded-xl mt-4 md:mt-0">
-                                <button 
-                                    onClick={() => setMode('combustion')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'combustion' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <i data-lucide="flame" size={16}/> 燃燒循環
-                                </button>
-                                <button 
-                                    onClick={() => setMode('formation')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'formation' ? 'bg-white text-green-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <i data-lucide="hammer" size={16}/> 生成循環
-                                </button>
-                                <button 
-                                    onClick={() => setMode('generic')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'generic' ? 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <i data-lucide="edit-3" size={16}/> 自訂
-                                </button>
-                            </div>
+                        {/* Tabs */}
+                        <div className="flex justify-center gap-4 mb-8 z-30 relative">
+                            <button 
+                                onClick={() => setMode('combustion')}
+                                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                    ${mode === 'combustion' 
+                                        ? 'bg-red-500 text-white border-red-600 ring-2 ring-red-200 scale-105' 
+                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            >
+                                <i data-lucide="flame" size={18}/> 燃燒循環
+                            </button>
+                            <button 
+                                onClick={() => setMode('formation')}
+                                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                    ${mode === 'formation' 
+                                        ? 'bg-green-500 text-white border-green-600 ring-2 ring-green-200 scale-105' 
+                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            >
+                                <i data-lucide="hammer" size={18}/> 生成循環
+                            </button>
+                            <button 
+                                onClick={() => setMode('generic')}
+                                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                    ${mode === 'generic' 
+                                        ? 'bg-blue-500 text-white border-blue-600 ring-2 ring-blue-200 scale-105' 
+                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            >
+                                <i data-lucide="edit-3" size={18}/> 自訂
+                            </button>
                         </div>
 
                         {/* Interactive Diagram */}
@@ -271,33 +356,42 @@
                                     className="node-input w-full bg-orange-50 border-2 border-orange-200 text-orange-800 font-bold p-4 rounded-2xl shadow-sm focus:outline-none placeholder-orange-300"/>
                             </div>
 
-                            {/* Value Inputs (Positioned on lines) */}
+                            {/* Value Inputs - Positioned ON TOP of lines */}
                             
                             {/* E1 Input (Center Top) */}
-                            <div className="absolute top-[70px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
-                                <label className="text-xs text-slate-500 font-bold mb-1 bg-white/80 px-2 rounded backdrop-blur-sm cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e1')}>
+                            <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center bg-white/90 px-2 py-1 rounded-lg shadow-sm border border-slate-100">
+                                <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e1')}>
                                     {edges.e1.label} <i data-lucide="refresh-cw" size={10}/>
                                 </label>
-                                <input type="number" placeholder="?" value={edges.e1.val} onChange={(e) => handleValueChange('e1', e.target.value)}
-                                    className={`val-input w-28 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e1.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
+                                <input 
+                                    type="number" placeholder="?" 
+                                    value={edges.e1.val} onChange={(e) => handleValueChange('e1', e.target.value)}
+                                    className={`val-input w-24 p-1 border-b-2 border-slate-300 font-mono font-bold text-center outline-none text-lg bg-transparent focus:border-indigo-500 ${edges.e1.val === '' ? 'bg-indigo-50/50' : ''}`}
+                                />
                             </div>
 
                             {/* E2 Input (Left Diagonal) */}
-                            <div className="absolute top-[220px] left-[25%] -translate-x-1/2 z-20 flex flex-col items-end">
-                                <label className="text-xs text-slate-500 font-bold mb-1 bg-white/80 px-2 rounded backdrop-blur-sm cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e2')}>
+                            <div className="absolute top-[220px] left-[22%] -translate-x-1/2 z-20 flex flex-col items-center bg-white/90 px-2 py-1 rounded-lg shadow-sm border border-slate-100">
+                                <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e2')}>
                                     {edges.e2.label} <i data-lucide="refresh-cw" size={10}/>
                                 </label>
-                                <input type="number" placeholder="?" value={edges.e2.val} onChange={(e) => handleValueChange('e2', e.target.value)}
-                                    className={`val-input w-28 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e2.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
+                                <input 
+                                    type="number" placeholder="?" 
+                                    value={edges.e2.val} onChange={(e) => handleValueChange('e2', e.target.value)}
+                                    className={`val-input w-24 p-1 border-b-2 border-slate-300 font-mono font-bold text-center outline-none text-lg bg-transparent focus:border-indigo-500 ${edges.e2.val === '' ? 'bg-indigo-50/50' : ''}`}
+                                />
                             </div>
 
                             {/* E3 Input (Right Diagonal) */}
-                            <div className="absolute top-[220px] left-[75%] -translate-x-1/2 z-20 flex flex-col items-start">
-                                <label className="text-xs text-slate-500 font-bold mb-1 bg-white/80 px-2 rounded backdrop-blur-sm cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e3')}>
+                            <div className="absolute top-[220px] left-[78%] -translate-x-1/2 z-20 flex flex-col items-center bg-white/90 px-2 py-1 rounded-lg shadow-sm border border-slate-100">
+                                <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e3')}>
                                     {edges.e3.label} <i data-lucide="refresh-cw" size={10}/>
                                 </label>
-                                <input type="number" placeholder="?" value={edges.e3.val} onChange={(e) => handleValueChange('e3', e.target.value)}
-                                    className={`val-input w-28 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e3.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
+                                <input 
+                                    type="number" placeholder="?" 
+                                    value={edges.e3.val} onChange={(e) => handleValueChange('e3', e.target.value)}
+                                    className={`val-input w-24 p-1 border-b-2 border-slate-300 font-mono font-bold text-center outline-none text-lg bg-transparent focus:border-indigo-500 ${edges.e3.val === '' ? 'bg-indigo-50/50' : ''}`}
+                                />
                             </div>
 
                         </div>
