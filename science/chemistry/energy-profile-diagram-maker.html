@@ -29,15 +29,57 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        const Presets = [
+            { 
+                name: '甲烷燃燒 (Combustion)', 
+                type: 'exothermic', 
+                dh: -890, // Scaled for visual: -89
+                ea: 200, // Arbitrary high Ea for uncatalysed
+                cat: false,
+                desc: '高度放熱反應。即使放熱量大，仍需點火 (Ea) 才能開始。'
+            },
+            { 
+                name: '哈伯法 (Haber Process)', 
+                type: 'exothermic', 
+                dh: -92, // Moderate exo
+                ea: 250, // High Ea (breaking N≡N)
+                cat: true, // Usually taught with iron catalyst
+                desc: 'N₂ + 3H₂ ⇌ 2NH₃。鐵催化劑降低了活化能。'
+            },
+            { 
+                name: '光合作用 (Photosynthesis)', 
+                type: 'endothermic', 
+                dh: 500, // Visual scale
+                ea: 100, 
+                cat: true, // Enzymes (Chlorophyll)
+                desc: '吸熱反應。吸收光能轉化為化學能。'
+            }
+        ];
+
         const App = () => {
             // State
             const [reactionType, setReactionType] = useState('exothermic'); // exothermic, endothermic
             const [deltaH, setDeltaH] = useState(-50);
             const [activationEnergy, setActivationEnergy] = useState(100);
             const [showCatalyst, setShowCatalyst] = useState(false);
+            const [currentPreset, setCurrentPreset] = useState(null);
             
             const canvasRef = useRef(null);
             const chartInstance = useRef(null);
+
+            // Scale helper for better visuals (keep numbers in range -200 to 300 for chart y-axis)
+            const scaleValue = (val) => {
+                if (Math.abs(val) > 300) return val / 10; 
+                return val;
+            }
+
+            const loadPreset = (p) => {
+                setReactionType(p.type);
+                setDeltaH(scaleValue(p.dh));
+                setActivationEnergy(scaleValue(p.ea));
+                setShowCatalyst(p.cat);
+                setCurrentPreset(p);
+            };
 
             // Validate Inputs
             useEffect(() => {
@@ -54,33 +96,25 @@
 
                 // Coordinates Logic
                 const reactantY = 50; // Base line
-                const productY = reactantY + deltaH; // Higher or lower
-                const transitionY = reactantY + activationEnergy; // Peak
-                const catalystY = reactantY + (activationEnergy * 0.6); // Lower peak
+                const productY = reactantY + deltaH; 
+                const transitionY = reactantY + activationEnergy; 
+                const catalystY = reactantY + (activationEnergy * 0.6); 
 
                 // Generate Curve Points
                 const generateCurve = (peakY) => {
                     const points = [];
-                    // Reactants flat
                     for(let x=0; x<=20; x+=2) points.push({x, y: reactantY});
-                    
-                    // Rise to peak
                     for(let x=21; x<=50; x+=1) {
                         const progress = (x - 20) / 30;
                         const y = reactantY + (peakY - reactantY) * Math.sin(progress * Math.PI / 2);
                         points.push({x, y});
                     }
-                    
-                    // Fall to products
                     for(let x=51; x<=80; x+=1) {
                         const progress = (x - 50) / 30;
-                        const y = peakY - (peakY - productY) * (1 - Math.cos(progress * Math.PI / 2)); // Ease out
+                        const y = peakY - (peakY - productY) * (1 - Math.cos(progress * Math.PI / 2)); 
                         points.push({x, y});
                     }
-
-                    // Products flat
                     for(let x=81; x<=100; x+=2) points.push({x, y: productY});
-                    
                     return points;
                 };
 
@@ -95,7 +129,7 @@
                                 label: '無催化路徑 (Uncatalysed)',
                                 data: uncatalysedData,
                                 showLine: true,
-                                borderColor: '#3b82f6', // Blue
+                                borderColor: '#3b82f6',
                                 borderWidth: 3,
                                 pointRadius: 0,
                                 tension: 0.4
@@ -104,12 +138,11 @@
                                 label: '催化路徑 (Catalysed)',
                                 data: catalysedData,
                                 showLine: true,
-                                borderColor: '#22c55e', // Green
+                                borderColor: '#22c55e',
                                 borderWidth: 3,
                                 borderDash: [5, 5],
                                 pointRadius: 0,
                                 tension: 0.4,
-                                // Hide from legend if not active to avoid confusion, but we keep consistent here
                                 hidden: !showCatalyst
                             }
                         ]
@@ -136,11 +169,11 @@
                             legend: { 
                                 position: 'top',
                                 labels: { usePointStyle: true, font: { weight: 'bold' } },
-                                onClick: null // DISABLE CLICKING to prevent hiding lines
+                                onClick: null 
                             },
                             tooltip: { enabled: false }
                         },
-                        animation: { duration: 1000 }
+                        animation: { duration: 800 }
                     },
                     plugins: [{
                         id: 'customLabels',
@@ -153,7 +186,6 @@
                             ctx.font = 'bold 12px "Roboto Mono", sans-serif';
                             ctx.textAlign = 'center';
                             
-                            // Draw Arrows Helper
                             const drawArrow = (x, y1, y2, color, label, labelXOffset = 5) => {
                                 ctx.beginPath();
                                 ctx.strokeStyle = color;
@@ -162,14 +194,13 @@
                                 ctx.lineTo(x, y2);
                                 ctx.stroke();
                                 
-                                // Arrowhead
                                 const headSize = 5;
                                 ctx.beginPath();
-                                if (y2 > y1) { // Up
+                                if (y2 > y1) { 
                                      ctx.moveTo(x, y2);
                                      ctx.lineTo(x - headSize, y2 - headSize);
                                      ctx.lineTo(x + headSize, y2 - headSize);
-                                } else { // Down
+                                } else { 
                                      ctx.moveTo(x, y2);
                                      ctx.lineTo(x - headSize, y2 + headSize);
                                      ctx.lineTo(x + headSize, y2 + headSize);
@@ -177,31 +208,24 @@
                                 ctx.fillStyle = color;
                                 ctx.fill();
 
-                                // Label
                                 ctx.fillStyle = color;
                                 ctx.textAlign = 'left';
                                 ctx.fillText(label, x + labelXOffset, (y1 + y2) / 2);
                             };
 
-                            // Reactants Label
                             ctx.fillStyle = '#1e293b';
                             ctx.fillText('反應物 (R)', xAxis.getPixelForValue(10), yAxis.getPixelForValue(reactantY) - 10);
-                            
-                            // Products Label
                             ctx.fillText('生成物 (P)', xAxis.getPixelForValue(90), yAxis.getPixelForValue(productY) - 10);
 
-                            // Ea Arrow (Reactants to Peak)
                             const arrowX = xAxis.getPixelForValue(35);
                             const rY = yAxis.getPixelForValue(reactantY);
                             const peakY = yAxis.getPixelForValue(transitionY);
                             drawArrow(arrowX, rY, peakY, '#f59e0b', 'Ea (無催化)');
 
-                            // Delta H Arrow (Reactants to Products)
                             const dhX = xAxis.getPixelForValue(85);
                             const pY = yAxis.getPixelForValue(productY);
                             drawArrow(dhX, rY, pY, '#ec4899', 'ΔH');
                             
-                            // Catalyst Arrow
                             if (showCatalyst) {
                                 const catPeakY = yAxis.getPixelForValue(catalystY);
                                 const catArrowX = xAxis.getPixelForValue(45);
@@ -224,6 +248,23 @@
                                 <i data-lucide="activity"></i> 能線圖繪製器
                             </h1>
                             <p className="text-slate-400 text-sm">Energy Profile Diagram Maker</p>
+                        </div>
+                        
+                        {/* Preset Buttons */}
+                        <div className="flex gap-2">
+                            {Presets.map((p, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => loadPreset(p)}
+                                    className={`px-3 py-1 rounded text-xs font-bold border transition-all
+                                        ${currentPreset?.name === p.name 
+                                            ? 'bg-blue-100 text-blue-700 border-blue-300' 
+                                            : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}
+                                    `}
+                                >
+                                    {p.name.split(' ')[0]}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -307,8 +348,13 @@
                                 <ul className="text-xs space-y-2 opacity-90 list-disc list-inside">
                                     <li><span className="text-amber-400 font-bold">Ea</span>: 反應所需的最小能量。</li>
                                     <li><span className="text-pink-400 font-bold">ΔH</span>: 反應前後的總能量變化 (與路徑無關)。</li>
-                                    <li><span className="text-green-400 font-bold">催化劑</span>: 提供一條 Ea 較低的路徑 (Ea')，加快反應速率，但不改變 ΔH。</li>
+                                    <li><span className="text-green-400 font-bold">催化劑</span>: 提供一條 Ea 較低的路徑，加快反應速率。</li>
                                 </ul>
+                                {currentPreset && (
+                                    <div className="mt-3 pt-3 border-t border-slate-600 text-xs text-slate-300 italic">
+                                        {currentPreset.desc}
+                                    </div>
+                                )}
                             </div>
 
                         </div>
