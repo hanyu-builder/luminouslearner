@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碰撞理論動畫 (Collision Theory Animator)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        #simulation-canvas {
+            width: 100%;
+            height: 100%;
+            background-color: #f8fafc;
+            border-radius: 1rem;
+            border: 2px solid #e2e8f0;
+        }
+
+        .stat-card { transition: all 0.3s ease; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            // Settings
+            const [temperature, setTemperature] = useState(300); // Kelvin (approx range 200-500)
+            const [concentration, setConcentration] = useState(50); // Number of particles (10-100)
+            const [isRunning, setIsRunning] = useState(true);
+            const [activationEnergy, setActivationEnergy] = useState(60); // Arbitrary unit relative to kinetic energy
+
+            // Stats
+            const [totalCollisions, setTotalCollisions] = useState(0);
+            const [effectiveCollisions, setEffectiveCollisions] = useState(0);
+            const [reactionRate, setReactionRate] = useState(0);
+
+            // Refs for Canvas Animation
+            const canvasRef = useRef(null);
+            const particlesRef = useRef([]);
+            const requestRef = useRef();
+            const statsRef = useRef({ total: 0, effective: 0, lastTime: Date.now() });
+
+            // Chart Refs
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Initialize Particles
+            useEffect(() => {
+                if (!canvasRef.current) return;
+                const width = canvasRef.current.width;
+                const height = canvasRef.current.height;
+
+                const newParticles = [];
+                // Create A (Red) and B (Blue) particles
+                for (let i = 0; i < concentration; i++) {
+                    newParticles.push(createParticle(width, height, 'A'));
+                    newParticles.push(createParticle(width, height, 'B'));
+                }
+                particlesRef.current = newParticles;
+                
+                // Reset Stats
+                statsRef.current = { total: 0, effective: 0, lastTime: Date.now() };
+                setTotalCollisions(0);
+                setEffectiveCollisions(0);
+                setReactionRate(0);
+
+            }, [concentration]); // Re-init when concentration changes
+
+            const createParticle = (w, h, type) => {
+                return {
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    vx: (Math.random() - 0.5) * 2, // Base velocity vector
+                    vy: (Math.random() - 0.5) * 2,
+                    type: type,
+                    radius: 4,
+                    color: type === 'A' ? '#ef4444' : '#3b82f6',
+                    energy: 0 // Will be set based on temp in loop
+                };
+            };
+
+            // Main Animation Loop
+            const animate = () => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const width = canvas.width;
+                const height = canvas.height;
+
+                ctx.clearRect(0, 0, width, height);
+
+                // Speed multiplier based on Temperature (T)
+                // Kinetic Energy KE = 1/2 mv^2 ~ T
+                // So v ~ sqrt(T)
+                const speedFactor = Math.sqrt(temperature / 300) * 2; 
+
+                // Update & Draw Particles
+                const particles = particlesRef.current;
+                
+                // Collision Detection (Naive O(N^2) for small N is fine)
+                for (let i = 0; i < particles.length; i++) {
+                    let p1 = particles[i];
+                    
+                    // Move
+                    p1.x += p1.vx * speedFactor;
+                    p1.y += p1.vy * speedFactor;
+
+                    // Bounce Walls
+                    if (p1.x < p1.radius || p1.x > width - p1.radius) p1.vx *= -1;
+                    if (p1.y < p1.radius || p1.y > height - p1.radius) p1.vy *= -1;
+
+                    // Keep within bounds
+                    p1.x = Math.max(p1.radius, Math.min(width - p1.radius, p1.x));
+                    p1.y = Math.max(p1.radius, Math.min(height - p1.radius, p1.y));
+
+                    // Calculate Energy (proportional to v^2, simplified here as just T factor + random variance per particle to simulate distribution)
+                    // In real physics, Maxwell-Boltzmann is a probability distribution. 
+                    // For visual sim, we assign energy based on T.
+                    // Let's simulate: Energy = T * RandomFactor.
+                    // BUT to show consistency, let's say particle energy fluctuates upon collision.
+                    // For this visual, let's just say Energy = Temperature (simplified).
+                    p1.energy = temperature * (0.5 + Math.random()); // Random noise
+
+                    // Draw
+                    ctx.beginPath();
+                    ctx.arc(p1.x, p1.y, p1.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p1.color;
+                    ctx.fill();
+                    
+                    // Check Collisions with other particles
+                    for (let j = i + 1; j < particles.length; j++) {
+                        let p2 = particles[j];
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+
+                        if (dist < p1.radius + p2.radius) {
+                            // Collision!
+                            // Simple elastic collision response (swap velocities roughly)
+                            const tempVx = p1.vx; const tempVy = p1.vy;
+                            p1.vx = p2.vx; p1.vy = p2.vy;
+                            p2.vx = tempVx; p2.vy = tempVy;
+                            
+                            // Separate slightly to prevent sticking
+                            const overlap = (p1.radius + p2.radius - dist) / 2;
+                            const angle = Math.atan2(dy, dx);
+                            p1.x += Math.cos(angle) * overlap;
+                            p1.y += Math.sin(angle) * overlap;
+                            p2.x -= Math.cos(angle) * overlap;
+                            p2.y -= Math.sin(angle) * overlap;
+
+                            // Check Reaction (A + B)
+                            if (p1.type !== p2.type) {
+                                statsRef.current.total++;
+                                
+                                // Energy Check (Effective Collision?)
+                                // Reaction happens if Energy > Ea
+                                // We use a probabilistic check based on Temperature vs Ea
+                                // Probability ~ exp(-Ea/RT)
+                                
+                                // Simplified: Is (p1.energy + p2.energy)/2 > Ea?
+                                // Let's scale Ea to match Temp range (200-500).
+                                // Let Ea cutoff be around 400.
+                                const collisionEnergy = (temperature * (0.5 + Math.random()) + temperature * (0.5 + Math.random())) / 2;
+                                // Activation energy threshold logic: 
+                                // Ea slider 20-100. Map to Temperature scale. 
+                                // If T=300, Ea=60 (default), we want some reactions.
+                                // Let's say Threshold = Ea * 5.
+                                if (collisionEnergy > activationEnergy * 5) {
+                                    statsRef.current.effective++;
+                                    
+                                    // Visual Flash
+                                    ctx.beginPath();
+                                    ctx.arc((p1.x+p2.x)/2, (p1.y+p2.y)/2, 10, 0, Math.PI * 2);
+                                    ctx.fillStyle = "rgba(255, 255, 0, 0.8)";
+                                    ctx.fill();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Update React Stats (Throttled)
+                const now = Date.now();
+                if (now - statsRef.current.lastTime > 500) { // Every 0.5s
+                    setTotalCollisions(prev => prev + statsRef.current.total);
+                    setEffectiveCollisions(prev => prev + statsRef.current.effective);
+                    setReactionRate((statsRef.current.effective * 2).toFixed(1)); // Scale for readability
+                    
+                    statsRef.current.total = 0;
+                    statsRef.current.effective = 0;
+                    statsRef.current.lastTime = now;
+                }
+
+                if (isRunning) {
+                    requestRef.current = requestAnimationFrame(animate);
+                }
+            };
+
+            useEffect(() => {
+                if (isRunning) {
+                    requestRef.current = requestAnimationFrame(animate);
+                }
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [isRunning, temperature, concentration, activationEnergy]);
+
+
+            // --- Maxwell-Boltzmann Chart ---
+            useEffect(() => {
+                if (chartRef.current) {
+                    if (chartInstance.current) chartInstance.current.destroy();
+
+                    const ctx = chartRef.current.getContext('2d');
+                    
+                    // Generate Maxwell-Boltzmann Curve Data
+                    // f(E) = 2*sqrt(E/pi) * (1/kT)^1.5 * exp(-E/kT)
+                    // Simplified: y = x^0.5 * exp(-x/T)
+                    const dataPoints = [];
+                    const labels = [];
+                    const eaIndex = Math.floor(activationEnergy * 5 / 10); // Map Ea to x-axis index roughly
+
+                    for(let x=0; x<100; x+=2) {
+                        // T affects the spread. Higher T = lower peak, wider spread to right.
+                        // let T_factor = temperature / 100;
+                        const y = Math.pow(x, 1.5) * Math.exp(-x / (temperature/15)); 
+                        dataPoints.push(y);
+                        labels.push(x);
+                    }
+
+                    // Highlight area > Ea
+                    const backgroundColors = labels.map(x => x > (activationEnergy * 1.5) ? 'rgba(34, 197, 94, 0.5)' : 'rgba(59, 130, 246, 0.2)');
+
+                    chartInstance.current = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: '粒子能量分佈 (Maxwell-Boltzmann)',
+                                data: dataPoints,
+                                borderColor: '#4f46e5',
+                                backgroundColor: backgroundColors, // Gradient fill logic needed or simple segment? Chartjs segment style is complex, using simple point color for now
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { display: false, title: { display: true, text: 'Kinetic Energy' } },
+                                y: { display: false, title: { display: true, text: 'Number of Particles' } }
+                            },
+                            animation: false // Disable animation for performance during slider updates
+                        },
+                        plugins: [{
+                            id: 'ea-line',
+                            afterDraw: (chart) => {
+                                const ctx = chart.ctx;
+                                const xAxis = chart.scales.x;
+                                const yAxis = chart.scales.y;
+                                const xPos = xAxis.getPixelForValue(activationEnergy * 1.5); // Scale factor to match chart x
+                                
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.moveTo(xPos, yAxis.top);
+                                ctx.lineTo(xPos, yAxis.bottom);
+                                ctx.strokeStyle = '#ef4444';
+                                ctx.lineWidth = 2;
+                                ctx.setLineDash([5, 5]);
+                                ctx.stroke();
+                                ctx.fillStyle = '#ef4444';
+                                ctx.fillText(`Ea (活化能)`, xPos + 5, yAxis.top + 20);
+                                
+                                // Shade area > Ea
+                                ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+                                ctx.fillRect(xPos, yAxis.top, xAxis.right - xPos, yAxis.bottom - yAxis.top);
+                                ctx.restore();
+                            }
+                        }]
+                    });
+                }
+                return () => { if(chartInstance.current) chartInstance.current.destroy(); }
+            }, [temperature, activationEnergy]);
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="activity"></i> 碰撞理論動畫 (Collision Theory)
+                            </h1>
+                            <p className="text-slate-400 text-sm">Simulate Concentration & Temperature Effects</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsRunning(!isRunning)}
+                            className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-sm
+                                ${isRunning ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-green-500 text-white hover:bg-green-600'}
+                            `}
+                        >
+                            {isRunning ? <i data-lucide="pause" size={16}/> : <i data-lucide="play" size={16}/>}
+                            {isRunning ? '暫停模擬' : '繼續模擬'}
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                        
+                        {/* Left: Controls & Chart */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            {/* Controls */}
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="sliders" size={16}/> 參數設定
+                                </h3>
+
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-sm font-bold text-red-500">溫度 (Temperature)</label>
+                                        <span className="text-xs font-mono font-bold bg-red-50 text-red-600 px-2 py-1 rounded">{temperature} K</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="200" max="600" 
+                                        value={temperature} 
+                                        onChange={(e) => setTemperature(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">影響粒子運動速度 (KE) 及能量分佈。</p>
+                                </div>
+
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-sm font-bold text-blue-500">濃度 (Concentration)</label>
+                                        <span className="text-xs font-mono font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded">{concentration * 2} particles</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="10" max="150" 
+                                        value={concentration} 
+                                        onChange={(e) => setConcentration(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">影響單位體積內的粒子數量。</p>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-sm font-bold text-amber-500">活化能 (Ea)</label>
+                                        <span className="text-xs font-mono font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded">{activationEnergy} kJ</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="20" max="100" 
+                                        value={activationEnergy} 
+                                        onChange={(e) => setActivationEnergy(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-amber-100 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Chart */}
+                            <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 flex-grow flex flex-col min-h-[200px]">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
+                                    <i data-lucide="line-chart" size={14}/> 能量分佈 (Energy Distribution)
+                                </h3>
+                                <div className="relative flex-grow w-full">
+                                    <canvas ref={chartRef}></canvas>
+                                </div>
+                                <p className="text-[10px] text-center text-green-600 mt-2 bg-green-50 rounded py-1">
+                                    綠色區域代表擁有足夠能量 (≥ Ea) 的粒子比例。
+                                </p>
+                            </div>
+
+                        </div>
+
+                        {/* Right: Visualization */}
+                        <div className="w-full lg:w-2/3 flex flex-col gap-4">
+                            
+                            {/* Simulation Canvas */}
+                            <div className="bg-white p-2 rounded-3xl border-4 border-slate-200 shadow-xl relative h-[400px] lg:h-[500px]">
+                                <canvas 
+                                    ref={canvasRef} 
+                                    width={800} 
+                                    height={500} 
+                                    id="simulation-canvas"
+                                ></canvas>
+                                
+                                {/* Floating Stats Overlay */}
+                                <div className="absolute top-6 right-6 bg-white/90 backdrop-blur p-4 rounded-xl shadow-lg border border-slate-200 flex flex-col gap-3 min-w-[180px]">
+                                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                                        <span className="text-xs font-bold text-slate-500">反應速率 (Rate)</span>
+                                        <span className="text-xl font-mono font-black text-indigo-600">{reactionRate}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-slate-400">有效碰撞</span>
+                                        <span className="text-sm font-mono font-bold text-green-500">{effectiveCollisions}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-slate-400">總碰撞</span>
+                                        <span className="text-sm font-mono font-bold text-slate-600">{totalCollisions}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Legend / Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-red-50 p-3 rounded-xl border border-red-100 stat-card">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <span className="font-bold text-red-700 text-sm">粒子 A</span>
+                                    </div>
+                                </div>
+                                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 stat-card">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                                        <span className="font-bold text-blue-700 text-sm">粒子 B</span>
+                                    </div>
+                                </div>
+                                <div className="bg-green-50 p-3 rounded-xl border border-green-100 stat-card">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-3 h-3 rounded-full bg-yellow-400 border border-yellow-500"></div>
+                                        <span className="font-bold text-green-700 text-sm">有效碰撞 (Flash)</span>
+                                    </div>
+                                    <p className="text-[10px] text-green-600">發生反應！(E ≥ Ea)</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-200 pt-4">
+                        Luminous Learner Science Tools | HKDSE Topic IX
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
