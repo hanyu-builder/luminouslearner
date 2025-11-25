@@ -46,13 +46,14 @@
         }
 
         .val-input {
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(4px);
             transition: all 0.2s;
         }
         .val-input:focus {
             background: white;
             border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
     </style>
 </head>
@@ -72,28 +73,26 @@
             });
             
             // Edges: 1=Top->Right, 2=Top->Bottom, 3=Right->Bottom (default directions for generic)
-            // Values: string to allow empty
-            // Direction: 1 = forward, -1 = reverse
             const [edges, setEdges] = useState({
-                e1: { val: '', dir: 1, name: 'ΔH1', label: '反應焓變' }, // Top -> Right
-                e2: { val: '', dir: 1, name: 'ΔH2', label: '反應物燃燒焓' }, // Top -> Bottom
-                e3: { val: '', dir: 1, name: 'ΔH3', label: '生成物燃燒焓' }  // Right -> Bottom (Note: usually P->O in combustion)
+                e1: { val: '', dir: 1, name: 'ΔH1', label: '反應焓變' }, 
+                e2: { val: '', dir: 1, name: 'ΔH2', label: '反應物燃燒焓' }, 
+                e3: { val: '', dir: 1, name: 'ΔH3', label: '生成物燃燒焓' }  
             });
 
             const [result, setResult] = useState(null);
-            const [pathHighlight, setPathHighlight] = useState([]); // ['e1', 'e2', 'e3'] to highlight
+            const [pathHighlight, setPathHighlight] = useState([]);
 
             // Preset Modes Configuration
             useEffect(() => {
                 if (mode === 'formation') {
-                    setNodes({ top: '反應物 (R)', right: '生成物 (P)', bottom: '構成元素 (Elements)' });
+                    setNodes({ top: '反應物 (Reactants)', right: '生成物 (Products)', bottom: '構成元素 (Elements)' });
                     setEdges({
                         e1: { ...edges.e1, val: '', dir: 1, label: '反應焓變 (ΔHr)' },
                         e2: { ...edges.e2, val: '', dir: -1, label: '反應物生成焓 (ΔHf[R])' }, // Elements -> Reactants (Bottom to Top)
                         e3: { ...edges.e3, val: '', dir: -1, label: '生成物生成焓 (ΔHf[P])' }  // Elements -> Products (Bottom to Right)
                     });
                 } else if (mode === 'combustion') {
-                    setNodes({ top: '反應物 (R)', right: '生成物 (P)', bottom: '燃燒產物 (Combustion Products)' });
+                    setNodes({ top: '反應物 (Reactants)', right: '生成物 (Products)', bottom: '燃燒產物 (Combustion Products)' });
                     setEdges({
                         e1: { ...edges.e1, val: '', dir: 1, label: '反應焓變 (ΔHr)' },
                         e2: { ...edges.e2, val: '', dir: 1, label: '反應物燃燒焓 (ΔHc[R])' }, // Reactants -> Oxides
@@ -131,7 +130,6 @@
             };
 
             const calculate = () => {
-                // Identify the unknown (empty value)
                 const unknownKey = Object.keys(edges).find(k => edges[k].val === '');
                 const knownKeys = Object.keys(edges).filter(k => edges[k].val !== '');
 
@@ -149,51 +147,39 @@
                 let highlight = [];
 
                 const getVal = (key) => parseFloat(edges[key].val);
-                const getDir = (key) => edges[key].dir; // 1 is default flow, -1 is reverse
+                const getDir = (key) => edges[key].dir; 
 
                 if (unknownKey === 'e1') {
-                    // Target: Top -> Right
-                    // Path: Top -> Bottom -> Right
-                    const v2 = getVal('e2') * getDir('e2'); // Effective vector 0->2
-                    const v3 = -(getVal('e3') * getDir('e3')); // Reverse 3
-
+                    // Target: Top -> Right = (Top->Bottom) + (Bottom->Right)
+                    const v2 = getVal('e2') * getDir('e2'); 
+                    const v3 = -(getVal('e3') * getDir('e3')); 
                     calcValue = v2 + v3;
-                    
-                    steps.push(`目標路徑 (Target): ${nodes.top} → ${nodes.right}`);
-                    steps.push(`替代路徑 (Alternative): ${nodes.top} → ${nodes.bottom} → ${nodes.right}`);
+                    steps.push(`目標: ${nodes.top} → ${nodes.right}`);
+                    steps.push(`路徑: ${nodes.top} → ${nodes.bottom} → ${nodes.right}`);
                     steps.push(`1. ${nodes.top} → ${nodes.bottom}: ${v2 > 0 ? '+' : ''}${v2}`);
-                    steps.push(`2. ${nodes.bottom} → ${nodes.right}: ${v3 > 0 ? '+' : ''}${v3} (逆向 ${edges.e3.label})`);
-                    
+                    steps.push(`2. ${nodes.bottom} → ${nodes.right}: ${v3 > 0 ? '+' : ''}${v3}`);
                     highlight = ['e2', 'e3'];
 
                 } else if (unknownKey === 'e2') {
-                    // Target: Top -> Bottom
-                    // Path: Top -> Right -> Bottom
+                    // Target: Top -> Bottom = (Top->Right) + (Right->Bottom)
                     const v1 = getVal('e1') * getDir('e1');
                     const v3 = getVal('e3') * getDir('e3');
-
                     calcValue = v1 + v3;
-                    
-                    steps.push(`目標路徑 (Target): ${nodes.top} → ${nodes.bottom}`);
-                    steps.push(`替代路徑 (Alternative): ${nodes.top} → ${nodes.right} → ${nodes.bottom}`);
+                    steps.push(`目標: ${nodes.top} → ${nodes.bottom}`);
+                    steps.push(`路徑: ${nodes.top} → ${nodes.right} → ${nodes.bottom}`);
                     steps.push(`1. ${nodes.top} → ${nodes.right}: ${v1}`);
                     steps.push(`2. ${nodes.right} → ${nodes.bottom}: ${v3}`);
-
                     highlight = ['e1', 'e3'];
 
                 } else if (unknownKey === 'e3') {
-                    // Target: Right -> Bottom
-                    // Path: Right -> Top -> Bottom
+                    // Target: Right -> Bottom = (Right->Top) + (Top->Bottom)
                     const v1 = -(getVal('e1') * getDir('e1'));
                     const v2 = getVal('e2') * getDir('e2');
-
                     calcValue = v1 + v2;
-
-                    steps.push(`目標路徑 (Target): ${nodes.right} → ${nodes.bottom}`);
-                    steps.push(`替代路徑 (Alternative): ${nodes.right} → ${nodes.top} → ${nodes.bottom}`);
-                    steps.push(`1. ${nodes.right} → ${nodes.top}: ${v1} (逆向 ${edges.e1.label})`);
+                    steps.push(`目標: ${nodes.right} → ${nodes.bottom}`);
+                    steps.push(`路徑: ${nodes.right} → ${nodes.top} → ${nodes.bottom}`);
+                    steps.push(`1. ${nodes.right} → ${nodes.top}: ${v1}`);
                     steps.push(`2. ${nodes.top} → ${nodes.bottom}: ${v2}`);
-
                     highlight = ['e1', 'e2'];
                 }
                 
@@ -207,50 +193,59 @@
             };
 
             return (
-                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-7xl">
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
                     
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
                         <div>
-                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                            <h1 className="text-3xl font-bold text-indigo-600 flex items-center gap-2">
                                 <i data-lucide="recycle"></i> 赫斯定律循環解題器
                             </h1>
                             <p className="text-slate-400 text-sm">Hess's Law Cycle Solver</p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row gap-8 flex-grow">
+                    {/* Main Container (Stacked Layout) */}
+                    <div className="flex flex-col gap-8 w-full">
                         
-                        {/* Left: Interactive Diagram & Mode Selection */}
-                        <div className="w-full lg:w-3/4 flex flex-col gap-4">
+                        {/* Top: Interactive Diagram */}
+                        <div className="w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 relative min-h-[600px] flex flex-col">
                             
-                            {/* Mode Selection (Moved Here) */}
-                            <div className="flex bg-slate-100 p-1 rounded-xl self-start">
+                            {/* Mode Selection Tabs (Inside Diagram Box) */}
+                            <div className="flex justify-center gap-4 mb-8 z-30 relative">
                                 <button 
                                     onClick={() => setMode('combustion')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'combustion' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                        ${mode === 'combustion' 
+                                            ? 'bg-red-500 text-white border-red-600 ring-2 ring-red-200 scale-105' 
+                                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
                                 >
-                                    <i data-lucide="flame" size={16}/> 燃燒循環
+                                    <i data-lucide="flame" size={18}/> 燃燒循環
                                 </button>
                                 <button 
                                     onClick={() => setMode('formation')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'formation' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                        ${mode === 'formation' 
+                                            ? 'bg-green-500 text-white border-green-600 ring-2 ring-green-200 scale-105' 
+                                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
                                 >
-                                    <i data-lucide="hammer" size={16}/> 生成循環
+                                    <i data-lucide="hammer" size={18}/> 生成循環
                                 </button>
                                 <button 
                                     onClick={() => setMode('generic')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'generic' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 shadow-sm border
+                                        ${mode === 'generic' 
+                                            ? 'bg-blue-500 text-white border-blue-600 ring-2 ring-blue-200 scale-105' 
+                                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
                                 >
-                                    <i data-lucide="edit-3" size={16}/> 自訂
+                                    <i data-lucide="edit-3" size={18}/> 自訂
                                 </button>
                             </div>
 
-                            {/* Diagram Container */}
-                            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 relative min-h-[550px] flex items-center justify-center overflow-hidden flex-grow">
-                                
+                            {/* Diagram Area */}
+                            <div className="relative flex-grow w-full flex items-center justify-center">
                                 {/* SVG Layer */}
-                                <svg viewBox="0 0 800 500" className="absolute inset-0 w-full h-full pointer-events-none">
+                                <svg viewBox="0 0 800 450" className="absolute inset-0 w-full h-full pointer-events-none z-0">
                                     <defs>
                                         <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                                             <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
@@ -261,138 +256,121 @@
                                     </defs>
                                     
                                     {/* E1: Top to Right */}
-                                    <line x1="350" y1="100" x2="650" y2="100" 
+                                    <line x1="350" y1="120" x2="650" y2="120" 
                                         className={`arrow-path ${pathHighlight.includes('e1') ? 'highlight' : ''}`} 
-                                        stroke="#94a3b8" strokeWidth="2" 
+                                        stroke="#94a3b8" strokeWidth="3" 
                                         markerEnd={pathHighlight.includes('e1') ? "url(#arrowhead-highlight)" : "url(#arrowhead)"}
-                                        transform={edges.e1.dir === -1 ? "rotate(180 500 100)" : ""}
+                                        transform={edges.e1.dir === -1 ? "rotate(180 500 120)" : ""}
                                     />
 
                                     {/* E2: Top to Bottom */}
-                                    <line x1="300" y1="140" x2="300" y2="400" 
+                                    <line x1="300" y1="160" x2="300" y2="350" 
                                         className={`arrow-path ${pathHighlight.includes('e2') ? 'highlight' : ''}`}
-                                        stroke="#94a3b8" strokeWidth="2" 
+                                        stroke="#94a3b8" strokeWidth="3" 
                                         markerEnd={pathHighlight.includes('e2') ? "url(#arrowhead-highlight)" : "url(#arrowhead)"}
-                                        transform={edges.e2.dir === -1 ? "rotate(180 300 270)" : ""}
+                                        transform={edges.e2.dir === -1 ? "rotate(180 300 255)" : ""}
                                     />
 
                                     {/* E3: Right to Bottom */}
-                                    <line x1="700" y1="140" x2="450" y2="400" 
+                                    <line x1="700" y1="160" x2="450" y2="350" 
                                         className={`arrow-path ${pathHighlight.includes('e3') ? 'highlight' : ''}`}
-                                        stroke="#94a3b8" strokeWidth="2" 
+                                        stroke="#94a3b8" strokeWidth="3" 
                                         markerEnd={pathHighlight.includes('e3') ? "url(#arrowhead-highlight)" : "url(#arrowhead)"}
-                                        transform={edges.e3.dir === -1 ? "rotate(180 575 270)" : ""}
+                                        transform={edges.e3.dir === -1 ? "rotate(180 575 255)" : ""}
                                     />
                                 </svg>
 
                                 {/* Nodes (Inputs) */}
-                                
-                                {/* Top Node */}
-                                <div className="absolute top-12 left-[100px] z-10 w-64">
-                                    <input 
-                                        type="text" value={nodes.top} onChange={(e) => setNodes({...nodes, top: e.target.value})}
-                                        className="node-input w-full bg-blue-50 border-2 border-blue-200 text-blue-800 font-bold p-3 rounded-xl shadow-sm focus:outline-none"
-                                    />
+                                <div className="absolute top-20 left-[100px] z-10 w-64">
+                                    <input type="text" value={nodes.top} onChange={(e) => setNodes({...nodes, top: e.target.value})}
+                                        className="node-input w-full bg-blue-50 border-2 border-blue-200 text-blue-800 font-bold p-4 rounded-2xl shadow-sm focus:outline-none"/>
                                 </div>
-
-                                {/* Right Node */}
-                                <div className="absolute top-12 right-[50px] z-10 w-64">
-                                    <input 
-                                        type="text" value={nodes.right} onChange={(e) => setNodes({...nodes, right: e.target.value})}
-                                        className="node-input w-full bg-green-50 border-2 border-green-200 text-green-800 font-bold p-3 rounded-xl shadow-sm focus:outline-none"
-                                    />
+                                <div className="absolute top-20 right-[50px] z-10 w-64">
+                                    <input type="text" value={nodes.right} onChange={(e) => setNodes({...nodes, right: e.target.value})}
+                                        className="node-input w-full bg-green-50 border-2 border-green-200 text-green-800 font-bold p-4 rounded-2xl shadow-sm focus:outline-none"/>
                                 </div>
-
-                                {/* Bottom Node */}
-                                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 w-80">
-                                    <input 
-                                        type="text" value={nodes.bottom} onChange={(e) => setNodes({...nodes, bottom: e.target.value})}
-                                        className="node-input w-full bg-orange-50 border-2 border-orange-200 text-orange-800 font-bold p-3 rounded-xl shadow-sm focus:outline-none"
-                                    />
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-10 w-80">
+                                    <input type="text" value={nodes.bottom} onChange={(e) => setNodes({...nodes, bottom: e.target.value})}
+                                        className="node-input w-full bg-orange-50 border-2 border-orange-200 text-orange-800 font-bold p-4 rounded-2xl shadow-sm focus:outline-none"/>
                                 </div>
 
                                 {/* Value Inputs (On Edges) */}
-                                
-                                {/* E1 Value (Top Horizontal) */}
-                                <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center bg-white/80 px-2 rounded">
-                                    <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600" onClick={() => toggleDirection('e1')}>
-                                        {edges.e1.label} <i data-lucide="refresh-cw" size={10} className="inline"/>
+                                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center bg-white/80 px-2 rounded backdrop-blur-sm">
+                                    <label className="text-xs text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e1')}>
+                                        {edges.e1.label} <i data-lucide="refresh-cw" size={12}/>
                                     </label>
-                                    <input 
-                                        type="number" placeholder="?" 
-                                        value={edges.e1.val} onChange={(e) => handleValueChange('e1', e.target.value)}
-                                        className={`val-input w-28 p-2 border rounded-lg font-mono font-bold text-center outline-none shadow-sm ${edges.e1.val === '' ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-300'}`}
-                                    />
+                                    <input type="number" placeholder="?" value={edges.e1.val} onChange={(e) => handleValueChange('e1', e.target.value)}
+                                        className={`val-input w-32 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e1.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
                                 </div>
-
-                                {/* E2 Value (Left Vertical) */}
-                                <div className="absolute top-1/2 left-[160px] -translate-y-1/2 z-20 flex flex-col items-end">
-                                    <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600" onClick={() => toggleDirection('e2')}>
-                                        {edges.e2.label} <i data-lucide="refresh-cw" size={10} className="inline"/>
+                                <div className="absolute top-1/2 left-[160px] -translate-x-full -translate-y-1/2 pr-4 z-20 flex flex-col items-end">
+                                    <label className="text-xs text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e2')}>
+                                        {edges.e2.label} <i data-lucide="refresh-cw" size={12}/>
                                     </label>
-                                    <input 
-                                        type="number" placeholder="?" 
-                                        value={edges.e2.val} onChange={(e) => handleValueChange('e2', e.target.value)}
-                                        className={`val-input w-28 p-2 border rounded-lg font-mono font-bold text-center outline-none shadow-sm ${edges.e2.val === '' ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-300'}`}
-                                    />
+                                    <input type="number" placeholder="?" value={edges.e2.val} onChange={(e) => handleValueChange('e2', e.target.value)}
+                                        className={`val-input w-32 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e2.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
                                 </div>
-
-                                {/* E3 Value (Right Diagonal) */}
                                 <div className="absolute top-1/2 right-[100px] -translate-y-1/2 z-20 flex flex-col items-start">
-                                    <label className="text-[10px] text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600" onClick={() => toggleDirection('e3')}>
-                                        {edges.e3.label} <i data-lucide="refresh-cw" size={10} className="inline"/>
+                                    <label className="text-xs text-slate-500 font-bold mb-1 uppercase tracking-wider cursor-pointer hover:text-indigo-600 flex items-center gap-1" onClick={() => toggleDirection('e3')}>
+                                        {edges.e3.label} <i data-lucide="refresh-cw" size={12}/>
                                     </label>
-                                    <input 
-                                        type="number" placeholder="?" 
-                                        value={edges.e3.val} onChange={(e) => handleValueChange('e3', e.target.value)}
-                                        className={`val-input w-28 p-2 border rounded-lg font-mono font-bold text-center outline-none shadow-sm ${edges.e3.val === '' ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-300'}`}
-                                    />
+                                    <input type="number" placeholder="?" value={edges.e3.val} onChange={(e) => handleValueChange('e3', e.target.value)}
+                                        className={`val-input w-32 p-2 border-2 rounded-xl font-mono font-bold text-center outline-none text-lg shadow-sm ${edges.e3.val === '' ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300'}`}/>
                                 </div>
-
                             </div>
                         </div>
 
-                        {/* Right: Controls & Solution */}
-                        <div className="w-full lg:w-1/4 flex flex-col gap-6">
+                        {/* Bottom: Calculator & Result */}
+                        <div className="w-full bg-white p-8 rounded-3xl shadow-lg border border-slate-200 flex flex-col md:flex-row gap-8 items-center">
                             
-                            <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-200 flex-grow flex flex-col h-full">
-                                <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                    <i data-lucide="calculator" className="text-indigo-500"/> 計算面板
-                                </h3>
-                                
-                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-6 text-xs text-indigo-800">
-                                    <p className="font-bold mb-2"><i data-lucide="info" size={14} className="inline mr-1"/>使用說明：</p>
+                            {/* Action */}
+                            <div className="w-full md:w-1/3 flex flex-col gap-4">
+                                <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-sm text-indigo-800">
+                                    <p className="font-bold mb-2 flex items-center gap-2"><i data-lucide="info" size={16}/> 操作說明</p>
                                     <ul className="list-disc list-inside space-y-1 opacity-80">
-                                        <li>輸入兩個已知數值 (kJ/mol)。</li>
-                                        <li><strong>留空</strong>一個欄位作為未知數。</li>
-                                        <li>點擊圖中標籤可<strong>反轉箭頭</strong>。</li>
+                                        <li>輸入兩個已知數值。</li>
+                                        <li><strong>留空</strong>一個欄位作為目標未知數。</li>
+                                        <li>點擊箭頭旁的標籤可<strong>反轉方向</strong>。</li>
                                     </ul>
                                 </div>
-
                                 <button 
                                     onClick={calculate}
-                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition-all active:scale-95 text-xl flex items-center justify-center gap-2"
                                 >
-                                    <i data-lucide="play" /> 計算未知數
+                                    <i data-lucide="calculator" /> 計算未知數
                                 </button>
+                            </div>
 
-                                {result && (
-                                    <div className="mt-6 animate-in slide-in-from-bottom-4 fade-in flex-grow flex flex-col">
-                                        <div className="bg-slate-800 text-white p-5 rounded-xl shadow-md text-center mb-4 relative overflow-hidden">
-                                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Result (kJ/mol)</div>
-                                            <div className="text-4xl font-mono font-black text-green-400">
+                            {/* Result Display */}
+                            <div className="w-full md:w-2/3">
+                                {result ? (
+                                    <div className="animate-in slide-in-from-right fade-in flex gap-6 items-stretch">
+                                        <div className="bg-slate-800 text-white p-6 rounded-2xl shadow-md text-center flex flex-col justify-center min-w-[200px]">
+                                            <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Calculated Result</div>
+                                            <div className="text-5xl font-mono font-black text-green-400">
                                                 {result.value > 0 ? '+' : ''}{result.value}
                                             </div>
+                                            <div className="text-sm text-slate-500 mt-1">kJ mol⁻¹</div>
                                         </div>
                                         
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex-grow overflow-y-auto">
-                                            <h4 className="font-bold text-slate-600 text-xs uppercase mb-3">解題步驟 (Steps)</h4>
-                                            <div className="space-y-2 text-xs font-mono text-slate-700">
+                                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex-grow">
+                                            <h4 className="font-bold text-slate-700 text-sm uppercase mb-4 flex items-center gap-2">
+                                                <i data-lucide="list-ordered" size={16}/> 解題步驟 (Solution Steps)
+                                            </h4>
+                                            <div className="space-y-3 text-sm font-mono text-slate-600">
                                                 {result.steps.map((s, i) => (
-                                                    <div key={i} className="border-b border-slate-200 pb-2 last:border-0">{s}</div>
+                                                    <div key={i} className="border-b border-slate-200 pb-2 last:border-0 flex gap-3">
+                                                        <span className="text-indigo-400 font-bold">{i+1}.</span>
+                                                        <span>{s}</span>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </div>
+                                    </div>
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 border-4 border-dashed border-slate-100 rounded-2xl bg-slate-50/50 p-8">
+                                        <i data-lucide="arrow-left-right" size={48} className="mb-4 opacity-20" />
+                                        <p className="text-lg font-medium">等待計算...</p>
+                                        <p className="text-sm opacity-70">請填寫數值並點擊計算按鈕</p>
                                     </div>
                                 )}
                             </div>
