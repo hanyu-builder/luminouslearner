@@ -31,17 +31,19 @@
             background-size: 20px 20px;
         }
         
-        /* Highlight Box Animation */
-        @keyframes pulse-border {
-            0% { border-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-            70% { border-color: #f87171; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-            100% { border-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        /* Highlight Box Animation (SVG Compatible) */
+        @keyframes pulse-stroke {
+            0% { stroke-opacity: 1; stroke-width: 3; }
+            50% { stroke-opacity: 0.6; stroke-width: 4; }
+            100% { stroke-opacity: 1; stroke-width: 3; }
         }
         .highlight-box {
-            border: 3px dashed #ef4444;
-            border-radius: 8px;
-            animation: pulse-border 2s infinite;
-            background-color: rgba(254, 226, 226, 0.3);
+            fill: rgba(254, 226, 226, 0.3); /* SVG fill instead of background-color */
+            stroke: #ef4444;                 /* SVG stroke instead of border-color */
+            stroke-width: 3;
+            stroke-dasharray: 8 4;           /* Dashed line */
+            animation: pulse-stroke 2s infinite;
+            pointer-events: none;            /* Let clicks pass through */
         }
     </style>
 </head>
@@ -53,8 +55,7 @@
         const { useState, useEffect, useRef } = React;
 
         // Question Database
-        // Type 1: Identify the homologous series based on the structure
-        // Type 2: Identify the name of the functional group (e.g. Hydroxyl group)
+        // Note: Added 'rx="8"' to rects for rounded corners in SVG
         
         const Questions = [
             {
@@ -64,7 +65,7 @@
                 structureSVG: (
                     <svg viewBox="0 0 200 100" className="w-full h-full">
                         <text x="40" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—CH₂—<tspan fill="#ef4444">OH</tspan></text>
-                        <rect x="140" y="30" width="45" height="40" className="highlight-box" />
+                        <rect x="140" y="30" width="45" height="40" rx="8" className="highlight-box" />
                     </svg>
                 ),
                 question: "圖中圈出的官能基屬於哪個同系列 (Homologous Series)？",
@@ -79,7 +80,7 @@
                 structureSVG: (
                     <svg viewBox="0 0 200 100" className="w-full h-full">
                         <text x="50" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—<tspan fill="#ef4444">COOH</tspan></text>
-                        <rect x="110" y="30" width="70" height="40" className="highlight-box" />
+                        <rect x="110" y="30" width="75" height="40" rx="8" className="highlight-box" />
                     </svg>
                 ),
                 question: "圖中圈出的官能基名稱是什麼？",
@@ -94,7 +95,7 @@
                 structureSVG: (
                     <svg viewBox="0 0 200 100" className="w-full h-full">
                         <text x="60" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₂<tspan fill="#ef4444">=</tspan>CH₂</text>
-                        <rect x="95" y="35" width="20" height="30" className="highlight-box" />
+                        <rect x="95" y="35" width="25" height="30" rx="5" className="highlight-box" />
                     </svg>
                 ),
                 question: "這個分子屬於哪個同系列？",
@@ -113,7 +114,9 @@
                         <text x="100" y="55" className="font-mono text-2xl font-bold" fill="#334155">C</text>
                         <text x="120" y="35" className="font-mono text-2xl font-bold" fill="#ef4444">=O</text>
                         <text x="120" y="75" className="font-mono text-2xl font-bold" fill="#334155">-H</text>
-                        <rect x="95" y="15" width="60" height="70" className="highlight-box" />
+                        <line x1="115" y1="48" x2="120" y2="40" stroke="#334155" strokeWidth="2" />
+                        <line x1="115" y1="60" x2="120" y2="65" stroke="#334155" strokeWidth="2" />
+                        <rect x="95" y="15" width="60" height="70" rx="8" className="highlight-box" />
                     </svg>
                 ),
                 question: "這個官能基 (-CHO) 的名稱是？",
@@ -131,7 +134,8 @@
                         <text x="90" y="55" className="font-mono text-2xl font-bold" fill="#334155">C</text>
                         <text x="90" y="30" className="font-mono text-2xl font-bold" fill="#ef4444">=O</text>
                         <text x="110" y="55" className="font-mono text-2xl font-bold" fill="#334155">—CH₃</text>
-                        <rect x="80" y="10" width="35" height="60" className="highlight-box" />
+                        <line x1="98" y1="45" x2="98" y2="35" stroke="#334155" strokeWidth="2" />
+                        <rect x="80" y="10" width="35" height="60" rx="8" className="highlight-box" />
                     </svg>
                 ),
                 question: "圖中顯示的是哪個同系列的特徵？",
@@ -148,7 +152,7 @@
                         <text x="20" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—</text>
                         <text x="80" y="55" className="font-mono text-2xl font-bold" fill="#ef4444">COO</text>
                         <text x="130" y="55" className="font-mono text-2xl font-bold" fill="#334155">—CH₃</text>
-                        <rect x="75" y="30" width="60" height="40" className="highlight-box" />
+                        <rect x="75" y="30" width="60" height="40" rx="8" className="highlight-box" />
                     </svg>
                 ),
                 question: "這個分子屬於哪個同系列？",
