@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>勒沙特列原理模擬器</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        /* Particle Animation */
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            transition: background-color 0.5s, width 0.5s, height 0.5s;
+        }
+        
+        /* Container transition for Volume change */
+        .reaction-container {
+            transition: width 0.5s ease-in-out, background-color 0.5s;
+        }
+        
+        /* Piston */
+        .piston {
+            transition: left 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const Systems = [
+            {
+                id: 'N2O4',
+                name: 'N₂O₄ ⇌ 2NO₂',
+                type: 'gas',
+                equation: 'N₂O₄(g) ⇌ 2NO₂(g)',
+                left: { name: 'N₂O₄', color: '#e2e8f0', size: 16, label: '無色' }, // Colorless
+                right: { name: 'NO₂', color: '#9a3412', size: 10, label: '紅棕色' }, // Brown
+                deltaH: +57, // Endothermic
+                kc: 0.2 // Arbitrary
+            },
+            {
+                id: 'Co',
+                name: '鈷配合物 (Cobalt Complex)',
+                type: 'solution',
+                equation: 'Co(H₂O)₆²⁺ + 4Cl⁻ ⇌ CoCl₄²⁻ + 6H₂O',
+                left: { name: 'Pink', color: '#f472b6', size: 14, label: '粉紅色' },
+                right: { name: 'Blue', color: '#3b82f6', size: 14, label: '藍色' },
+                deltaH: +100, // Endothermic
+                kc: 1.0
+            }
+        ];
+
+        const App = () => {
+            const [system, setSystem] = useState(Systems[0]);
+            
+            // Conditions
+            const [temperature, setTemperature] = useState(298); // K
+            const [volume, setVolume] = useState(1.0); // Relative Volume (0.5 - 2.0) for Gas
+            const [concentrationL, setConcentrationL] = useState(5); // Number of Left particles
+            const [concentrationR, setConcentrationR] = useState(5); // Number of Right particles
+            
+            // Simulation State
+            const [particles, setParticles] = useState([]);
+            const containerRef = useRef(null);
+            const requestRef = useRef();
+
+            // Color calculation for the whole container
+            const getContainerColor = () => {
+                if (system.id === 'N2O4') {
+                    // Mix White and Brown based on ratio
+                    const total = concentrationL + concentrationR;
+                    if (total === 0) return '#fff';
+                    const brownIntensity = concentrationR / total; 
+                    // Simple mix: White to Brown
+                    // Brown: rgb(154, 52, 18)
+                    const r = Math.round(255 - (255-154)*brownIntensity);
+                    const g = Math.round(255 - (255-52)*brownIntensity);
+                    const b = Math.round(255 - (255-18)*brownIntensity);
+                    return `rgba(${r}, ${g}, ${b}, 0.3)`;
+                } else {
+                    // Pink to Blue
+                    const total = concentrationL + concentrationR;
+                    if (total === 0) return '#fff';
+                    const blueRatio = concentrationR / total;
+                    // Pink: 244, 114, 182 -> Blue: 59, 130, 246
+                    const r = Math.round(244 + (59-244)*blueRatio);
+                    const g = Math.round(114 + (130-114)*blueRatio);
+                    const b = Math.round(182 + (246-182)*blueRatio);
+                    return `rgba(${r}, ${g}, ${b}, 0.6)`;
+                }
+            };
+
+            // Initialize Particles
+            useEffect(() => {
+                const newParticles = [];
+                for(let i=0; i<concentrationL; i++) {
+                    newParticles.push(createParticle(system.left));
+                }
+                for(let i=0; i<concentrationR; i++) {
+                    newParticles.push(createParticle(system.right));
+                }
+                setParticles(newParticles);
+            }, [concentrationL, concentrationR, system]);
+
+            const createParticle = (typeData) => {
+                return {
+                    id: Math.random(),
+                    x: Math.random() * 100, // %
+                    y: Math.random() * 100, // %
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    ...typeData
+                };
+            };
+
+            // Equilibrium Logic Loop (Simulated Le Chatelier)
+            useEffect(() => {
+                // Simplified Equilibrium shift logic
+                // Target Ratio K ~ [R]/[L] (ignoring powers for visual simplicity or assume 1:1 stoichiometry visual)
+                // But N2O4 is 1:2.
+                
+                // Effect of Temp: 
+                // If Endo (dH>0), K increases with T.
+                // If Exo (dH<0), K decreases with T.
+                
+                // Base K at 298K
+                const baseK = system.kc; 
+                let targetK = baseK;
+                
+                if (system.deltaH > 0) {
+                    targetK = baseK * Math.pow(1.02, (temperature - 298)/10);
+                } else {
+                    targetK = baseK * Math.pow(0.98, (temperature - 298)/10);
+                }
+
+                // Effect of Volume (Pressure) for Gas:
+                // N2O4 (1 mol) -> 2NO2 (2 mol).
+                // Decrease Volume (Increase P) -> Shift to fewer moles (Left).
+                // We simulate this by adjusting the "effective K" or directly shifting counts.
+                // Let's use a simple rate approach.
+                // Rate Forward ~ [L]
+                // Rate Backward ~ [R]^2 (if 2nd order)
+                
+                // Animation Loop
+                const animate = () => {
+                    // Move particles
+                    setParticles(prev => {
+                        // Chance to react
+                        // If Q < K, shift right (L -> R)
+                        // If Q > K, shift left (R -> L)
+                        
+                        // Calculate current Q approx
+                        // Conc = N / V
+                        const cL = concentrationL / volume;
+                        const cR = concentrationR / volume;
+                        let Q = 0;
+                        if (system.id === 'N2O4') Q = (cR * cR) / cL; // [NO2]^2 / [N2O4]
+                        else Q = cR / cL; // Simplified 1:1 for Cobalt visual
+                        
+                        const shiftDirection = Q < targetK ? 1 : -1; // 1: L->R, -1: R->L
+                        
+                        // Randomly pick a particle to react based on probability
+                        const reactionProb = 0.02; // speed factor
+                        
+                        const next = prev.map(p => {
+                            let nx = p.x + p.vx * (temperature/298); // Temp affects speed
+                            let ny = p.y + p.vy * (temperature/298);
+                            
+                            if (nx < 0 || nx > 100) p.vx *= -1;
+                            if (ny < 0 || ny > 100) p.vy *= -1;
+                            
+                            return { ...p, x: nx, y: ny };
+                        });
+                        
+                        // React?
+                        if (Math.random() < reactionProb) {
+                            if (shiftDirection === 1 && concentrationL > 0) {
+                                // L -> R
+                                setConcentrationL(l => l - 1);
+                                // Stoichiometry: 1 N2O4 -> 2 NO2
+                                const gain = system.id === 'N2O4' ? 2 : 1;
+                                setConcentrationR(r => r + gain);
+                            } else if (shiftDirection === -1 && concentrationR > (system.id==='N2O4'?1:0)) {
+                                // R -> L
+                                const loss = system.id === 'N2O4' ? 2 : 1;
+                                setConcentrationR(r => r - loss);
+                                setConcentrationL(l => l + 1);
+                            }
+                        }
+
+                        return next;
+                    });
+                    
+                    requestRef.current = requestAnimationFrame(animate);
+                };
+                
+                requestRef.current = requestAnimationFrame(animate);
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [temperature, volume, concentrationL, concentrationR, system]);
+
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="scale"></i> 勒沙特列原理模擬器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Le Chatelier's Principle Simulator</p>
+                        </div>
+                        
+                        <div className="flex bg-slate-100 p-1 rounded-xl">
+                            {Systems.map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => { setSystem(s); setConcentrationL(10); setConcentrationR(10); setVolume(1); setTemperature(298); }}
+                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${system.id === s.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                                >
+                                    {s.name.split(' ')[0]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow items-start">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            {/* Equation Display */}
+                            <div className="bg-white p-4 rounded-2xl border border-indigo-100 text-center shadow-sm">
+                                <div className="text-xs text-slate-400 font-bold uppercase mb-2">平衡方程式 (Equilibrium)</div>
+                                <div className="text-lg font-mono font-bold text-slate-800">{system.equation}</div>
+                                <div className={`text-xs font-bold mt-1 ${system.deltaH > 0 ? 'text-red-500' : 'text-blue-500'}`}>
+                                    ΔH = {system.deltaH > 0 ? '+' : ''}{system.deltaH} kJ mol⁻¹ ({system.deltaH > 0 ? '吸熱 Endothermic' : '放熱 Exothermic'})
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
+                                    <i data-lucide="sliders" size={16}/> 擾亂平衡 (Disturbance)
+                                </h3>
+
+                                {/* Concentration Buttons */}
+                                <div className="mb-6">
+                                    <label className="text-xs font-bold text-slate-600 block mb-2">濃度 (Concentration)</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => setConcentrationL(c => c + 5)} className="p-2 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold flex items-center justify-center gap-1">
+                                            <i data-lucide="plus" size={12}/> 加反應物 (L)
+                                        </button>
+                                        <button onClick={() => setConcentrationR(c => c + 5)} className="p-2 bg-slate-100 rounded hover:bg-slate-200 text-xs font-bold flex items-center justify-center gap-1">
+                                            <i data-lucide="plus" size={12}/> 加生成物 (R)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Temperature Slider */}
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-red-500">溫度 (Temperature)</label>
+                                        <span className="text-xs font-mono font-bold">{temperature} K</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="273" max="373" step="1" 
+                                        value={temperature} 
+                                        onChange={(e) => setTemperature(Number(e.target.value))}
+                                        className="w-full h-2 bg-gradient-to-r from-blue-300 to-red-300 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+
+                                {/* Volume Slider (Gas Only) */}
+                                {system.type === 'gas' && (
+                                    <div className="mb-2">
+                                        <div className="flex justify-between mb-1">
+                                            <label className="text-xs font-bold text-blue-500">體積/壓力 (Volume/Pressure)</label>
+                                            <span className="text-xs font-mono font-bold">{volume.toFixed(1)}x</span>
+                                        </div>
+                                        <input 
+                                            type="range" min="0.5" max="2.0" step="0.1" 
+                                            value={volume} 
+                                            onChange={(e) => setVolume(Number(e.target.value))}
+                                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                                            <span>壓縮 (High P)</span>
+                                            <span>擴張 (Low P)</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Status */}
+                            <div className="bg-slate-800 text-white p-4 rounded-xl shadow-lg text-center">
+                                <div className="text-xs font-bold text-slate-400 uppercase mb-1">Current State</div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="text-2xl font-mono font-black text-slate-200">{concentrationL}</div>
+                                        <div className="text-[10px] text-slate-500">Left Particles</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-2xl font-mono font-black text-slate-200">{concentrationR}</div>
+                                        <div className="text-[10px] text-slate-500">Right Particles</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* Right: Visualization */}
+                        <div className="w-full lg:w-2/3 bg-white rounded-3xl border-4 border-slate-200 p-8 shadow-xl min-h-[500px] flex flex-col items-center justify-center relative overflow-hidden">
+                            
+                            {/* Container / Syringe */}
+                            <div 
+                                className="reaction-container relative border-4 border-slate-400 rounded-xl overflow-hidden shadow-inner flex items-center justify-center"
+                                style={{
+                                    width: system.type === 'gas' ? `${volume * 50}%` : '60%',
+                                    height: '300px',
+                                    backgroundColor: getContainerColor()
+                                }}
+                            >
+                                {/* Particles */}
+                                {particles.map((p, i) => (
+                                    <div 
+                                        key={i}
+                                        className="particle shadow-sm"
+                                        style={{
+                                            left: `${p.x}%`,
+                                            top: `${p.y}%`,
+                                            width: `${p.size}px`,
+                                            height: `${p.size}px`,
+                                            backgroundColor: p.color
+                                        }}
+                                    ></div>
+                                ))}
+                            </div>
+
+                            {/* Piston Visual for Gas */}
+                            {system.type === 'gas' && (
+                                <div 
+                                    className="absolute h-[320px] w-4 bg-slate-600 rounded-l piston shadow-xl"
+                                    style={{ 
+                                        left: `calc(50% + ${volume * 25}% + 4px)`, // Align with container right edge
+                                        top: '50%', transform: 'translateY(-50%)'
+                                    }}
+                                >
+                                    <div className="absolute top-1/2 -right-12 w-12 h-4 bg-slate-400 -translate-y-1/2"></div>
+                                    <div className="absolute top-1/2 -right-16 w-8 h-16 bg-slate-700 -translate-y-1/2 rounded"></div>
+                                </div>
+                            )}
+
+                            {/* Legend */}
+                            <div className="flex gap-8 mt-8">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded-full" style={{backgroundColor: system.left.color}}></div>
+                                    <div className="text-xs font-bold text-slate-600">{system.left.name} ({system.left.label})</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded-full" style={{backgroundColor: system.right.color}}></div>
+                                    <div className="text-xs font-bold text-slate-600">{system.right.name} ({system.right.label})</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-200 pt-4">
+                        Luminous Learner Science Tools | HKDSE Topic X
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
