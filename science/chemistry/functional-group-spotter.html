@@ -31,15 +31,15 @@
             background-size: 20px 20px;
         }
         
-        /* Highlight Box Animation (SVG Compatible) */
+        /* Highlight Box Animation (SVG Compatible - FIXED) */
         @keyframes pulse-stroke {
             0% { stroke-opacity: 1; stroke-width: 3; }
-            50% { stroke-opacity: 0.6; stroke-width: 4; }
+            50% { stroke-opacity: 0.6; stroke-width: 5; }
             100% { stroke-opacity: 1; stroke-width: 3; }
         }
         .highlight-box {
-            fill: rgba(254, 226, 226, 0.3); /* SVG fill instead of background-color */
-            stroke: #ef4444;                 /* SVG stroke instead of border-color */
+            fill: rgba(254, 226, 226, 0.2); /* SVG fill: Light Red transparent */
+            stroke: #ef4444;                 /* SVG stroke: Red */
             stroke-width: 3;
             stroke-dasharray: 8 4;           /* Dashed line */
             animation: pulse-stroke 2s infinite;
@@ -60,7 +60,7 @@
                 id: 1,
                 type: 'series',
                 formula: 'CH3-CH2-OH',
-                // ViewBox widened to accommodate structure comfortably
+                // ViewBox widened
                 structureSVG: (
                     <svg viewBox="0 0 300 150" className="w-full h-full">
                         <text x="50" y="80" className="font-mono text-3xl font-bold" fill="#334155">CH₃—CH₂—<tspan fill="#ef4444">OH</tspan></text>
@@ -108,7 +108,6 @@
                 formula: 'CH3-CHO',
                 structureSVG: (
                     <svg viewBox="0 0 300 150" className="w-full h-full">
-                        {/* Expanded structural hint for aldehyde */}
                         <text x="60" y="80" className="font-mono text-3xl font-bold" fill="#334155">CH₃—</text>
                         <text x="140" y="80" className="font-mono text-3xl font-bold" fill="#334155">C</text>
                         
@@ -175,12 +174,13 @@
         const App = () => {
             const [currentQIndex, setCurrentQIndex] = useState(0);
             const [score, setScore] = useState(0);
+            const [streak, setStreak] = useState(0);
             const [selectedOption, setSelectedOption] = useState(null);
             const [showResult, setShowResult] = useState(false);
             const [isCorrect, setIsCorrect] = useState(false);
             const [shuffledOptions, setShuffledOptions] = useState([]);
-            const [gameOver, setGameOver] = useState(false);
 
+            // Shuffle function
             const shuffleArray = (array) => {
                 const newArr = [...array];
                 for (let i = newArr.length - 1; i > 0; i--) {
@@ -190,14 +190,11 @@
                 return newArr;
             };
 
+            // Load question
             useEffect(() => {
-                if (currentQIndex < Questions.length) {
-                    setShuffledOptions(shuffleArray(Questions[currentQIndex].options));
-                    setSelectedOption(null);
-                    setShowResult(false);
-                } else {
-                    setGameOver(true);
-                }
+                setShuffledOptions(shuffleArray(Questions[currentQIndex].options));
+                setSelectedOption(null);
+                setShowResult(false);
             }, [currentQIndex]);
 
             const handleOptionClick = (option) => {
@@ -208,48 +205,23 @@
                 setIsCorrect(correct);
                 setShowResult(true);
                 
-                if (correct) setScore(s => s + 10);
+                if (correct) {
+                    setScore(s => s + 10);
+                    setStreak(s => s + 1);
+                } else {
+                    setStreak(0);
+                }
             };
 
             const nextQuestion = () => {
-                setCurrentQIndex(prev => prev + 1);
+                // Infinite Mode: Pick random next question
+                let nextIndex;
+                do {
+                    nextIndex = Math.floor(Math.random() * Questions.length);
+                } while (nextIndex === currentQIndex); // Avoid same question twice in a row
+
+                setCurrentQIndex(nextIndex);
             };
-
-            const restartGame = () => {
-                setScore(0);
-                setCurrentQIndex(0);
-                setGameOver(false);
-            };
-
-            const progress = ((currentQIndex) / Questions.length) * 100;
-
-            if (gameOver) {
-                return (
-                    <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-3xl items-center justify-center min-h-[600px]">
-                        <div className="bg-white p-10 rounded-3xl shadow-xl border-2 border-indigo-100 text-center w-full">
-                            <div className="mb-8">
-                                <div className="w-32 h-32 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
-                                    <i data-lucide="trophy" size={64} />
-                                </div>
-                                <h2 className="text-4xl font-black text-slate-800 mb-2">挑戰完成！</h2>
-                                <p className="text-slate-500 text-lg">你完成了所有官能基辨識題目。</p>
-                            </div>
-                            
-                            <div className="bg-slate-50 p-8 rounded-2xl border border-slate-200 mb-10">
-                                <div className="text-sm font-bold text-slate-400 uppercase mb-2 tracking-wider">最終得分</div>
-                                <div className="text-6xl font-mono font-black text-indigo-600">{score} <span className="text-2xl text-slate-400">/ {Questions.length * 10}</span></div>
-                            </div>
-                            
-                            <button 
-                                onClick={restartGame}
-                                className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition-all active:scale-95 text-xl flex items-center justify-center gap-3"
-                            >
-                                <i data-lucide="rotate-ccw" /> 再玩一次
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
 
             const currentQ = Questions[currentQIndex];
 
@@ -262,21 +234,16 @@
                             <h1 className="text-2xl font-bold text-green-600 flex items-center gap-2">
                                 <i data-lucide="search"></i> 官能基辨識器
                             </h1>
-                            <p className="text-slate-400 text-sm">Functional Group Spotter</p>
+                            <p className="text-slate-400 text-sm">Functional Group Spotter (Endless Mode)</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                            <div className="text-sm font-bold text-slate-400">
-                                Question {currentQIndex + 1}/{Questions.length}
+                        <div className="flex gap-4">
+                            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm font-mono font-bold text-orange-500 flex items-center gap-2">
+                                <i data-lucide="flame" size={16}/> Streak: {streak}
                             </div>
                             <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm font-mono font-bold text-indigo-600">
                                 Score: {score}
                             </div>
                         </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-200 h-2 rounded-full mb-8 overflow-hidden">
-                        <div className="h-full bg-green-500 transition-all duration-500" style={{width: `${progress}%`}}></div>
                     </div>
 
                     {/* Main Grid Layout: 3 Columns */}
@@ -288,8 +255,8 @@
                                 <div className="w-full h-full">
                                     {currentQ.structureSVG}
                                 </div>
-                                <div className="absolute bottom-4 text-center w-full text-slate-400 text-xs font-bold uppercase tracking-widest">
-                                    Identify the highlighted group
+                                <div className="absolute bottom-4 text-center w-full text-slate-400 text-xs font-bold uppercase tracking-widest bg-white/90 py-1">
+                                    請觀察紅色虛線框內的結構
                                 </div>
                             </div>
                         </div>
@@ -346,7 +313,7 @@
                                                 <i data-lucide={isCorrect ? "thumbs-up" : "info"} size={24} />
                                             </div>
                                             <h4 className={`text-xl font-black ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
-                                                {isCorrect ? 'Correct!' : 'Wrong!'}
+                                                {isCorrect ? '答對了！' : '答錯了！'}
                                             </h4>
                                         </div>
                                         
@@ -360,7 +327,7 @@
                                         onClick={nextQuestion}
                                         className={`w-full py-3 rounded-xl font-bold text-white transition-colors flex items-center justify-center gap-2 shadow-lg ${isCorrect ? 'bg-green-600 hover:bg-green-500' : 'bg-red-500 hover:bg-red-400'}`}
                                     >
-                                        下一題 <i data-lucide="arrow-right" size={18} />
+                                        下一題 (Next) <i data-lucide="arrow-right" size={18} />
                                     </button>
                                 </div>
                             ) : (
@@ -387,3 +354,4 @@
     </script>
 </body>
 </html>
+```
