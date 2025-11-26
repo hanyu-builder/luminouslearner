@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>官能基辨識器 (Functional Group Spotter)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        .option-btn {
+            transition: all 0.2s ease;
+        }
+        .option-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .option-btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+        
+        /* Molecule Display Area */
+        .molecule-card {
+            background-image: radial-gradient(#e0f2fe 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        /* Highlight Box Animation */
+        @keyframes pulse-border {
+            0% { border-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { border-color: #f87171; box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { border-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .highlight-box {
+            border: 3px dashed #ef4444;
+            border-radius: 8px;
+            animation: pulse-border 2s infinite;
+            background-color: rgba(254, 226, 226, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Question Database
+        // Type 1: Identify the homologous series based on the structure
+        // Type 2: Identify the name of the functional group (e.g. Hydroxyl group)
+        
+        const Questions = [
+            {
+                id: 1,
+                type: 'series',
+                formula: 'CH3-CH2-OH',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        <text x="40" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—CH₂—<tspan fill="#ef4444">OH</tspan></text>
+                        <rect x="140" y="30" width="45" height="40" className="highlight-box" />
+                    </svg>
+                ),
+                question: "圖中圈出的官能基屬於哪個同系列 (Homologous Series)？",
+                options: ["Alkane (烷)", "Alkene (烯)", "Alcohol (醇)", "Carboxylic Acid (羧酸)"],
+                answer: "Alcohol (醇)",
+                explanation: "含有 -OH (Hydroxyl group) 且連接在飽和碳原子上，屬於醇類。"
+            },
+            {
+                id: 2,
+                type: 'group',
+                formula: 'CH3-COOH',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        <text x="50" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—<tspan fill="#ef4444">COOH</tspan></text>
+                        <rect x="110" y="30" width="70" height="40" className="highlight-box" />
+                    </svg>
+                ),
+                question: "圖中圈出的官能基名稱是什麼？",
+                options: ["Hydroxyl group (羥基)", "Carboxyl group (羧基)", "Carbonyl group (羰基)", "Ester group (酯基)"],
+                answer: "Carboxyl group (羧基)",
+                explanation: "-COOH 稱為 Carboxyl group，是羧酸 (Carboxylic Acid) 的特徵。"
+            },
+            {
+                id: 3,
+                type: 'series',
+                formula: 'CH2=CH2',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        <text x="60" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₂<tspan fill="#ef4444">=</tspan>CH₂</text>
+                        <rect x="95" y="35" width="20" height="30" className="highlight-box" />
+                    </svg>
+                ),
+                question: "這個分子屬於哪個同系列？",
+                options: ["Alkane", "Alkene", "Alcohol", "Aldehyde"],
+                answer: "Alkene",
+                explanation: "碳碳雙鍵 (C=C) 是烯烴 (Alkene) 的官能基。"
+            },
+            {
+                id: 4,
+                type: 'group',
+                formula: 'CH3-CHO',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        {/* Expanded structural hint for aldehyde */}
+                        <text x="40" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—</text>
+                        <text x="100" y="55" className="font-mono text-2xl font-bold" fill="#334155">C</text>
+                        <text x="120" y="35" className="font-mono text-2xl font-bold" fill="#ef4444">=O</text>
+                        <text x="120" y="75" className="font-mono text-2xl font-bold" fill="#334155">-H</text>
+                        <rect x="95" y="15" width="60" height="70" className="highlight-box" />
+                    </svg>
+                ),
+                question: "這個官能基 (-CHO) 的名稱是？",
+                options: ["Ketone group", "Aldehyde group", "Carboxyl group", "Ester group"],
+                answer: "Aldehyde group",
+                explanation: "-CHO (羰基連接一個氫原子) 是醛基 (Aldehyde group)。"
+            },
+            {
+                id: 5,
+                type: 'series',
+                formula: 'CH3-CO-CH3',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        <text x="30" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—</text>
+                        <text x="90" y="55" className="font-mono text-2xl font-bold" fill="#334155">C</text>
+                        <text x="90" y="30" className="font-mono text-2xl font-bold" fill="#ef4444">=O</text>
+                        <text x="110" y="55" className="font-mono text-2xl font-bold" fill="#334155">—CH₃</text>
+                        <rect x="80" y="10" width="35" height="60" className="highlight-box" />
+                    </svg>
+                ),
+                question: "圖中顯示的是哪個同系列的特徵？",
+                options: ["Aldehyde", "Ketone", "Carboxylic Acid", "Ester"],
+                answer: "Ketone",
+                explanation: "羰基 (C=O) 連接兩個碳原子（烷基），這是酮 (Ketone) 的特徵。"
+            },
+             {
+                id: 6,
+                type: 'series',
+                formula: 'CH3-COO-CH3',
+                structureSVG: (
+                    <svg viewBox="0 0 200 100" className="w-full h-full">
+                        <text x="20" y="55" className="font-mono text-2xl font-bold" fill="#334155">CH₃—</text>
+                        <text x="80" y="55" className="font-mono text-2xl font-bold" fill="#ef4444">COO</text>
+                        <text x="130" y="55" className="font-mono text-2xl font-bold" fill="#334155">—CH₃</text>
+                        <rect x="75" y="30" width="60" height="40" className="highlight-box" />
+                    </svg>
+                ),
+                question: "這個分子屬於哪個同系列？",
+                options: ["Carboxylic Acid", "Ether", "Ester", "Ketone"],
+                answer: "Ester",
+                explanation: "-COO- 連接兩個烷基，這是酯 (Ester) 的官能基。"
+            }
+        ];
+
+        const App = () => {
+            const [currentQIndex, setCurrentQIndex] = useState(0);
+            const [score, setScore] = useState(0);
+            const [selectedOption, setSelectedOption] = useState(null);
+            const [showResult, setShowResult] = useState(false);
+            const [isCorrect, setIsCorrect] = useState(false);
+            const [shuffledOptions, setShuffledOptions] = useState([]);
+            const [gameOver, setGameOver] = useState(false);
+
+            // Shuffle function
+            const shuffleArray = (array) => {
+                const newArr = [...array];
+                for (let i = newArr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+                }
+                return newArr;
+            };
+
+            // Load new question
+            useEffect(() => {
+                if (currentQIndex < Questions.length) {
+                    setShuffledOptions(shuffleArray(Questions[currentQIndex].options));
+                    setSelectedOption(null);
+                    setShowResult(false);
+                } else {
+                    setGameOver(true);
+                }
+            }, [currentQIndex]);
+
+            const handleOptionClick = (option) => {
+                if (showResult) return; // Prevent double clicking
+                
+                setSelectedOption(option);
+                const correct = option === Questions[currentQIndex].answer;
+                setIsCorrect(correct);
+                setShowResult(true);
+                
+                if (correct) setScore(s => s + 10);
+            };
+
+            const nextQuestion = () => {
+                setCurrentQIndex(prev => prev + 1);
+            };
+
+            const restartGame = () => {
+                setScore(0);
+                setCurrentQIndex(0);
+                setGameOver(false);
+                // Ideally shuffle questions array here too, but for simplicity we keep order
+            };
+
+            // Progress Bar
+            const progress = ((currentQIndex) / Questions.length) * 100;
+
+            if (gameOver) {
+                return (
+                    <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-2xl items-center justify-center min-h-[600px]">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border-2 border-indigo-100 text-center w-full">
+                            <div className="mb-6">
+                                <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
+                                    <i data-lucide="trophy" size={48} />
+                                </div>
+                                <h2 className="text-3xl font-black text-slate-800 mb-2">挑戰完成！</h2>
+                                <p className="text-slate-500">你完成了所有官能基辨識題目。</p>
+                            </div>
+                            
+                            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8">
+                                <div className="text-sm font-bold text-slate-400 uppercase mb-1">最終得分</div>
+                                <div className="text-5xl font-mono font-black text-indigo-600">{score} / {Questions.length * 10}</div>
+                            </div>
+                            
+                            <button 
+                                onClick={restartGame}
+                                className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-500 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
+                            >
+                                <i data-lucide="rotate-ccw" /> 再玩一次
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            const currentQ = Questions[currentQIndex];
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-4xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-green-600 flex items-center gap-2">
+                                <i data-lucide="search"></i> 官能基辨識器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Functional Group Spotter</p>
+                        </div>
+                        <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm font-mono font-bold text-indigo-600">
+                            Score: {score}
+                        </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 h-2 rounded-full mb-8 overflow-hidden">
+                        <div className="h-full bg-green-500 transition-all duration-500" style={{width: `${progress}%`}}></div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-8">
+                        
+                        {/* Left: Visualization (Molecule Card) */}
+                        <div className="w-full md:w-1/2">
+                            <div className="bg-white p-8 rounded-3xl shadow-lg border-2 border-slate-100 molecule-card h-64 flex items-center justify-center relative overflow-hidden">
+                                <div className="w-full h-full transform scale-110">
+                                    {currentQ.structureSVG}
+                                </div>
+                                <div className="absolute top-4 left-4 text-xs font-bold text-slate-400 bg-white/80 px-2 py-1 rounded border">
+                                    Question {currentQIndex + 1} / {Questions.length}
+                                </div>
+                            </div>
+                            <div className="mt-4 text-center text-slate-500 text-sm italic">
+                                請觀察紅色虛線框內的結構
+                            </div>
+                        </div>
+
+                        {/* Right: Question & Options */}
+                        <div className="w-full md:w-1/2 flex flex-col gap-4">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                                <h3 className="text-lg font-bold text-slate-800 mb-6">
+                                    {currentQ.question}
+                                </h3>
+                                
+                                <div className="space-y-3">
+                                    {shuffledOptions.map((opt, idx) => {
+                                        // Determine style based on result state
+                                        let btnStyle = 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-indigo-50 hover:border-indigo-300';
+                                        let icon = null;
+
+                                        if (showResult) {
+                                            if (opt === currentQ.answer) {
+                                                btnStyle = 'bg-green-100 text-green-800 border-green-400 ring-1 ring-green-400';
+                                                icon = <i data-lucide="check" size={18}/>;
+                                            } else if (opt === selectedOption) {
+                                                btnStyle = 'bg-red-100 text-red-800 border-red-400 ring-1 ring-red-400';
+                                                icon = <i data-lucide="x" size={18}/>;
+                                            } else {
+                                                btnStyle = 'opacity-50 bg-slate-50 border-slate-100';
+                                            }
+                                        } else if (selectedOption === opt) {
+                                            btnStyle = 'bg-indigo-100 text-indigo-800 border-indigo-400';
+                                        }
+
+                                        return (
+                                            <button
+                                                key={idx}
+                                                onClick={() => handleOptionClick(opt)}
+                                                disabled={showResult}
+                                                className={`option-btn w-full p-4 rounded-xl border-2 font-bold text-left flex justify-between items-center ${btnStyle}`}
+                                            >
+                                                <span>{opt}</span>
+                                                {icon}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Feedback Area (Shows after answer) */}
+                            {showResult && (
+                                <div className={`p-4 rounded-2xl border-l-4 shadow-md animate-in slide-in-from-bottom-2 fade-in ${isCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`}>
+                                    <div className="flex items-start gap-3">
+                                        <div className={`p-2 rounded-full ${isCorrect ? 'bg-green-200 text-green-700' : 'bg-red-200 text-red-700'}`}>
+                                            <i data-lucide={isCorrect ? "thumbs-up" : "info"} size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className={`font-bold ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
+                                                {isCorrect ? '答對了！' : '再試一次！'}
+                                            </h4>
+                                            <p className={`text-sm mt-1 ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                                                {currentQ.explanation}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={nextQuestion}
+                                        className={`mt-4 w-full py-2 rounded-lg font-bold text-white transition-colors ${isCorrect ? 'bg-green-600 hover:bg-green-500' : 'bg-red-500 hover:bg-red-400'}`}
+                                    >
+                                        下一題 <i data-lucide="arrow-right" size={16} className="inline ml-1"/>
+                                    </button>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-12">
+                        Luminous Learner Science Tools | HKDSE Topic XI
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
