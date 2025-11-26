@@ -43,7 +43,7 @@
     <div id="root" class="flex-grow flex flex-col"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
         const { Scale, Thermometer, Maximize2, FlaskConical, ArrowRight, RotateCcw, Info, Activity, TrendingUp } = lucide;
 
         // --- 1. 系統定義 (Systems Data) ---
@@ -92,6 +92,17 @@
             const requestRef = useRef();
             const timeRef = useRef(0);
             const containerRef = useRef(null);
+
+            // 粒子生成器 (Helper function)
+            const createParticle = useCallback((typeData) => ({
+                id: Math.random(),
+                x: Math.random() * 100, 
+                y: Math.random() * 100,
+                vx: (Math.random() - 0.5) * 0.8,
+                vy: (Math.random() - 0.5) * 0.8,
+                type: typeData.name,
+                ...typeData
+            }), []);
 
             // --- 計算邏輯 (Calculations) ---
 
@@ -155,7 +166,7 @@
 
             // --- 模擬循環 (Simulation Loop) ---
             
-            // 初始化粒子
+            // 初始化粒子 (系統切換時)
             useEffect(() => {
                 const newParticles = [];
                 for(let i=0; i<molesL; i++) newParticles.push(createParticle(system.left));
@@ -163,18 +174,34 @@
                 setParticles(newParticles);
                 setHistory([]); // Reset graph on system change
                 timeRef.current = 0;
-            }, [system]);
+            }, [system, createParticle]); // Added createParticle to deps
 
-            // 粒子生成器
-            const createParticle = (typeData) => ({
-                id: Math.random(),
-                x: Math.random() * 100, 
-                y: Math.random() * 100,
-                vx: (Math.random() - 0.5) * 0.8,
-                vy: (Math.random() - 0.5) * 0.8,
-                type: typeData.name,
-                ...typeData
-            });
+            // [FIX] 粒子同步機制：當 molesL/R 改變 (例如點擊按鈕) 時，自動補足/移除粒子
+            useEffect(() => {
+                setParticles(prev => {
+                    const currentL = prev.filter(p => p.type === system.left.name).length;
+                    const currentR = prev.filter(p => p.type === system.right.name).length;
+                    
+                    // 如果粒子數量與狀態一致，不需更新
+                    if (currentL === molesL && currentR === molesR) return prev;
+
+                    let newParticles = [...prev];
+
+                    // 補足左側粒子
+                    if (molesL > currentL) {
+                        for(let i=0; i < molesL - currentL; i++) newParticles.push(createParticle(system.left));
+                    } 
+                    // (可選：若有減少按鈕，也可在此處理移除邏輯，目前主要是處理增加)
+
+                    // 補足右側粒子
+                    if (molesR > currentR) {
+                        for(let i=0; i < molesR - currentR; i++) newParticles.push(createParticle(system.right));
+                    }
+                    
+                    return newParticles;
+                });
+            }, [molesL, molesR, system, createParticle]);
+
 
             // 動畫與反應邏輯
             useEffect(() => {
@@ -195,8 +222,6 @@
                     // 2. 粒子移動與反應
                     setParticles(prev => {
                         // 確定移動方向
-                        // Q < K: L -> R
-                        // Q > K: R -> L
                         const shiftRight = currentQ < currentK;
                         const reactionChance = 0.03; // Reaction probability per frame
 
@@ -234,8 +259,8 @@
                                 // Remove R
                                 const loss = system.id === 'N2O4' ? 2 : 1;
                                 let removedCount = 0;
+                                
                                 // Try to remove 'loss' amount of R particles
-                                // Ideally close to each other, but random is fine for simple sim
                                 nextParticles = nextParticles.filter(p => {
                                     if (p.type === system.right.name && removedCount < loss) {
                                         removedCount++;
@@ -274,7 +299,7 @@
 
                 requestRef.current = requestAnimationFrame(animate);
                 return () => cancelAnimationFrame(requestRef.current);
-            }, [temperature, volume, molesL, molesR, system, currentK, currentQ]);
+            }, [temperature, volume, molesL, molesR, system, currentK, currentQ, createParticle]);
 
 
             // --- UI Components ---
