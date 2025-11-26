@@ -1,1 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>哈伯法優化器 (Haber Process Optimizer)</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans HK', sans-serif; }
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+        
+        /* Particle Animation */
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            transition: transform 0.2s linear; /* Movement handled by JS for smoothness */
+        }
+        
+        /* Catalyst Grid Pattern */
+        .catalyst-grid {
+            background-image: radial-gradient(#475569 2px, transparent 2px);
+            background-size: 10px 10px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .catalyst-active {
+            opacity: 0.6;
+        }
 
+        /* Gauge Animation */
+        .gauge-fill { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <div id="root" class="flex-grow flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            // Parameters
+            const [pressure, setPressure] = useState(200); // atm
+            const [temperature, setTemperature] = useState(450); // Celsius
+            const [hasCatalyst, setHasCatalyst] = useState(true); // Iron
+            
+            // Outputs
+            const [yieldPercent, setYieldPercent] = useState(0);
+            const [rate, setRate] = useState(0);
+            const [cost, setCost] = useState(0);
+            const [score, setScore] = useState(0);
+            const [feedback, setFeedback] = useState('');
+
+            // Simulation Refs
+            const containerRef = useRef(null);
+            const particlesRef = useRef([]);
+            const requestRef = useRef();
+
+            // --- Physics & Chemistry Logic ---
+            useEffect(() => {
+                // 1. Yield Calculation (Equilibrium)
+                // N2 + 3H2 <-> 2NH3 + Heat
+                // Exothermic: High T -> Low Yield
+                // Fewer moles gas products: High P -> High Yield
+                
+                // Base calculation (Approximation for visual feedback)
+                // Max theoretical yield at low T, high P
+                // At 450C, 200atm, yield is approx 15-20% per pass in reality, but let's scale it to 0-100 "Potential Yield"
+                
+                // Temp factor: Higher T reduces yield drastically
+                const tFactor = Math.max(0, 1000 - temperature) / 1000; 
+                // Pressure factor: Higher P increases yield (diminishing returns)
+                const pFactor = Math.log10(pressure) / Math.log10(400);
+                
+                let calcYield = (tFactor * pFactor * 100).toFixed(1);
+                // Cap at 99%
+                if (calcYield > 99) calcYield = 99;
+                if (calcYield < 0) calcYield = 0;
+
+                // 2. Rate Calculation (Kinetics)
+                // Higher T -> Higher Rate
+                // Higher P -> Higher Rate (Concentration)
+                // Catalyst -> Massive boost
+                
+                const tRate = Math.pow(temperature / 200, 2); // Exponential effect of T
+                const pRate = pressure / 100; // Linear effect of P
+                const catFactor = hasCatalyst ? 10 : 1;
+                
+                let calcRate = (tRate * pRate * catFactor);
+                // Normalize to 0-100 scale for UI
+                let displayRate = Math.min(100, calcRate / 2); 
+
+                // 3. Cost Calculation
+                // High P = Exponentially expensive (Safety, Pipes)
+                // High T = Linearly expensive (Fuel)
+                // Catalyst = One-off cost (Low impact on daily run, but we factor it in simply)
+                
+                const pCost = Math.pow(pressure / 100, 1.5) * 20;
+                const tCost = (temperature / 100) * 10;
+                
+                let calcCost = pCost + tCost;
+                let displayCost = Math.min(100, calcCost);
+
+                // 4. Efficiency Score (The "Game" Element)
+                // We want: High Yield, High Rate, Low Cost.
+                // Ideal Industrial Point: ~450C, ~200atm, With Catalyst
+                
+                // Score = (Yield * Rate) / Cost
+                // Adjusted for game balance
+                let rawScore = (parseFloat(calcYield) * displayRate) / (displayCost + 1);
+                // Normalize to 0-100 approx
+                let displayScore = Math.min(100, rawScore * 0.6);
+
+                setYieldPercent(calcYield);
+                setRate(displayRate.toFixed(1));
+                setCost(displayCost.toFixed(1));
+                setScore(displayScore.toFixed(0));
+
+                // Feedback Logic
+                if (temperature < 350) {
+                    setFeedback("溫度太低！反應速率極慢 (Too Slow)，雖然產率高但經濟效益低。");
+                } else if (temperature > 550) {
+                    setFeedback("溫度太高！雖然反應快，但產率太低 (Low Yield)，且燃料成本高。");
+                } else if (pressure < 100) {
+                    setFeedback("壓力太低！產率不理想。");
+                } else if (pressure > 300) {
+                    setFeedback("壓力太高！建造成本和安全風險極高 (High Cost/Risk)。");
+                } else if (!hasCatalyst) {
+                    setFeedback("未加催化劑！反應速率太慢，請加入鐵粉 (Iron)。");
+                } else {
+                    setFeedback("完美平衡！這就是工業上的折衷方案 (Optimum Conditions)。");
+                }
+
+            }, [pressure, temperature, hasCatalyst]);
+
+            // --- Particle Animation Loop ---
+            useEffect(() => {
+                // Initialize Particles
+                const pCount = 30;
+                const newParticles = [];
+                for(let i=0; i<pCount; i++) {
+                    newParticles.push({
+                        x: Math.random() * 100,
+                        y: Math.random() * 100,
+                        vx: (Math.random() - 0.5),
+                        vy: (Math.random() - 0.5),
+                        type: Math.random() > 0.7 ? 'NH3' : (Math.random() > 0.5 ? 'N2' : 'H2')
+                    });
+                }
+                particlesRef.current = newParticles;
+
+                const animate = () => {
+                    // Speed depends on Temperature
+                    const speedFactor = (temperature / 200) * 0.5;
+                    
+                    // Size/Density visual depends on Pressure (Simulation: we limit the container size visual or just keep particles same but move faster)
+                    // Let's just move them
+                    
+                    const container = containerRef.current;
+                    if(!container) return;
+
+                    particlesRef.current = particlesRef.current.map(p => {
+                        let nx = p.x + p.vx * speedFactor;
+                        let ny = p.y + p.vy * speedFactor;
+
+                        // Bounce
+                        if (nx <= 0 || nx >= 100) p.vx *= -1;
+                        if (ny <= 0 || ny >= 100) p.vy *= -1;
+                        
+                        return { ...p, x: Math.max(0, Math.min(100, nx)), y: Math.max(0, Math.min(100, ny)) };
+                    });
+                    
+                    // Force update to render particles? 
+                    // No, directly manipulating DOM for performance in high frequency loop is better, 
+                    // but React state is fine for low particle count (30).
+                    // To avoid re-render loop, we use a ref for positions and a requestAnimationFrame that forces a re-render only if needed,
+                    // or just use CSS transitions. 
+                    // Actually, for this simple app, let's use a CSS animation trick or just simple state update every 50ms.
+                    // Let's use the Ref to store positions and querySelector to update style to avoid React render cycle overhead.
+                    
+                    particlesRef.current.forEach((p, i) => {
+                        const el = document.getElementById(`p-${i}`);
+                        if (el) {
+                            el.style.left = `${p.x}%`;
+                            el.style.top = `${p.y}%`;
+                        }
+                    });
+
+                    requestRef.current = requestAnimationFrame(animate);
+                };
+                
+                requestRef.current = requestAnimationFrame(animate);
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [temperature]);
+
+            // Color classes
+            const getScoreColor = (s) => {
+                if (s > 80) return 'text-green-500';
+                if (s > 50) return 'text-yellow-500';
+                return 'text-red-500';
+            };
+
+            return (
+                <div className="flex flex-col h-full container mx-auto px-4 py-6 max-w-6xl">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-indigo-600 flex items-center gap-2">
+                                <i data-lucide="factory"></i> 哈伯法優化器
+                            </h1>
+                            <p className="text-slate-400 text-sm">Hess Process Optimizer: Balance Yield, Rate & Cost</p>
+                        </div>
+                        
+                        <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200 flex items-center gap-3">
+                            <div className="text-xs font-bold text-slate-400 uppercase text-right">
+                                綜合效益<br/>Efficiency Score
+                            </div>
+                            <div className={`text-4xl font-mono font-black ${getScoreColor(score)}`}>
+                                {score}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col lg:flex-row gap-8 flex-grow items-start">
+                        
+                        {/* Left: Controls */}
+                        <div className="w-full lg:w-1/3 flex flex-col gap-6">
+                            
+                            <div className="bg-white p-6 rounded-2xl shadow-md border border-indigo-100 relative overflow-hidden">
+                                <h3 className="text-sm font-bold text-slate-500 uppercase mb-6 flex items-center gap-2">
+                                    <i data-lucide="sliders" size={16}/> 工廠參數設定
+                                </h3>
+
+                                {/* Pressure */}
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-sm font-bold text-blue-600 flex items-center gap-2">
+                                            <i data-lucide="gauge" size={16}/> 壓力 (Pressure)
+                                        </label>
+                                        <span className="font-mono font-bold text-blue-700 text-lg">{pressure} atm</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="1" max="400" step="10"
+                                        value={pressure}
+                                        onChange={(e) => setPressure(Number(e.target.value))}
+                                        className="w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <span>1 atm (Low Cost)</span>
+                                        <span>400 atm (High Cost)</span>
+                                    </div>
+                                </div>
+
+                                {/* Temperature */}
+                                <div className="mb-6">
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-sm font-bold text-red-500 flex items-center gap-2">
+                                            <i data-lucide="thermometer" size={16}/> 溫度 (Temperature)
+                                        </label>
+                                        <span className="font-mono font-bold text-red-600 text-lg">{temperature} °C</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="200" max="700" step="10"
+                                        value={temperature}
+                                        onChange={(e) => setTemperature(Number(e.target.value))}
+                                        className="w-full h-2 bg-red-100 rounded-lg appearance-none cursor-pointer accent-red-500"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <span>200°C (Slow)</span>
+                                        <span>700°C (Low Yield)</span>
+                                    </div>
+                                </div>
+
+                                {/* Catalyst */}
+                                <div className="mb-2">
+                                    <label className="flex items-center justify-between p-4 border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                            <i data-lucide="boxes" size={18} className="text-amber-500"/> 
+                                            鐵催化劑 (Iron Catalyst)
+                                        </span>
+                                        <div className={`w-12 h-6 rounded-full p-1 transition-colors ${hasCatalyst ? 'bg-green-500' : 'bg-slate-300'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${hasCatalyst ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                        </div>
+                                        <input type="checkbox" className="hidden" checked={hasCatalyst} onChange={(e) => setHasCatalyst(e.target.checked)} />
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Feedback Box */}
+                            <div className={`p-4 rounded-xl border-l-4 text-sm font-medium shadow-sm transition-all
+                                ${score > 80 ? 'bg-green-50 border-green-500 text-green-800' : 'bg-yellow-50 border-yellow-500 text-yellow-800'}
+                            `}>
+                                <div className="font-bold mb-1 flex items-center gap-2">
+                                    <i data-lucide={score > 80 ? "check-circle" : "alert-circle"} size={16}/> 系統診斷 (Diagnostics)
+                                </div>
+                                {feedback}
+                            </div>
+
+                        </div>
+
+                        {/* Right: Dashboard & Visuals */}
+                        <div className="w-full lg:w-2/3 flex flex-col gap-6">
+                            
+                            {/* Visual Container */}
+                            <div className="bg-slate-800 rounded-3xl shadow-xl border-4 border-slate-700 p-6 relative h-[300px] flex items-center justify-center overflow-hidden" ref={containerRef}>
+                                {/* Background Grid (Catalyst) */}
+                                <div className={`absolute inset-0 catalyst-grid ${hasCatalyst ? 'catalyst-active' : ''}`}></div>
+                                
+                                {/* Reaction Chamber Label */}
+                                <div className="absolute top-4 left-4 text-xs font-mono text-slate-500 uppercase tracking-widest">Reaction Chamber</div>
+                                <div className="absolute bottom-4 right-4 text-xs text-slate-500">
+                                    N₂ + 3H₂ ⇌ 2NH₃ (ΔH &lt; 0)
+                                </div>
+
+                                {/* Particles */}
+                                {particlesRef.current.map((p, i) => (
+                                    <div 
+                                        key={i} 
+                                        id={`p-${i}`}
+                                        className="particle shadow-sm flex items-center justify-center text-[8px] font-bold text-white select-none"
+                                        style={{
+                                            width: p.type === 'NH3' ? '16px' : '12px',
+                                            height: p.type === 'NH3' ? '16px' : '12px',
+                                            backgroundColor: p.type === 'NH3' ? '#3b82f6' : (p.type === 'N2' ? '#94a3b8' : '#cbd5e1'),
+                                            opacity: pressure / 400 + 0.2 // Density visual
+                                        }}
+                                    >
+                                        {p.type}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Gauges */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                
+                                {/* Yield Gauge */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                    <div className="text-xs font-bold text-slate-400 uppercase mb-2">產率 (Yield)</div>
+                                    <div className="flex items-end gap-2 mb-2">
+                                        <span className="text-3xl font-black text-blue-600">{yieldPercent}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 gauge-fill" style={{width: `${yieldPercent}%`}}></div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-2">受平衡位置影響 (Eqm Position)</p>
+                                </div>
+
+                                {/* Rate Gauge */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                    <div className="text-xs font-bold text-slate-400 uppercase mb-2">生產速率 (Rate)</div>
+                                    <div className="flex items-end gap-2 mb-2">
+                                        <span className="text-3xl font-black text-green-600">{rate}</span>
+                                        <span className="text-xs text-slate-400 mb-1">units/hr</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 gauge-fill" style={{width: `${rate}%`}}></div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-2">受動力學因素影響 (Kinetics)</p>
+                                </div>
+
+                                {/* Cost Gauge */}
+                                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                    <div className="text-xs font-bold text-slate-400 uppercase mb-2">營運成本 (Cost)</div>
+                                    <div className="flex items-end gap-2 mb-2">
+                                        <span className="text-3xl font-black text-red-500">${cost}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                        <div className="h-full bg-red-500 gauge-fill" style={{width: `${Math.min(100, cost)}%`}}></div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-2">受能源與設備影響</p>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                    
+                    <div className="text-center text-slate-400 text-xs mt-8 border-t border-slate-200 pt-4">
+                        Luminous Learner Science Tools | HKDSE Topic XIII
+                    </div>
+                </div>
+            );
+        };
+
+        lucide.createIcons();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
