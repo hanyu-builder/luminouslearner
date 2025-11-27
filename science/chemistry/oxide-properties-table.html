@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oxide Properties Table v3.0</title>
+    <title>Oxide Properties Table v3.1</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -22,8 +22,12 @@
         .card-enter { animation: slideIn 0.3s ease-out forwards; }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* Grid Highlight */
-        .highlight-cell { background-color: rgba(59, 130, 246, 0.1); border-radius: 0.5rem; transition: all 0.3s; }
+        /* Graph Animations */
+        .graph-path { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: drawLine 2s ease-out forwards; }
+        .graph-point { opacity: 0; animation: fadeInPoint 0.5s ease-out forwards; }
+        
+        @keyframes drawLine { to { stroke-dashoffset: 0; } }
+        @keyframes fadeInPoint { from { opacity: 0; transform: scale(0); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -53,13 +57,13 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- EXTENDED DATASET ---
+        // --- EXTENDED DATASET WITH NUMERIC pH ---
         const DATABASE = {
             3: [
                 {
                     element: 'Na', formula: 'Na₂O', name: 'Sodium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Basic', ph: '13-14',
+                    acidBase: 'Basic', ph: '13-14', phValue: 13.5,
                     reaction: 'Na₂O(s) + H₂O(l) → 2NaOH(aq)',
                     desc: 'Vigorous reaction with water to form a strong alkali.',
                     color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
@@ -67,7 +71,7 @@
                 {
                     element: 'Mg', formula: 'MgO', name: 'Magnesium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Basic', ph: '9-10',
+                    acidBase: 'Basic', ph: '9-10', phValue: 9.5,
                     reaction: 'MgO(s) + H₂O(l) ⇌ Mg(OH)₂(s/aq)',
                     desc: 'Slightly soluble in water. Forms a weak alkaline solution.',
                     color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
@@ -75,7 +79,7 @@
                 {
                     element: 'Al', formula: 'Al₂O₃', name: 'Aluminium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Amphoteric', ph: '7 (Insoluble)',
+                    acidBase: 'Amphoteric', ph: '7 (Insoluble)', phValue: 7,
                     reaction: 'Insoluble in water',
                     desc: 'Reacts with both acids and bases. High melting point.',
                     color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
@@ -83,7 +87,7 @@
                 {
                     element: 'Si', formula: 'SiO₂', name: 'Silicon Dioxide',
                     state: 'Solid', bonding: 'Covalent', structure: 'Giant Covalent',
-                    acidBase: 'Acidic', ph: '7 (Insoluble)',
+                    acidBase: 'Acidic', ph: '7 (Insoluble)', phValue: 7,
                     reaction: 'Insoluble in water',
                     desc: 'Sand/Quartz. Reacts with hot conc. NaOH but not water.',
                     color: 'text-orange-400', bgColor: 'bg-orange-900/20', borderColor: 'border-orange-500/50'
@@ -91,7 +95,7 @@
                 {
                     element: 'P', formula: 'P₄O₁₀', name: 'Phosphorus(V) Oxide',
                     state: 'Solid', bonding: 'Covalent', structure: 'Simple Molecular',
-                    acidBase: 'Acidic', ph: '1-2',
+                    acidBase: 'Acidic', ph: '1-2', phValue: 1.5,
                     reaction: 'P₄O₁₀(s) + 6H₂O(l) → 4H₃PO₄(aq)',
                     desc: 'Violent reaction. Forms phosphoric acid.',
                     color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
@@ -99,7 +103,7 @@
                 {
                     element: 'S', formula: 'SO₂ / SO₃', name: 'Sulphur Dioxide / Trioxide',
                     state: 'Gas / Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
-                    acidBase: 'Acidic', ph: '1-2',
+                    acidBase: 'Acidic', ph: '1-2', phValue: 1.5,
                     reaction: 'SO₂(g) + H₂O(l) ⇌ H₂SO₃(aq)',
                     desc: 'Forms sulphurous acid (SO₂) or sulphuric acid (SO₃).',
                     color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
@@ -107,7 +111,7 @@
                 {
                     element: 'Cl', formula: 'Cl₂O₇', name: 'Dichlorine Heptoxide',
                     state: 'Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
-                    acidBase: 'Acidic', ph: '1-2',
+                    acidBase: 'Acidic', ph: '1-2', phValue: 1.5,
                     reaction: 'Cl₂O₇(l) + H₂O(l) → 2HClO₄(aq)',
                     desc: 'Forms perchloric acid, a very strong acid.',
                     color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
@@ -117,7 +121,7 @@
                 {
                     element: 'K', formula: 'K₂O', name: 'Potassium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Basic', ph: '13-14',
+                    acidBase: 'Basic', ph: '13-14', phValue: 13.5,
                     reaction: 'K₂O(s) + H₂O(l) → 2KOH(aq)',
                     desc: 'Very vigorous reaction. Forms a strong alkali.',
                     color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
@@ -125,7 +129,7 @@
                 {
                     element: 'Ca', formula: 'CaO', name: 'Calcium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Basic', ph: '10-12',
+                    acidBase: 'Basic', ph: '10-12', phValue: 11,
                     reaction: 'CaO(s) + H₂O(l) → Ca(OH)₂(aq)',
                     desc: 'Quicklime. Exothermic reaction forming limewater.',
                     color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
@@ -133,7 +137,7 @@
                 {
                     element: 'Ga', formula: 'Ga₂O₃', name: 'Gallium Oxide',
                     state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
-                    acidBase: 'Amphoteric', ph: '7 (Insoluble)',
+                    acidBase: 'Amphoteric', ph: '7 (Insoluble)', phValue: 7,
                     reaction: 'Insoluble in water',
                     desc: 'Similar to Al₂O₃. Reacts with both acids and alkalis.',
                     color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
@@ -141,7 +145,7 @@
                 {
                     element: 'Ge', formula: 'GeO₂', name: 'Germanium Dioxide',
                     state: 'Solid', bonding: 'Covalent', structure: 'Giant Covalent',
-                    acidBase: 'Acidic', ph: '7 (Insoluble)',
+                    acidBase: 'Acidic', ph: '7 (Insoluble)', phValue: 7,
                     reaction: 'Insoluble in water',
                     desc: 'Similar to SiO₂ but can form rutile structure.',
                     color: 'text-orange-400', bgColor: 'bg-orange-900/20', borderColor: 'border-orange-500/50'
@@ -149,7 +153,7 @@
                 {
                     element: 'As', formula: 'As₄O₆', name: 'Arsenic(III) Oxide',
                     state: 'Solid', bonding: 'Covalent', structure: 'Simple Molecular',
-                    acidBase: 'Amphoteric', ph: '4-5', // Slightly acidic but amphoteric
+                    acidBase: 'Amphoteric', ph: '4-5', phValue: 4.5,
                     reaction: 'As₄O₆(s) + 6H₂O(l) ⇌ 4H₃AsO₃(aq)',
                     desc: 'White solid. Amphoteric but more acidic character.',
                     color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
@@ -157,7 +161,7 @@
                 {
                     element: 'Se', formula: 'SeO₂', name: 'Selenium Dioxide',
                     state: 'Solid', bonding: 'Covalent', structure: 'Polymeric/Molecular',
-                    acidBase: 'Acidic', ph: '2-3',
+                    acidBase: 'Acidic', ph: '2-3', phValue: 2.5,
                     reaction: 'SeO₂(s) + H₂O(l) → H₂SeO₃(aq)',
                     desc: 'White solid. Forms selenous acid.',
                     color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
@@ -165,12 +169,110 @@
                 {
                     element: 'Br', formula: 'Br₂O', name: 'Bromine Monoxide',
                     state: 'Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
-                    acidBase: 'Acidic', ph: '2-3',
+                    acidBase: 'Acidic', ph: '2-3', phValue: 2.5,
                     reaction: 'Br₂O(l) + H₂O(l) → 2HBrO(aq)',
                     desc: 'Unstable dark brown liquid. Forms hypobromous acid.',
                     color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
                 }
             ]
+        };
+
+        // --- NEW: pH Trend Graph Component ---
+        const PHGraph = () => {
+            const width = 800;
+            const height = 300;
+            const padding = 40;
+            
+            const groups = ['1', '2', '13', '14', '15', '16', '17'];
+            const p3Data = DATABASE[3];
+            const p4Data = DATABASE[4];
+
+            // Helper to get coordinates
+            const getCoord = (idx, ph) => {
+                const x = padding + (idx * (width - 2 * padding) / 6);
+                const y = height - padding - (ph / 14) * (height - 2 * padding);
+                return { x, y };
+            };
+
+            const p3Points = p3Data.map((d, i) => getCoord(i, d.phValue));
+            const p4Points = p4Data.map((d, i) => getCoord(i, d.phValue));
+
+            const p3Path = `M ${p3Points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+            const p4Path = `M ${p4Points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+
+            return (
+                <div className="w-full overflow-x-auto">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full min-w-[600px] h-auto overflow-visible">
+                        {/* Grid Lines Y */}
+                        {[0, 7, 14].map(val => {
+                            const y = height - padding - (val / 14) * (height - 2 * padding);
+                            return (
+                                <g key={val}>
+                                    <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="#334155" strokeWidth="1" strokeDasharray="4" />
+                                    <text x={padding - 10} y={y + 4} fill="#94a3b8" fontSize="10" textAnchor="end">pH {val}</text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Grid Lines X & Labels */}
+                        {groups.map((g, i) => {
+                            const x = padding + (i * (width - 2 * padding) / 6);
+                            return (
+                                <g key={i}>
+                                    <line x1={x} y1={height - padding} x2={x} y2={padding} stroke="#334155" strokeWidth="1" opacity="0.5" />
+                                    <text x={x} y={height - padding + 20} fill="#94a3b8" fontSize="12" textAnchor="middle" fontWeight="bold">Group {g}</text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Period 4 Line */}
+                        <path d={p4Path} fill="none" stroke="#c084fc" strokeWidth="3" className="graph-path" />
+                        {/* Period 3 Line */}
+                        <path d={p3Path} fill="none" stroke="#34d399" strokeWidth="3" className="graph-path" />
+
+                        {/* Period 4 Points */}
+                        {p4Data.map((d, i) => {
+                            const { x, y } = p4Points[i];
+                            return (
+                                <g key={`p4-${i}`} className="group cursor-pointer">
+                                    <circle cx={x} cy={y} r="6" fill="#0F172A" stroke="#c084fc" strokeWidth="3" className="graph-point" style={{animationDelay: `${i*0.1}s`}} />
+                                    <circle cx={x} cy={y} r="20" fill="transparent" /> {/* Hit Area */}
+                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <rect x={x - 30} y={y - 45} width="60" height="35" rx="6" fill="#1e293b" stroke="#c084fc" />
+                                        <text x={x} y={y - 25} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{d.element}</text>
+                                        <text x={x} y={y - 13} fill="#c084fc" fontSize="10" textAnchor="middle">pH {d.phValue}</text>
+                                    </g>
+                                </g>
+                            );
+                        })}
+
+                        {/* Period 3 Points */}
+                        {p3Data.map((d, i) => {
+                            const { x, y } = p3Points[i];
+                            return (
+                                <g key={`p3-${i}`} className="group cursor-pointer">
+                                    <circle cx={x} cy={y} r="6" fill="#0F172A" stroke="#34d399" strokeWidth="3" className="graph-point" style={{animationDelay: `${i*0.1}s`}} />
+                                    <circle cx={x} cy={y} r="20" fill="transparent" /> {/* Hit Area */}
+                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <rect x={x - 30} y={y - 45} width="60" height="35" rx="6" fill="#1e293b" stroke="#34d399" />
+                                        <text x={x} y={y - 25} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{d.element}</text>
+                                        <text x={x} y={y - 13} fill="#34d399" fontSize="10" textAnchor="middle">pH {d.phValue}</text>
+                                    </g>
+                                </g>
+                            );
+                        })}
+
+                        {/* Legend */}
+                        <g transform={`translate(${width - 150}, ${padding})`}>
+                            <rect width="130" height="60" rx="8" fill="#1e293b" stroke="#334155" />
+                            <circle cx="20" cy="20" r="4" fill="#34d399" />
+                            <text x="35" y="24" fill="#cbd5e1" fontSize="12">Period 3</text>
+                            <circle cx="20" cy="40" r="4" fill="#c084fc" />
+                            <text x="35" y="44" fill="#cbd5e1" fontSize="12">Period 4</text>
+                        </g>
+                    </svg>
+                </div>
+            );
         };
 
         const App = () => {
@@ -361,6 +463,17 @@
                                     </div>
                                 </div>
 
+                            </div>
+
+                            {/* NEW: pH Trend Graph Section */}
+                            <div className="bg-slate-800 rounded-3xl border border-slate-700 p-8 mt-8">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <Icon name="activity" className="text-purple-400" /> pH Trend Analysis
+                                </h3>
+                                <p className="text-slate-400 text-sm mb-6">
+                                    Comparison of pH values across Period 3 and Period 4 oxides. Notice the trend from <strong className="text-purple-400">Basic</strong> (Metal oxides) to <strong className="text-red-400">Acidic</strong> (Non-metal oxides).
+                                </p>
+                                <PHGraph />
                             </div>
 
                         </div>
