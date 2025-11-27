@@ -117,7 +117,7 @@
         // --- COMPONENTS ---
 
         // 1. ADDITION POLYMER VISUALIZER (SVG)
-        const AdditionVisualizer = ({ groups, progress }) => {
+        const AdditionVisualizer = ({ groups = [], progress }) => {
             // progress: 0 (Monomer) -> 1 (Polymer)
             
             // Interpolation helpers
@@ -137,6 +137,12 @@
                 bl: { x: 100 - (10*p), y: 220 + (20*p) },
                 br: { x: 200 + (10*p), y: 220 + (20*p) }
             };
+
+            // Safely get groups with fallbacks
+            const g0 = groups[0] || '';
+            const g1 = groups[1] || '';
+            const g2 = groups[2] || '';
+            const g3 = groups[3] || '';
 
             return (
                 <svg width="300" height="300" viewBox="0 0 300 300" className="overflow-visible transition-all-slow">
@@ -163,19 +169,19 @@
                     {/* Substituents (Groups) */}
                     {/* Top Left */}
                     <line x1="100" y1="150" x2={gPos.tl.x} y2={gPos.tl.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.tl.x} y={gPos.tl.y} text={groups[0]} align="middle" />
+                    <GroupLabel x={gPos.tl.x} y={gPos.tl.y} text={g0} align="middle" />
 
                     {/* Top Right */}
                     <line x1="200" y1="150" x2={gPos.tr.x} y2={gPos.tr.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.tr.x} y={gPos.tr.y} text={groups[1]} align="middle" />
+                    <GroupLabel x={gPos.tr.x} y={gPos.tr.y} text={g1} align="middle" />
 
                     {/* Bot Left */}
                     <line x1="100" y1="150" x2={gPos.bl.x} y2={gPos.bl.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.bl.x} y={gPos.bl.y} text={groups[2]} align="middle" />
+                    <GroupLabel x={gPos.bl.x} y={gPos.bl.y} text={g2} align="middle" />
 
                     {/* Bot Right */}
                     <line x1="200" y1="150" x2={gPos.br.x} y2={gPos.br.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.br.x} y={gPos.br.y} text={groups[3]} align="middle" />
+                    <GroupLabel x={gPos.br.x} y={gPos.br.y} text={g3} align="middle" />
 
                     {/* Brackets & 'n' (Polymer Only) */}
                     <g style={{ opacity: bracketAlpha }}>
@@ -187,18 +193,21 @@
             );
         };
 
-        const GroupLabel = ({ x, y, text, align }) => {
-            const isComplex = text.length > 2; // e.g. Ph, CH3
+        const GroupLabel = ({ x, y, text = '', align }) => {
+            // Defensive check: Ensure text is a string
+            const safeText = String(text || '');
+            const isComplex = safeText.length > 2; // e.g. Ph, CH3
+            
             return (
                 <g transform={`translate(${x}, ${y})`}>
                     <circle r={isComplex ? 18 : 12} fill={isComplex ? '#ec4899' : '#0ea5e9'} />
-                    <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={isComplex ? 12 : 14} fontWeight="bold">{text}</text>
+                    <text x="0" y="1" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={isComplex ? 12 : 14} fontWeight="bold">{safeText}</text>
                 </g>
             );
         };
 
         // 2. CONDENSATION POLYMER VISUALIZER
-        const CondensationVisualizer = ({ data, progress }) => {
+        const CondensationVisualizer = ({ data = {}, progress }) => {
             const p = progress;
             
             // Box dimensions
@@ -250,7 +259,7 @@
                     {/* Small Molecule Dropping out */}
                     <g style={{ opacity: p, transform: `translate(200px, ${75 + (p*50)}px)` }}>
                         <circle r="15" fill="#ef4444" opacity="0.2" />
-                        <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="#ef4444" fontSize="14" fontWeight="bold">{data.smallMol}</text>
+                        <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="#ef4444" fontSize="14" fontWeight="bold">{data.smallMol || ''}</text>
                         <text x="0" y="20" textAnchor="middle" fill="#94a3b8" fontSize="10">Small Molecule</text>
                     </g>
 
@@ -273,7 +282,10 @@
             const [progress, setProgress] = useState(0); // 0 = Monomer, 1 = Polymer
             const [animating, setAnimating] = useState(false);
 
-            const currentData = POLYMERS[mode][selectedId];
+            // SAFETY FIX: Ensure currentData is never undefined (fallback to first item)
+            // This prevents crashes during mode switching where selectedId might be out of bounds
+            const currentList = POLYMERS[mode];
+            const currentData = currentList[selectedId] || currentList[0];
 
             // Reset when switching modes
             useEffect(() => {
@@ -344,14 +356,14 @@
                                     key={item.id}
                                     onClick={() => { setSelectedId(idx); setProgress(0); }}
                                     className={`w-full text-left p-4 rounded-xl border transition-all group
-                                        ${selectedId === idx 
+                                        ${currentData.id === item.id 
                                             ? (mode === 'addition' ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-purple-900/20 border-purple-500/50') 
                                             : 'bg-slate-800 border-slate-700 hover:border-slate-500'}
                                     `}
                                 >
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className={`font-bold ${selectedId === idx ? 'text-white' : 'text-slate-300'}`}>{item.short}</span>
-                                        {selectedId === idx && <Icon name="check-circle" className="w-4 h-4 text-emerald-400" />}
+                                        <span className={`font-bold ${currentData.id === item.id ? 'text-white' : 'text-slate-300'}`}>{item.short}</span>
+                                        {currentData.id === item.id && <Icon name="check-circle" className="w-4 h-4 text-emerald-400" />}
                                     </div>
                                     <div className="text-xs text-slate-400">{item.name}</div>
                                 </button>
@@ -371,9 +383,9 @@
 
                             <div className="relative z-10 transform scale-110 md:scale-125">
                                 {mode === 'addition' ? (
-                                    <AdditionVisualizer groups={currentData.groups} progress={progress} />
+                                    <AdditionVisualizer key={currentData.id} groups={currentData.groups} progress={progress} />
                                 ) : (
-                                    <CondensationVisualizer data={currentData} progress={progress} />
+                                    <CondensationVisualizer key={currentData.id} data={currentData} progress={progress} />
                                 )}
                             </div>
 
