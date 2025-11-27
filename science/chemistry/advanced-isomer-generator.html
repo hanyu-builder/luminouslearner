@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IsoGen 3D - Advanced Isomer Explorer</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js (For 3D Rendering) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        canvas { outline: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- ATOM COLORS (CPK Naming) ---
+        const ATOM_COLORS = {
+            C: 0x333333, // Carbon - Black/Grey
+            H: 0xFFFFFF, // Hydrogen - White
+            O: 0xFF0000, // Oxygen - Red
+            N: 0x0000FF, // Nitrogen - Blue
+            Cl: 0x00FF00, // Chlorine - Green
+            Br: 0x800000, // Bromine - Dark Red/Brown
+            F: 0xFFFF00,  // Fluorine - Yellow
+            Mirror: 0x88CCFF // Mirror plane
+        };
+
+        const ATOM_RADIUS = {
+            C: 0.4, H: 0.25, O: 0.4, N: 0.4, Cl: 0.45, Br: 0.5, F: 0.35
+        };
+
+        // --- MOLECULE DATABASE (The "Generator" Logic) ---
+        // Pre-calculated coordinates for stability and performance
+        const MOLECULES = {
+            structural: [
+                {
+                    formula: "C₄H₁₀",
+                    name: "Butane Isomers (Chain)",
+                    variants: [
+                        {
+                            name: "n-Butane (正丁烷)",
+                            atoms: [
+                                { el: 'C', x: -2.2, y: 0, z: 0 }, { el: 'C', x: -0.7, y: 0.5, z: 0 },
+                                { el: 'C', x: 0.7, y: -0.5, z: 0 }, { el: 'C', x: 2.2, y: 0, z: 0 },
+                                // Hydrogens simplified for visualization clarity or implicit
+                                { el: 'H', x: -2.2, y: -1.1, z: 0 }, { el: 'H', x: -2.7, y: 0.4, z: 0.9 }, { el: 'H', x: -2.7, y: 0.4, z: -0.9 },
+                                { el: 'H', x: 2.2, y: 1.1, z: 0 }, { el: 'H', x: 2.7, y: -0.4, z: 0.9 }, { el: 'H', x: 2.7, y: -0.4, z: -0.9 }
+                            ],
+                            bonds: [[0,1], [1,2], [2,3], [0,4], [0,5], [0,6], [3,7], [3,8], [3,9]]
+                        },
+                        {
+                            name: "Isobutane (2-methylpropane)",
+                            atoms: [
+                                { el: 'C', x: 0, y: 0.5, z: 0 }, // Central
+                                { el: 'C', x: 0, y: 2.0, z: 0 }, // Top
+                                { el: 'C', x: -1.3, y: -0.5, z: 0.8 }, // Left
+                                { el: 'C', x: 1.3, y: -0.5, z: -0.8 }, // Right
+                            ],
+                            bonds: [[0,1], [0,2], [0,3]]
+                        }
+                    ]
+                },
+                {
+                    formula: "C₂H₆O",
+                    name: "Ethanol vs Ether (Functional Group)",
+                    variants: [
+                        {
+                            name: "Ethanol (乙醇)",
+                            atoms: [
+                                { el: 'C', x: -1.0, y: 0, z: 0 }, { el: 'C', x: 0.5, y: 0, z: 0 },
+                                { el: 'O', x: 1.5, y: 1.0, z: 0 }, { el: 'H', x: 2.2, y: 0.6, z: 0 } // Hydroxyl H
+                            ],
+                            bonds: [[0,1], [1,2], [2,3]]
+                        },
+                        {
+                            name: "Methoxymethane (二甲醚)",
+                            atoms: [
+                                { el: 'C', x: -1.5, y: -0.5, z: 0 }, 
+                                { el: 'O', x: 0, y: 0.5, z: 0 }, 
+                                { el: 'C', x: 1.5, y: -0.5, z: 0 }
+                            ],
+                            bonds: [[0,1], [1,2]]
+                        }
+                    ]
+                }
+            ],
+            cistrans: [
+                {
+                    formula: "C₂H₂Cl₂",
+                    name: "1,2-Dichloroethene",
+                    variants: [
+                        {
+                            name: "Cis-1,2-dichloroethene (順式)",
+                            atoms: [
+                                { el: 'C', x: -0.7, y: 0, z: 0 }, { el: 'C', x: 0.7, y: 0, z: 0 },
+                                { el: 'Cl', x: -1.5, y: 1.5, z: 0 }, { el: 'Cl', x: 1.5, y: 1.5, z: 0 }, // Both Up
+                                { el: 'H', x: -1.5, y: -1.0, z: 0 }, { el: 'H', x: 1.5, y: -1.0, z: 0 }
+                            ],
+                            bonds: [[0,1, 2], [0,2], [1,3], [0,4], [1,5]] // index 2 in bonds indicates double bond visually
+                        },
+                        {
+                            name: "Trans-1,2-dichloroethene (反式)",
+                            atoms: [
+                                { el: 'C', x: -0.7, y: 0, z: 0 }, { el: 'C', x: 0.7, y: 0, z: 0 },
+                                { el: 'Cl', x: -1.5, y: 1.5, z: 0 }, { el: 'H', x: 1.5, y: 1.5, z: 0 }, // Up: Cl, H
+                                { el: 'H', x: -1.5, y: -1.0, z: 0 }, { el: 'Cl', x: 1.5, y: -1.0, z: 0 } // Down: H, Cl
+                            ],
+                            bonds: [[0,1, 2], [0,2], [1,5], [0,4], [1,3]]
+                        }
+                    ]
+                },
+                {
+                    formula: "C₄H₈",
+                    name: "But-2-ene",
+                    variants: [
+                        {
+                            name: "Cis-but-2-ene",
+                            atoms: [
+                                { el: 'C', x: -0.7, y: 0, z: 0 }, { el: 'C', x: 0.7, y: 0, z: 0 }, // Double bond
+                                { el: 'C', x: -1.8, y: 1.2, z: 0 }, { el: 'C', x: 1.8, y: 1.2, z: 0 }, // Methyls Up
+                            ],
+                            bonds: [[0,1,2], [0,2], [1,3]]
+                        },
+                        {
+                            name: "Trans-but-2-ene",
+                            atoms: [
+                                { el: 'C', x: -0.7, y: 0, z: 0 }, { el: 'C', x: 0.7, y: 0, z: 0 },
+                                { el: 'C', x: -1.8, y: 1.2, z: 0 }, { el: 'C', x: 1.8, y: -1.2, z: 0 }, // Methyls Opp
+                            ],
+                            bonds: [[0,1,2], [0,2], [1,3]]
+                        }
+                    ]
+                }
+            ],
+            enantiomers: [
+                {
+                    formula: "CHFClBr",
+                    name: "Bromochlorofluoromethane",
+                    note: "Chiral Center (手性碳)",
+                    variants: [
+                        {
+                            name: "R-Isomer",
+                            atoms: [
+                                { el: 'C', x: 0, y: 0, z: 0 },
+                                { el: 'H', x: 0, y: 1.2, z: 0 },
+                                { el: 'F', x: 1.1, y: -0.5, z: 0 },
+                                { el: 'Cl', x: -0.8, y: -0.5, z: 0.9 }, // Front
+                                { el: 'Br', x: -0.8, y: -0.5, z: -0.9 } // Back
+                            ],
+                            bonds: [[0,1], [0,2], [0,3], [0,4]]
+                        },
+                        {
+                            name: "S-Isomer (Mirror Image)",
+                            atoms: [
+                                { el: 'C', x: 0, y: 0, z: 0 },
+                                { el: 'H', x: 0, y: 1.2, z: 0 },
+                                { el: 'F', x: -1.1, y: -0.5, z: 0 }, // Flipped X
+                                { el: 'Cl', x: 0.8, y: -0.5, z: 0.9 }, // Flipped X
+                                { el: 'Br', x: 0.8, y: -0.5, z: -0.9 } // Flipped X
+                            ],
+                            bonds: [[0,1], [0,2], [0,3], [0,4]]
+                        }
+                    ]
+                },
+                {
+                    formula: "C₃H₆O₃",
+                    name: "Lactic Acid (乳酸)",
+                    variants: [
+                        {
+                            name: "(+)-Lactic Acid",
+                            atoms: [
+                                { el: 'C', x: 0, y: 0, z: 0 }, // Chiral C
+                                { el: 'C', x: 0, y: 1.5, z: 0 }, // COOH Carbon
+                                { el: 'O', x: 0.8, y: 2.2, z: 0 }, // =O
+                                { el: 'O', x: -1.0, y: 1.8, z: 0 }, // -OH
+                                { el: 'C', x: 1.4, y: -0.8, z: 0 }, // Methyl
+                                { el: 'O', x: -1.0, y: -0.8, z: 0.8 }, // Alcohol OH
+                                { el: 'H', x: -0.5, y: -0.5, z: -1.0 } // H back
+                            ],
+                            bonds: [[0,1], [1,2,2], [1,3], [0,4], [0,5], [0,6]]
+                        },
+                        {
+                            name: "(-)-Lactic Acid",
+                            atoms: [
+                                { el: 'C', x: 0, y: 0, z: 0 },
+                                { el: 'C', x: 0, y: 1.5, z: 0 },
+                                { el: 'O', x: 0.8, y: 2.2, z: 0 },
+                                { el: 'O', x: -1.0, y: 1.8, z: 0 },
+                                { el: 'C', x: -1.4, y: -0.8, z: 0 }, // Flipped
+                                { el: 'O', x: 1.0, y: -0.8, z: 0.8 }, // Flipped
+                                { el: 'H', x: 0.5, y: -0.5, z: -1.0 } // Flipped
+                            ],
+                            bonds: [[0,1], [1,2,2], [1,3], [0,4], [0,5], [0,6]]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const Icon = ({ name, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        // --- 3D VIEWER COMPONENT ---
+        const MoleculeViewer = ({ moleculeData, showMirror }) => {
+            const mountRef = useRef(null);
+            const sceneRef = useRef(null);
+            const rendererRef = useRef(null);
+            const frameIdRef = useRef(null);
+
+            useEffect(() => {
+                if (!mountRef.current) return;
+
+                // 1. Setup Scene
+                const width = mountRef.current.clientWidth;
+                const height = mountRef.current.clientHeight;
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1e293b); // Slate 800
+                sceneRef.current = scene;
+
+                // Camera
+                const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+                camera.position.set(0, 2, 8);
+
+                // Renderer
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(width, height);
+                mountRef.current.appendChild(renderer.domElement);
+                rendererRef.current = renderer;
+
+                // Controls
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(5, 10, 7);
+                scene.add(dirLight);
+
+                // --- RENDER LOGIC ---
+                const renderMolecule = (mol, offsetX = 0, isMirror = false) => {
+                    const group = new THREE.Group();
+                    
+                    // Atoms
+                    mol.atoms.forEach(atom => {
+                        const geometry = new THREE.SphereGeometry(ATOM_RADIUS[atom.el] || 0.3, 32, 32);
+                        const material = new THREE.MeshPhysicalMaterial({ 
+                            color: ATOM_COLORS[atom.el] || 0xcccccc,
+                            metalness: 0.1,
+                            roughness: 0.3,
+                            clearcoat: 0.8
+                        });
+                        const sphere = new THREE.Mesh(geometry, material);
+                        sphere.position.set(atom.x + offsetX, atom.y, atom.z);
+                        if (isMirror) sphere.scale.x = -1; // Mirror effect if needed visually, though logic handles pos
+                        group.add(sphere);
+                    });
+
+                    // Bonds
+                    mol.bonds.forEach(bond => {
+                        const startAtom = mol.atoms[bond[0]];
+                        const endAtom = mol.atoms[bond[1]];
+                        const isDouble = bond[2] === 2;
+
+                        const start = new THREE.Vector3(startAtom.x + offsetX, startAtom.y, startAtom.z);
+                        const end = new THREE.Vector3(endAtom.x + offsetX, endAtom.y, endAtom.z);
+                        const distance = start.distanceTo(end);
+                        
+                        // Cylinder
+                        const cylinderGeo = new THREE.CylinderGeometry(isDouble ? 0.06 : 0.08, isDouble ? 0.06 : 0.08, distance, 12);
+                        const cylinderMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                        
+                        // If double bond, we render two thinner cylinders
+                        if (isDouble) {
+                            const offset = 0.08;
+                            // Simplified double bond visual: just make it thicker and grey
+                             const doubleGeo = new THREE.CylinderGeometry(0.12, 0.12, distance, 12);
+                             const bondMesh = new THREE.Mesh(doubleGeo, cylinderMat);
+                             bondMesh.position.copy(start).lerp(end, 0.5);
+                             bondMesh.lookAt(end);
+                             bondMesh.rotateX(Math.PI / 2);
+                             group.add(bondMesh);
+                        } else {
+                            const bondMesh = new THREE.Mesh(cylinderGeo, cylinderMat);
+                            bondMesh.position.copy(start).lerp(end, 0.5);
+                            bondMesh.lookAt(end);
+                            bondMesh.rotateX(Math.PI / 2);
+                            group.add(bondMesh);
+                        }
+                    });
+
+                    scene.add(group);
+                };
+
+                // Clear previous
+                while(scene.children.length > 0){ 
+                    scene.remove(scene.children[0]); 
+                }
+                scene.add(ambientLight);
+                scene.add(dirLight);
+
+                // Render Current Molecule
+                renderMolecule(moleculeData);
+
+                // Render Mirror Image if requested
+                if (showMirror) {
+                    // Mirror Plane
+                    const planeGeo = new THREE.PlaneGeometry(6, 6);
+                    const planeMat = new THREE.MeshPhysicalMaterial({ 
+                        color: 0x88ccff, 
+                        side: THREE.DoubleSide, 
+                        transparent: true, 
+                        opacity: 0.2,
+                        metalness: 0.5,
+                        roughness: 0.1
+                    });
+                    const plane = new THREE.Mesh(planeGeo, planeMat);
+                    plane.position.set(3, 0, 0);
+                    plane.rotateY(Math.PI / 2);
+                    scene.add(plane);
+
+                    // Create Mirror Molecule (Invert X coords relative to plane)
+                    // Plane is at x=3. If atom is at x=0, reflection is at x=6.
+                    // Formula: x' = planeX + (planeX - x) = 2*planeX - x
+                    const mirrorAtoms = moleculeData.atoms.map(a => ({
+                        ...a,
+                        x: 6 - a.x // Reflect across x=3
+                    }));
+                    
+                    renderMolecule({ ...moleculeData, atoms: mirrorAtoms });
+                }
+
+                // Animation Loop
+                const animate = () => {
+                    frameIdRef.current = requestAnimationFrame(animate);
+                    controls.update();
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                // Cleanup
+                return () => {
+                    cancelAnimationFrame(frameIdRef.current);
+                    if (mountRef.current && rendererRef.current) {
+                        mountRef.current.removeChild(rendererRef.current.domElement);
+                    }
+                    // Dispose geometries to free memory
+                    scene.traverse((object) => {
+                        if (object.geometry) object.geometry.dispose();
+                        if (object.material) object.material.dispose();
+                    });
+                };
+            }, [moleculeData, showMirror]);
+
+            return <div ref={mountRef} className="w-full h-full" />;
+        };
+
+        const App = () => {
+            const [mode, setMode] = useState('structural'); // structural, cistrans, enantiomers
+            const [groupIndex, setGroupIndex] = useState(0);
+            const [variantIndex, setVariantIndex] = useState(0);
+            const [showMirror, setShowMirror] = useState(false);
+
+            const currentGroup = MOLECULES[mode][groupIndex];
+            const currentVariant = currentGroup.variants[variantIndex];
+
+            // Reset when mode changes
+            useEffect(() => {
+                setGroupIndex(0);
+                setVariantIndex(0);
+                setShowMirror(false);
+            }, [mode]);
+
+            return (
+                <div className="min-h-screen flex flex-col md:flex-row bg-[#0F172A] text-white">
+                    
+                    {/* Sidebar Controls */}
+                    <div className="w-full md:w-80 bg-slate-800 border-r border-slate-700 p-6 flex flex-col gap-6 z-10 shadow-xl">
+                        <div>
+                            <div className="flex items-center gap-2 mb-6">
+                                <div className="p-2 bg-emerald-500 rounded-lg"><Icon name="box" className="w-6 h-6 text-white"/></div>
+                                <h1 className="text-xl font-bold tracking-tight">IsoGen 3D</h1>
+                            </div>
+                            
+                            {/* Mode Select */}
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Isomerism Type</label>
+                            <div className="grid grid-cols-1 gap-2 mb-6">
+                                <button onClick={() => setMode('structural')} className={`px-4 py-3 rounded-xl font-bold text-left flex items-center gap-3 transition-all ${mode === 'structural' ? 'bg-emerald-600 shadow-lg shadow-emerald-500/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                                    <Icon name="share-2" className="w-5 h-5"/> 結構異構 (Structural)
+                                </button>
+                                <button onClick={() => setMode('cistrans')} className={`px-4 py-3 rounded-xl font-bold text-left flex items-center gap-3 transition-all ${mode === 'cistrans' ? 'bg-blue-600 shadow-lg shadow-blue-500/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                                    <Icon name="flip-horizontal" className="w-5 h-5"/> 幾何異構 (Cis-Trans)
+                                </button>
+                                <button onClick={() => setMode('enantiomers')} className={`px-4 py-3 rounded-xl font-bold text-left flex items-center gap-3 transition-all ${mode === 'enantiomers' ? 'bg-purple-600 shadow-lg shadow-purple-500/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                                    <Icon name="copy" className="w-5 h-5"/> 對映異構 (Enantiomers)
+                                </button>
+                            </div>
+
+                            {/* Molecule Select */}
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Select Molecule</label>
+                            <select 
+                                className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 mb-6 outline-none focus:border-emerald-500 font-mono text-sm"
+                                value={groupIndex}
+                                onChange={(e) => { setGroupIndex(Number(e.target.value)); setVariantIndex(0); }}
+                            >
+                                {MOLECULES[mode].map((m, i) => (
+                                    <option key={i} value={i}>{m.formula} - {m.name}</option>
+                                ))}
+                            </select>
+
+                            {/* Variant Toggles */}
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Generate Isomer</label>
+                            <div className="flex flex-col gap-2">
+                                {currentGroup.variants.map((v, i) => (
+                                    <button 
+                                        key={i}
+                                        onClick={() => setVariantIndex(i)}
+                                        className={`p-3 rounded-xl text-sm font-bold border-2 text-left transition-all
+                                            ${variantIndex === i 
+                                                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' 
+                                                : 'border-slate-600 bg-slate-800 text-slate-400 hover:border-slate-500'}
+                                        `}
+                                    >
+                                        {v.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Legend */}
+                        <div className="mt-auto pt-6 border-t border-slate-700">
+                            <div className="text-xs font-bold text-slate-500 mb-3">CPK Color Code</div>
+                            <div className="flex flex-wrap gap-2">
+                                <span className="flex items-center gap-1 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-full bg-neutral-700"></span> C</span>
+                                <span className="flex items-center gap-1 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-full bg-white border border-slate-500"></span> H</span>
+                                <span className="flex items-center gap-1 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-full bg-red-600"></span> O</span>
+                                <span className="flex items-center gap-1 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-full bg-green-500"></span> Cl</span>
+                                <span className="flex items-center gap-1 text-[10px] text-slate-300"><span className="w-3 h-3 rounded-full bg-yellow-400"></span> F</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main 3D View */}
+                    <div className="flex-1 relative bg-slate-900 overflow-hidden">
+                        <div className="absolute top-6 left-6 z-10 pointer-events-none">
+                            <h2 className="text-3xl font-black text-white drop-shadow-lg">{currentVariant.name}</h2>
+                            <p className="text-emerald-400 font-mono mt-1 text-lg">{currentGroup.formula}</p>
+                        </div>
+
+                        {/* Enantiomer Special Controls */}
+                        {mode === 'enantiomers' && (
+                            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10">
+                                <button 
+                                    onClick={() => setShowMirror(!showMirror)}
+                                    className={`px-6 py-3 rounded-full font-bold shadow-xl flex items-center gap-2 transition-all
+                                        ${showMirror ? 'bg-purple-600 text-white scale-105' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}
+                                    `}
+                                >
+                                    <Icon name="layers" className="w-5 h-5"/> 
+                                    {showMirror ? 'Hide Mirror Plane' : 'Show Mirror Plane'}
+                                </button>
+                            </div>
+                        )}
+
+                        <MoleculeViewer moleculeData={currentVariant} showMirror={showMirror} />
+                        
+                        <div className="absolute bottom-6 right-6 text-slate-600 text-xs pointer-events-none">
+                            Click & Drag to Rotate • Scroll to Zoom
+                        </div>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
