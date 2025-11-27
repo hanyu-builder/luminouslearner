@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Periodic Trend Grapher v2.1</title>
+    <title>Periodic Trend Grapher v2.2</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -19,13 +19,12 @@
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
         /* Smooth transitions */
-        .chart-point { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .chart-point { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .chart-line { transition: d 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         
-        /* Tooltip animation */
-        .tooltip { opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none; }
-        .group:hover .tooltip { opacity: 1; transform: translateY(0); }
+        /* Hover effect for points */
+        .group:hover .chart-point { r: 8; stroke-width: 3; filter: drop-shadow(0 0 4px rgba(255,255,255,0.5)); }
         
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -124,23 +123,23 @@
                     { symbol: 'Kr', name: 'Krypton', struct: 'Simple Atomic', type: 'Noble Gas' }
                 ],
                 data: {
-                    mp: [336, 1115, 303, 1211, 1090, 494, 266, 116], // As sublimes, Ga low MP
+                    mp: [336, 1115, 303, 1211, 1090, 494, 266, 116], 
                     bp: [1032, 1757, 2477, 3106, 887, 958, 332, 120],
                     radius: [0.227, 0.197, 0.135, 0.122, 0.120, 0.117, 0.114, 0.109],
                     electronegativity: [0.8, 1.0, 1.8, 2.0, 2.2, 2.6, 3.0, 0],
                     ionization: [419, 590, 579, 762, 947, 941, 1140, 1351]
                 },
                 notes: {
-                    mp: "Potassium has very low MP (weak metallic bond). Gallium has unusually low MP (303K) due to crystal structure. Ge is high (Giant Covalent).",
+                    mp: "Potassium has very low MP (weak metallic bond). Gallium has unusually low MP (303K). Ge is high (Giant Covalent).",
                     radius: "Notice the contraction from Group 1 to 18. Ga is smaller than expected due to d-block contraction."
                 }
             }
         };
 
         const PROPERTY_CONFIG = {
-            mp: { label: 'Melting Point (K)', unit: 'K', desc: 'Temperature at which solid turns to liquid.' },
-            bp: { label: 'Boiling Point (K)', unit: 'K', desc: 'Temperature at which liquid turns to gas.' },
-            radius: { label: 'Atomic Radius (nm)', unit: 'nm', desc: 'Distance from nucleus to outermost electron.' },
+            mp: { label: 'Melting Point', unit: 'K', desc: 'Temperature at which solid turns to liquid.' },
+            bp: { label: 'Boiling Point', unit: 'K', desc: 'Temperature at which liquid turns to gas.' },
+            radius: { label: 'Atomic Radius', unit: 'nm', desc: 'Distance from nucleus to outermost electron.' },
             electronegativity: { label: 'Electronegativity', unit: '', desc: 'Power of an atom to attract bonding electrons.' },
             ionization: { label: '1st Ionization Energy', unit: 'kJ/mol', desc: 'Energy required to remove one mole of electrons.' }
         };
@@ -152,9 +151,9 @@
             return '#94a3b8'; // Grey (Noble Gas)
         };
 
-        const Graph = ({ activeProp, activePeriod }) => {
+        // Modified Graph to accept onHover callback
+        const Graph = ({ activeProp, activePeriod, onHover }) => {
             const periodData = PERIOD_DATA[activePeriod];
-            const propConfig = PROPERTY_CONFIG[activeProp];
             const values = periodData.data[activeProp];
             const elements = periodData.elements;
 
@@ -193,24 +192,23 @@
 
                         {/* Data Points */}
                         {points.map((p, i) => (
-                            <g key={i} className="group cursor-pointer">
-                                <circle cx={p.x} cy={p.y} r="20" fill="transparent" />
+                            <g 
+                                key={i} 
+                                className="group cursor-pointer"
+                                onMouseEnter={() => onHover(p)}
+                                onMouseLeave={() => onHover(null)}
+                            >
+                                {/* Hit Area */}
+                                <circle cx={p.x} cy={p.y} r="25" fill="transparent" />
+                                
+                                {/* Visible Dot */}
                                 <circle 
                                     cx={p.x} cy={p.y} r="6" 
                                     fill={getColor(p.el.struct)} 
                                     stroke="#0f172a" strokeWidth="2"
                                     className="chart-point z-10 relative"
                                 />
-                                <text x={p.x} y={height - padding + 20} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.symbol}</text>
-
-                                {/* Tooltip */}
-                                <g className="tooltip" transform={`translate(${p.x}, ${p.y - 15})`}>
-                                    <rect x="-65" y="-60" width="130" height="55" rx="6" fill="#1e293b" stroke="#475569" />
-                                    <text x="0" y="-38" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.name}</text>
-                                    <text x="0" y="-20" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle">{p.val} {propConfig.unit}</text>
-                                    <text x="0" y="-8" fill="#94a3b8" fontSize="9" textAnchor="middle">{p.el.struct}</text>
-                                    <path d="M -5 -5 L 0 0 L 5 -5" fill="#1e293b" stroke="#475569" strokeWidth="1" transform="translate(0, -2)" />
-                                </g>
+                                <text x={p.x} y={height - padding + 25} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.symbol}</text>
                             </g>
                         ))}
                     </svg>
@@ -221,8 +219,10 @@
         const App = () => {
             const [activeProp, setActiveProp] = useState('mp');
             const [activePeriod, setActivePeriod] = useState(3);
+            const [hoveredData, setHoveredData] = useState(null); // New state for hover
 
             const currentNote = PERIOD_DATA[activePeriod].notes[activeProp] || PROPERTY_CONFIG[activeProp].desc;
+            const currentPropConfig = PROPERTY_CONFIG[activeProp];
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
@@ -251,7 +251,7 @@
                                     `}
                                 >
                                     <span className={`text-sm font-bold ${activeProp === key ? 'text-white' : 'text-slate-300'}`}>
-                                        {conf.label.split('(')[0]}
+                                        {conf.label}
                                     </span>
                                     {activeProp === key && <Icon name="chevron-right" className="text-emerald-400" size={16} />}
                                 </button>
@@ -281,7 +281,7 @@
                     {/* Main Stage */}
                     <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
                         
-                        {/* NEW: Top Navigation Bar for Periods */}
+                        {/* Top Navigation Bar */}
                         <div className="absolute top-0 left-0 right-0 p-6 flex justify-center z-20 pointer-events-none">
                              <div className="bg-slate-800/90 backdrop-blur p-1 rounded-xl border border-slate-700 shadow-xl flex gap-1 pointer-events-auto">
                                 {[2, 3, 4].map(p => (
@@ -307,32 +307,63 @@
                             </div>
 
                             <div className="w-full max-w-4xl h-[400px] relative z-10 pt-10">
-                                {/* Key forces re-render on prop/period change */}
-                                <Graph key={`${activeProp}-${activePeriod}`} activeProp={activeProp} activePeriod={activePeriod} />
+                                <Graph 
+                                    key={`${activeProp}-${activePeriod}`} 
+                                    activeProp={activeProp} 
+                                    activePeriod={activePeriod} 
+                                    onHover={setHoveredData}
+                                />
                             </div>
                         </div>
 
-                        {/* Info Panel */}
-                        <div className="bg-slate-800 border-t border-slate-700 p-6 md:p-8 shrink-0 safe-area-bottom">
+                        {/* Info Panel (Dynamic) */}
+                        <div className="bg-slate-800 border-t border-slate-700 p-6 md:p-8 shrink-0 safe-area-bottom min-h-[140px]">
                             <div className="max-w-4xl mx-auto">
-                                <div className="flex items-start gap-4">
-                                    <div className="p-3 bg-slate-700 rounded-xl hidden md:block">
-                                        <Icon name="info" className="text-blue-400" size={24} />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="bg-slate-700 text-xs px-2 py-0.5 rounded text-slate-300 border border-slate-600">
-                                                {PERIOD_DATA[activePeriod].label}
-                                            </span>
-                                            <h2 className="text-lg font-bold text-white">
-                                                {PROPERTY_CONFIG[activeProp].label}
-                                            </h2>
+                                {hoveredData ? (
+                                    // Single Element View
+                                    <div className="flex items-center gap-6 animate-in">
+                                        <div className="p-4 bg-slate-700 rounded-2xl border border-slate-600 shadow-lg">
+                                            <span className="text-4xl font-black text-white" style={{color: getColor(hoveredData.el.struct)}}>{hoveredData.el.symbol}</span>
                                         </div>
-                                        <p className="text-slate-400 text-sm leading-relaxed">
-                                            {currentNote}
-                                        </p>
+                                        <div>
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                                    {hoveredData.el.struct}
+                                                </span>
+                                                <span className="text-slate-600 text-xs">•</span>
+                                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                                    {hoveredData.el.type}
+                                                </span>
+                                            </div>
+                                            <div className="text-3xl font-bold text-white flex items-baseline gap-2">
+                                                {hoveredData.el.name}
+                                            </div>
+                                            <div className="text-emerald-400 font-mono text-xl mt-1 font-bold">
+                                                {hoveredData.val} <span className="text-sm text-emerald-400/60">{currentPropConfig.unit}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    // Trend Analysis View (Default)
+                                    <div className="flex items-start gap-4 animate-in">
+                                        <div className="p-3 bg-slate-700 rounded-xl hidden md:block">
+                                            <Icon name="trending-up" className="text-blue-400" size={28} />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="bg-slate-700 text-xs px-2 py-0.5 rounded text-slate-300 border border-slate-600">
+                                                    Trend Analysis
+                                                </span>
+                                                <h2 className="text-lg font-bold text-white">
+                                                    {currentPropConfig.label}
+                                                </h2>
+                                            </div>
+                                            <p className="text-slate-400 text-sm leading-relaxed max-w-3xl">
+                                                {currentNote}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
