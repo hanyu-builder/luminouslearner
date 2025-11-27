@@ -3,282 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HKDSE Organic Reaction Map (Extended) - Luminous Learner</title>
+    <title>HKDSE Organic Reaction Map (Bi-directional Fix) - Luminous Learner</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://unpkg.com/lucide@latest"></script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <style>
         body { font-family: 'Noto Sans HK', sans-serif; background-color: #f8fafc; margin: 0; overflow: hidden; }
         .font-mono { font-family: 'Roboto Mono', monospace; }
-        
-        /* Node Styling */
-        .node-container { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
-        .node-container:hover { transform: translateY(-4px); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
-        .node-active { transform: scale(1.05); stroke: #7c3aed; stroke-width: 2px; }
-
-        /* Edge Styling */
-        .edge { transition: stroke-width 0.2s ease, stroke 0.2s ease, opacity 0.2s; cursor: pointer; opacity: 0.5; }
-        .edge:hover { opacity: 1; stroke: #059669; stroke-width: 4px; }
-        .edge-active { opacity: 1 !important; stroke: #7c3aed !important; stroke-width: 4px !important; stroke-dasharray: 10; animation: flow 1s linear infinite; }
-        
-        @keyframes flow { to { stroke-dashoffset: -20; } }
-        
-        .cursor-grab { cursor: grab; }
-        .cursor-grabbing { cursor: grabbing; }
-
-        /* Hide scrollbars for clean UI */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .node-container { transition: all 0.3s ease; cursor: pointer; }
+        .node-container:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .edge { transition: all 0.2s; cursor: pointer; opacity: 0.6; }
+        .edge:hover { opacity: 1; stroke-width: 3px; }
+        .edge-active { opacity: 1 !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: flow 1s linear infinite; }
+        @keyframes flow { to { stroke-dashoffset: -16; } }
     </style>
 </head>
 <body>
     <div id="root" style="height: 100vh; width: 100vw;"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
 
-        // --- Safe Icon Component (Prevents Crash) ---
-        const Icon = ({ name, size = 20, className = "" }) => {
-            const [iconNode, setIconNode] = useState(null);
-            
-            useEffect(() => {
-                if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
-                    // Lucide renders to SVG string, we need to parse it or use a library.
-                    // But simpler for standalone: Just use the creating element method if available, 
-                    // or rely on Lucide's createIcons for static, but here we are in React.
-                    // To keep it simple and crash-free, we use a basic fallback or render specific known SVGs if lucide fails.
-                    // BETTER APPROACH for Standalone React + Lucide CDN:
-                    // Lucide generic CDN doesn't export React components directly.
-                    // We will just assume Lucide global exists and create an <i> tag, then run lucide.createIcons().
-                }
-            }, [name]);
-
-            // Fallback strategy: Render an <i> tag and let Lucide replace it
-            return <i data-lucide={name.toLowerCase().replace(/([A-Z])/g, '-$1').replace(/^-/, '')} className={className} style={{fontSize: size, width: size, height: size}}></i>;
+        // --- Safe Icon Component ---
+        const Icon = ({ name, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+            return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- DATASET: HKDSE Core + Extensions ---
-        // Layout Strategy: 
-        // X-Axis: Oxidation Level / Complexity
-        // Y-Axis: Functional Group Family
-        
+        // --- DATASET ---
         const Nodes = [
-            // Hydrocarbons (Left)
             { id: 'alkane', label: 'Alkane\n烷烴', x: 50, y: 300, color: '#64748b', cat: 'Hydrocarbon' },
             { id: 'alkene', label: 'Alkene\n烯烴', x: 280, y: 300, color: '#10b981', cat: 'Hydrocarbon' }, 
             { id: 'haloalkane', label: 'Haloalkane\n鹵代烷', x: 280, y: 100, color: '#f59e0b', cat: 'Derivative' },
-            
-            // The "Extensions" (Bottom Left / Top Middle)
             { id: 'epoxide', label: 'Epoxide\n環氧化物', x: 280, y: 550, color: '#06b6d4', cat: 'Ether (Adv)' }, 
             { id: 'ether', label: 'Ether\n醚', x: 550, y: 100, color: '#0ea5e9', cat: 'Ether (Adv)' },
-
-            // Oxygenates (Middle)
             { id: 'alcohol_1', label: '1° Alcohol\n伯醇', x: 550, y: 300, color: '#0ea5e9', cat: 'Oxygen' },
             { id: 'alcohol_2', label: '2° Alcohol\n仲醇', x: 550, y: 500, color: '#0ea5e9', cat: 'Oxygen' },
             { id: 'diol', label: 'Diol\n二醇', x: 400, y: 450, color: '#06b6d4', cat: 'Oxygen' },
-            
-            // Carbonyls (Middle-Right)
             { id: 'aldehyde', label: 'Aldehyde\n醛', x: 800, y: 300, color: '#ec4899', cat: 'Carbonyl' },
             { id: 'ketone', label: 'Ketone\n酮', x: 800, y: 500, color: '#ec4899', cat: 'Carbonyl' },
-            
-            // Acids & Derivatives (Right)
             { id: 'acid', label: 'Carboxylic Acid\n羧酸', x: 1050, y: 300, color: '#ef4444', cat: 'Acid' },
             { id: 'ester', label: 'Ester\n酯', x: 1050, y: 550, color: '#8b5cf6', cat: 'Derivative' },
             { id: 'amide', label: 'Amide\n酰胺', x: 1300, y: 300, color: '#8b5cf6', cat: 'Nitrogen' },
-            
-            // Nitrogen / Step-up (Top/Far Right)
             { id: 'nitrile', label: 'Nitrile\n腈', x: 800, y: 100, color: '#d97706', cat: 'Nitrogen (Step-up)' },
             { id: 'amine', label: 'Amine\n胺', x: 1300, y: 100, color: '#6366f1', cat: 'Nitrogen' }
         ];
 
         const Edges = [
-            // --- Alkane ---
-            { from: 'alkane', to: 'haloalkane', reagents: 'X₂ / UV light', type: 'Free Radical Substitution', desc: '產物為混合物，合成價值低。' },
-
-            // --- Alkene ---
-            { from: 'alkene', to: 'alkane', reagents: 'H₂ / Pt, heat', type: 'Addition', desc: 'Catalytic Hydrogenation' },
-            { from: 'alkene', to: 'haloalkane', reagents: 'HX(g)', type: 'Addition', desc: 'Markovnikov\'s Rule applied.' },
-            { from: 'alkene', to: 'alcohol_1', reagents: '1. Conc. H₂SO₄ 2. H₂O, boil', type: 'Addition', desc: '實驗室水合法 (Hydration)' },
-            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄ / H⁺', type: 'Oxidation', desc: 'Purple → Colourless' },
+            { from: 'alkane', to: 'haloalkane', reagents: 'X₂ / UV light', type: 'Sub', desc: 'Free Radical Substitution' },
+            { from: 'alkene', to: 'alkane', reagents: 'H₂ / Pt', type: 'Add', desc: 'Hydrogenation' },
+            { from: 'alkene', to: 'haloalkane', reagents: 'HX(g)', type: 'Add', desc: 'Markovnikov Addition' },
+            { from: 'alkene', to: 'alcohol_1', reagents: 'H₂SO₄ then H₂O', type: 'Add', desc: 'Hydration' },
+            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄', type: 'Ox', desc: 'Oxidation' },
+            { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA', type: 'Ox', desc: 'Epoxidation (Adv)' },
+            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺', type: 'Hyd', desc: 'Hydrolysis' },
             
-            // --- Epoxide Extension (Advanced) ---
-            { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA (in CH₂Cl₂)', type: 'Oxidation', desc: 'Adv/Elective: Epoxidation (Syn-addition of oxygen)' },
-            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺ (acid hydrolysis)', type: 'Hydrolysis', desc: 'Adv/Elective: Ring opening to form trans-diol' },
+            // --- THE FIX: Distinct Bi-directional Reactions ---
+            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Sub', desc: 'Hydrolysis (Substitution)' },
+            // Note: This matches the node structure but creates a reverse path
+            { from: 'alcohol_1', to: 'haloalkane', reagents: 'SOCl₂', type: 'Sub', desc: 'Using Thionyl Chloride' },
 
-            // --- Haloalkane ---
-            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Substitution', desc: 'Nucleophilic Substitution' },
-            { from: 'haloalkane', to: 'alkene', reagents: 'NaOH in alcohol, reflux', type: 'Elimination', desc: '注意溶劑: Alcoholic implies Elimination' },
-            { from: 'haloalkane', to: 'nitrile', reagents: 'KCN in alcohol, reflux', type: 'Substitution', desc: '★ Step-up (+1 Carbon)' },
-            { from: 'haloalkane', to: 'amine', reagents: 'Excess conc. NH₃, heat', type: 'Substitution', desc: 'Sealed tube' },
-
-            // --- Alcohol ---
-            { from: 'alcohol_1', to: 'aldehyde', reagents: 'K₂Cr₂O₇ / H⁺, Distillation', type: 'Oxidation', desc: 'Orange → Green. Distil to prevent further oxidation.' },
-            { from: 'alcohol_1', to: 'acid', reagents: 'KMnO₄ / H⁺, Reflux', type: 'Oxidation', desc: 'Full oxidation.' },
-            { from: 'alcohol_1', to: 'alkene', reagents: 'Conc. H₂SO₄, heat', type: 'Dehydration', desc: 'Elimination of water' },
-            { from: 'alcohol_1', to: 'haloalkane', reagents: 'SOCl₂', type: 'Substitution', desc: 'Best method (gaseous by-products)' },
-            { from: 'alcohol_1', to: 'ester', reagents: 'Acid + conc. H₂SO₄, reflux', type: 'Condensation', desc: 'Esterification' },
+            { from: 'haloalkane', to: 'alkene', reagents: 'NaOH(alc), heat', type: 'Elim', desc: 'Elimination' },
+            { from: 'haloalkane', to: 'nitrile', reagents: 'KCN, reflux', type: 'Sub', desc: 'Step-up (+1 C)' },
+            { from: 'haloalkane', to: 'amine', reagents: 'conc. NH₃', type: 'Sub', desc: 'Nucleophilic Substitution' },
             
-            // --- Ether Extension (Advanced) ---
-            { from: 'alcohol_1', to: 'ether', reagents: '1. Na  2. R-X', type: 'Substitution', desc: 'Adv/Elective: Williamson Ether Synthesis' },
+            { from: 'alcohol_1', to: 'aldehyde', reagents: 'K₂Cr₂O₇/H⁺ Distil', type: 'Ox', desc: 'Partial Oxidation' },
+            { from: 'alcohol_1', to: 'acid', reagents: 'KMnO₄/H⁺ Reflux', type: 'Ox', desc: 'Full Oxidation' },
+            { from: 'alcohol_1', to: 'alkene', reagents: 'conc. H₂SO₄', type: 'Elim', desc: 'Dehydration' },
+            { from: 'alcohol_1', to: 'ester', reagents: 'Acid / H₂SO₄', type: 'Cond', desc: 'Esterification' },
+            { from: 'alcohol_1', to: 'ether', reagents: 'Na then RX', type: 'Sub', desc: 'Williamson Synthesis (Adv)' },
 
-            // --- 2° Alcohol ---
-            { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇ / H⁺, Reflux', type: 'Oxidation', desc: 'Ketones cannot be oxidized further easily' },
+            { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇/H⁺ Reflux', type: 'Ox', desc: 'Oxidation' },
 
-            // --- Aldehyde / Ketone ---
-            { from: 'aldehyde', to: 'acid', reagents: 'K₂Cr₂O₇ / H⁺, Reflux', type: 'Oxidation', desc: '' },
-            { from: 'aldehyde', to: 'alcohol_1', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', desc: 'Or NaBH₄ in methanol' },
-            { from: 'ketone', to: 'alcohol_2', reagents: 'NaBH₄ in methanol', type: 'Reduction', desc: '' },
+            { from: 'aldehyde', to: 'acid', reagents: 'K₂Cr₂O₇/H⁺', type: 'Ox', desc: 'Oxidation' },
+            { from: 'aldehyde', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
+            { from: 'ketone', to: 'alcohol_2', reagents: 'NaBH₄', type: 'Red', desc: 'Reduction' },
 
-            // --- Nitrile (Step-up) ---
-            { from: 'nitrile', to: 'acid', reagents: 'H⁺(aq), Reflux', type: 'Hydrolysis', desc: 'Acid Hydrolysis of -CN to -COOH' },
-            { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄', type: 'Reduction', desc: 'Reduction to 1° Amine' },
+            { from: 'nitrile', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' },
+            { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
 
-            // --- Acid ---
-            { from: 'acid', to: 'alcohol_1', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', desc: 'Requires strong reducing agent' },
-            { from: 'acid', to: 'amide', reagents: '1. SOCl₂ 2. NH₃', type: 'Substitution', desc: 'Via Acid Chloride' },
+            { from: 'acid', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
+            { from: 'acid', to: 'amide', reagents: '1.SOCl₂ 2.NH₃', type: 'Sub', desc: 'Via Acid Chloride' },
             
-            // --- Amide (Step-down) ---
-            { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Hofmann Degradation', desc: '★ Step-down (-1 Carbon). Removes Carbonyl C.' },
-            { from: 'amide', to: 'acid', reagents: 'H⁺(aq), Reflux', type: 'Hydrolysis', desc: '' }
+            { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Deg', desc: 'Hofmann Degradation (Step-down)' },
+            { from: 'amide', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' }
         ];
 
         const App = () => {
             const [selectedNode, setSelectedNode] = useState(null);
             const [selectedEdge, setSelectedEdge] = useState(null);
-            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.8 });
+            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.85 });
             const [isDragging, setIsDragging] = useState(false);
             const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-            const [error, setError] = useState(null);
 
-            // Trigger Lucide icon replacement after render
             useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            });
-
-            // Center the map on load
-            useEffect(() => {
-                const screenW = window.innerWidth;
-                const screenH = window.innerHeight;
-                // Approximate center of the graph (based on nodes max x/y)
-                setTransform({ x: screenW/2 - 700 * 0.8, y: screenH/2 - 300 * 0.8, scale: 0.8 });
+                const cx = window.innerWidth / 2 - 700 * 0.85;
+                const cy = window.innerHeight / 2 - 300 * 0.85;
+                setTransform({ x: cx, y: cy, scale: 0.85 });
             }, []);
 
-            const handleWheel = (e) => {
-                e.preventDefault();
-                const scaleSensitivity = 0.001;
-                const newScale = Math.min(Math.max(0.4, transform.scale - e.deltaY * scaleSensitivity), 2);
-                setTransform(p => ({ ...p, scale: newScale }));
-            };
+            // --- KEY LOGIC: OFFSET CALCULATION ---
+            // This separates overlapping lines by shifting them to their "right"
+            const getOffsetCoords = (s, e, offsetAmount = 12) => {
+                const dx = e.x - s.x;
+                const dy = e.y - s.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len === 0) return { x1: s.x, y1: s.y, x2: e.x, y2: e.y };
 
-            const handleMouseDown = (e) => {
-                setIsDragging(true);
-                setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y });
-            };
+                // Normalized perpendicular vector (-dy, dx)
+                const perpX = -dy / len;
+                const perpY = dx / len;
 
-            const handleMouseMove = (e) => {
-                if (isDragging) {
-                    setTransform(p => ({ ...p, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }));
-                }
-            };
-
-            const handleMouseUp = () => setIsDragging(false);
-
-            const getNode = (id) => Nodes.find(n => n.id === id);
-            
-            // Calculation for Edge Lines
-            const getEdgeCoords = (edge) => {
-                const s = getNode(edge.from);
-                const e = getNode(edge.to);
-                if (!s || !e) return { x1:0, y1:0, x2:0, y2:0 };
-                // Center of nodes (Node width=160, height=70 approx)
-                return { 
-                    x1: s.x + 80, 
-                    y1: s.y + 35, 
-                    x2: e.x + 80, 
-                    y2: e.y + 35 
+                // Shift both points
+                return {
+                    x1: s.x + 80 + (perpX * offsetAmount), // +80 is half-width of node
+                    y1: s.y + 35 + (perpY * offsetAmount), // +35 is half-height of node
+                    x2: e.x + 80 + (perpX * offsetAmount),
+                    y2: e.y + 35 + (perpY * offsetAmount)
                 };
             };
 
-            if (error) {
-                return <div className="p-8 text-red-600 bg-red-50 h-screen flex items-center justify-center">Error: {error.message}</div>;
-            }
+            const getNode = (id) => Nodes.find(n => n.id === id);
 
             return (
                 <div 
                     className="w-full h-full bg-slate-50 relative overflow-hidden select-none"
-                    onWheel={handleWheel}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
+                    onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); }}
+                    onMouseMove={(e) => { if(isDragging) setTransform(p => ({ ...p, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); }}
+                    onMouseUp={() => setIsDragging(false)}
+                    onWheel={(e) => setTransform(p => ({ ...p, scale: Math.min(Math.max(0.4, p.scale - e.deltaY * 0.001), 2) }))}
                 >
-                    {/* UI Overlay */}
-                    <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border border-slate-200 max-w-sm">
+                    {/* Header */}
+                    <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-lg border border-slate-200">
                         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                             <Icon name="flask-conical" className="text-emerald-600" />
-                             HKDSE Reaction Map
+                             <Icon name="flask-conical" className="text-emerald-600" /> Reaction Map v4.1
                         </h1>
-                        <p className="text-xs text-slate-500 mt-1">Include Elective & Advanced Pathways</p>
-                        <div className="mt-2 flex gap-2">
-                             <button onClick={() => setTransform({x:0, y:0, scale: 0.8})} className="bg-slate-100 hover:bg-slate-200 p-2 rounded-lg text-slate-600">
-                                <Icon name="refresh-cw" size={16} />
-                             </button>
-                             <div className="text-[10px] text-slate-400 flex items-center">
-                                Scroll to Zoom • Drag to Move
-                             </div>
-                        </div>
+                        <p className="text-xs text-slate-400">Fixed: Bi-directional Arrows</p>
                     </div>
 
-                    {/* The Canvas */}
-                    <div 
-                        className="absolute origin-top-left transition-transform duration-75 will-change-transform"
-                        style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}
-                    >
+                    {/* Canvas */}
+                    <div className="absolute origin-top-left will-change-transform" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
                         <svg width="2000" height="1000" className="overflow-visible">
                             <defs>
-                                <marker id="arrow" markerWidth="8" markerHeight="6" refX="20" refY="3" orient="auto">
-                                    <path d="M0,0 L8,3 L0,6" fill="#94a3b8" />
+                                <marker id="arrow" markerWidth="6" markerHeight="4" refX="16" refY="2" orient="auto">
+                                    <path d="M0,0 L6,2 L0,4" fill="#94a3b8" />
                                 </marker>
-                                <marker id="arrow-active" markerWidth="8" markerHeight="6" refX="20" refY="3" orient="auto">
-                                    <path d="M0,0 L8,3 L0,6" fill="#7c3aed" />
+                                <marker id="arrow-active" markerWidth="6" markerHeight="4" refX="16" refY="2" orient="auto">
+                                    <path d="M0,0 L6,2 L0,4" fill="#7c3aed" />
                                 </marker>
                             </defs>
 
-                            {/* Edges */}
                             {Edges.map((edge, i) => {
-                                const { x1, y1, x2, y2 } = getEdgeCoords(edge);
-                                const isSelected = selectedEdge === edge;
-                                const isRelated = selectedNode && (edge.from === selectedNode || edge.to === selectedNode);
-                                const active = isSelected || isRelated;
-
+                                const s = getNode(edge.from);
+                                const e = getNode(edge.to);
+                                // --- Apply Offset Here ---
+                                const { x1, y1, x2, y2 } = getOffsetCoords(s, e, 10); 
+                                
+                                const active = selectedEdge === edge || (selectedNode && (edge.from === selectedNode || edge.to === selectedNode));
+                                
                                 return (
                                     <g key={i} onClick={(e) => { e.stopPropagation(); setSelectedEdge(edge); setSelectedNode(null); }}>
-                                        {/* Hit area */}
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" />
-                                        {/* Visual Line */}
-                                        <line 
-                                            x1={x1} y1={y1} x2={x2} y2={y2} 
+                                        <line x1={x1} y1={y1} x2={x2} y2={y2} 
                                             className={`edge ${active ? 'edge-active' : ''}`}
-                                            stroke="#cbd5e1" 
+                                            stroke={active ? "#7c3aed" : "#cbd5e1"} 
                                             strokeWidth="2"
                                             markerEnd={active ? "url(#arrow-active)" : "url(#arrow)"}
                                         />
-                                        {/* Label on path */}
-                                        {transform.scale > 0.6 && (
-                                            <foreignObject x={(x1+x2)/2 - 60} y={(y1+y2)/2 - 12} width="120" height="24" style={{pointerEvents: 'none'}}>
-                                                <div className={`text-[9px] text-center rounded px-1 transition-opacity ${active ? 'bg-purple-100 text-purple-700 opacity-100 font-bold' : 'bg-slate-50/80 text-slate-400 opacity-0'}`}>
-                                                    {edge.reagents}
+                                        {transform.scale > 0.7 && (
+                                            <foreignObject x={(x1+x2)/2 - 40} y={(y1+y2)/2 - 10} width="80" height="20" style={{pointerEvents:'none'}}>
+                                                <div className={`text-[9px] text-center rounded ${active ? 'bg-purple-100 text-purple-700 font-bold' : 'opacity-0'}`}>
+                                                    {edge.reagents.split(' ')[0]}...
                                                 </div>
                                             </foreignObject>
                                         )}
@@ -286,84 +186,52 @@
                                 );
                             })}
 
-                            {/* Nodes */}
-                            {Nodes.map(node => {
-                                const active = selectedNode === node.id;
-                                const isTarget = selectedEdge?.to === node.id;
-                                const isSource = selectedEdge?.from === node.id;
-
-                                return (
-                                    <foreignObject key={node.id} x={node.x} y={node.y} width="160" height="70">
-                                        <div 
-                                            onClick={(e) => { e.stopPropagation(); setSelectedNode(node.id); setSelectedEdge(null); }}
-                                            className={`
-                                                w-full h-full bg-white rounded-xl shadow-sm border-2 flex flex-col items-center justify-center
-                                                node-container
-                                                ${active ? 'border-purple-600 ring-2 ring-purple-100 bg-purple-50' : 'border-slate-200'}
-                                                ${isSource ? 'border-emerald-500 ring-2 ring-emerald-100' : ''}
-                                                ${isTarget ? 'border-indigo-500 ring-2 ring-indigo-100' : ''}
-                                            `}
-                                        >
-                                            <div className="text-sm font-bold text-slate-700 text-center whitespace-pre-line leading-tight">
-                                                {node.label}
-                                            </div>
-                                            <div className="text-[9px] uppercase tracking-wider font-semibold mt-1" style={{color: node.color}}>
-                                                {node.cat}
-                                            </div>
-                                        </div>
-                                    </foreignObject>
-                                );
-                            })}
+                            {Nodes.map(node => (
+                                <foreignObject key={node.id} x={node.x} y={node.y} width="160" height="70">
+                                    <div 
+                                        onClick={(e) => { e.stopPropagation(); setSelectedNode(node.id); setSelectedEdge(null); }}
+                                        className={`w-full h-full bg-white rounded-xl shadow-sm border-2 flex flex-col items-center justify-center node-container
+                                            ${selectedNode === node.id ? 'border-purple-600 bg-purple-50' : 'border-slate-200'}
+                                            ${selectedEdge?.from === node.id ? 'border-emerald-500' : ''}
+                                            ${selectedEdge?.to === node.id ? 'border-indigo-500' : ''}
+                                        `}
+                                    >
+                                        <div className="text-sm font-bold text-slate-700 text-center whitespace-pre-line leading-tight">{node.label}</div>
+                                        <div className="text-[9px] uppercase font-bold mt-1" style={{color: node.color}}>{node.cat}</div>
+                                    </div>
+                                </foreignObject>
+                            ))}
                         </svg>
                     </div>
 
                     {/* Info Panel */}
-                    <div className={`absolute bottom-0 left-0 w-full p-4 transition-transform duration-300 z-20 flex justify-center ${selectedNode || selectedEdge ? 'translate-y-0' : 'translate-y-[120%]'}`}>
-                        <div className="bg-white/95 backdrop-blur shadow-2xl rounded-2xl border border-slate-200 w-full max-w-4xl p-6 relative">
-                            <button onClick={() => {setSelectedNode(null); setSelectedEdge(null);}} className="absolute top-3 right-3 p-1 rounded-full hover:bg-slate-100">
-                                <Icon name="x" size={20} className="text-slate-400" />
-                            </button>
-
-                            {/* Node Info */}
-                            {selectedNode && (
-                                <div className="text-center">
-                                    <h2 className="text-2xl font-bold text-slate-800 mb-2">{getNode(selectedNode).label.replace('\n', ' ')}</h2>
-                                    <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-mono mb-4">
-                                        {getNode(selectedNode).cat}
-                                    </span>
-                                    <p className="text-slate-500 text-sm">
-                                        Click on connecting arrows to view reaction conditions.
-                                    </p>
+                    <div className={`absolute bottom-0 left-0 w-full p-4 transition-transform duration-300 z-20 flex justify-center ${selectedNode || selectedEdge ? 'translate-y-0' : 'translate-y-full'}`}>
+                        <div className="bg-white/95 backdrop-blur shadow-2xl rounded-2xl border border-slate-200 w-full max-w-3xl p-6 relative">
+                            <button onClick={() => {setSelectedNode(null); setSelectedEdge(null);}} className="absolute top-3 right-3 p-1 rounded-full hover:bg-slate-100"><Icon name="x" className="w-5 h-5 text-slate-400" /></button>
+                            
+                            {selectedEdge && (
+                                <div className="flex gap-6 items-center">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                                            <span>{getNode(selectedEdge.from).label.split('\n')[1]}</span>
+                                            <Icon name="arrow-right" className="w-4 h-4" />
+                                            <span>{getNode(selectedEdge.to).label.split('\n')[1]}</span>
+                                        </div>
+                                        <div className="text-xl font-mono font-bold text-slate-800 bg-slate-100 p-3 rounded-lg border border-slate-200 mb-2">
+                                            {selectedEdge.reagents}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">{selectedEdge.type}</span>
+                                            <span className="text-slate-500 text-sm">{selectedEdge.desc}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Edge Info */}
-                            {selectedEdge && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-                                    <div className="md:col-span-1 border-r border-slate-100 pr-4">
-                                        <div className="flex flex-col items-center text-center">
-                                            <div className="text-lg font-bold text-emerald-600">{getNode(selectedEdge.from).label.split('\n')[0]}</div>
-                                            <Icon name="arrow-down" className="text-slate-300 my-1" />
-                                            <div className="text-lg font-bold text-purple-600">{getNode(selectedEdge.to).label.split('\n')[0]}</div>
-                                        </div>
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <div className="mb-4">
-                                            <label className="text-xs font-bold text-slate-400 uppercase">Reagents & Conditions</label>
-                                            <div className="text-lg font-mono font-bold text-slate-800 bg-slate-50 p-2 rounded mt-1 border border-slate-200">
-                                                {selectedEdge.reagents}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-400 uppercase">Type & Notes</label>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">{selectedEdge.type}</span>
-                                            </div>
-                                            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                                                {selectedEdge.desc}
-                                            </p>
-                                        </div>
-                                    </div>
+                            {selectedNode && (
+                                <div className="text-center">
+                                    <h2 className="text-2xl font-bold text-slate-800">{getNode(selectedNode).label.replace('\n', ' ')}</h2>
+                                    <p className="text-slate-500 text-sm mt-1">Select an arrow to view reaction details.</p>
                                 </div>
                             )}
                         </div>
