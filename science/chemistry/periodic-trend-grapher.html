@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Periodic Trend Grapher (Period 3)</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Smooth transitions */
+        .chart-point { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .chart-line { transition: d 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .bar { transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1), y 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        /* Tooltip animation */
+        .tooltip { opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none; }
+        .group:hover .tooltip { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const Icon = ({ name, className = "" }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        // --- PERIOD 3 DATASET ---
+        const ELEMENTS = [
+            { symbol: 'Na', name: 'Sodium', proton: 11, struct: 'Giant Metallic', type: 'Metal' },
+            { symbol: 'Mg', name: 'Magnesium', proton: 12, struct: 'Giant Metallic', type: 'Metal' },
+            { symbol: 'Al', name: 'Aluminium', proton: 13, struct: 'Giant Metallic', type: 'Metal' },
+            { symbol: 'Si', name: 'Silicon', proton: 14, struct: 'Giant Covalent', type: 'Metalloid' },
+            { symbol: 'P', name: 'Phosphorus', formula: 'P₄', proton: 15, struct: 'Simple Molecular', type: 'Non-metal' },
+            { symbol: 'S', name: 'Sulphur', formula: 'S₈', proton: 16, struct: 'Simple Molecular', type: 'Non-metal' },
+            { symbol: 'Cl', name: 'Chlorine', formula: 'Cl₂', proton: 17, struct: 'Simple Molecular', type: 'Non-metal' },
+            { symbol: 'Ar', name: 'Argon', formula: 'Ar', proton: 18, struct: 'Simple Atomic', type: 'Noble Gas' }
+        ];
+
+        const DATA_SETS = {
+            mp: {
+                label: 'Melting Point (K)',
+                unit: 'K',
+                desc: 'Strong metallic bonds increase from Na to Al. Giant covalent Si is very high. Simple molecules P, S, Cl are low (S > P > Cl due to molecular size).',
+                values: [371, 923, 933, 1687, 317, 388, 171, 84]
+            },
+            bp: {
+                label: 'Boiling Point (K)',
+                unit: 'K',
+                desc: 'Similar trend to melting point but much higher for metals. Al is very high. Note the drop after Si.',
+                values: [1156, 1363, 2792, 3538, 550, 718, 239, 87]
+            },
+            radius: {
+                label: 'Atomic Radius (nm)',
+                unit: 'nm',
+                desc: 'Radius decreases across the period due to increasing effective nuclear charge pulling shells closer.',
+                values: [0.186, 0.160, 0.143, 0.118, 0.110, 0.102, 0.099, 0.098]
+            },
+            electronegativity: {
+                label: 'Electronegativity (Pauling)',
+                unit: '',
+                desc: 'Increases across the period. Cl is the most electronegative element in Period 3.',
+                values: [0.9, 1.3, 1.6, 1.9, 2.2, 2.6, 3.2, 0] // Ar is effectively 0
+            },
+            ionization: {
+                label: '1st Ionization Energy (kJ/mol)',
+                unit: 'kJ/mol',
+                desc: 'General increase due to nuclear charge. Dips at Al (p-orbital) and S (paired electrons repulsion).',
+                values: [496, 738, 578, 789, 1012, 1000, 1251, 1521]
+            }
+        };
+
+        // Color coding based on structure
+        const getColor = (struct) => {
+            if (struct.includes('Metallic')) return '#34d399'; // Emerald
+            if (struct.includes('Covalent')) return '#f87171'; // Red
+            if (struct.includes('Molecular')) return '#60a5fa'; // Blue
+            return '#94a3b8'; // Grey (Argon)
+        };
+
+        const Graph = ({ activeProp }) => {
+            const data = DATA_SETS[activeProp];
+            const maxVal = Math.max(...data.values) * 1.1;
+            const height = 300;
+            const width = 600;
+            const padding = 40;
+            const graphH = height - padding * 2;
+            const graphW = width - padding * 2;
+            const stepX = graphW / (ELEMENTS.length - 1);
+
+            // Generate Path D string
+            const points = data.values.map((val, i) => {
+                const x = padding + i * stepX;
+                const y = height - padding - (val / maxVal) * graphH;
+                return { x, y, val, el: ELEMENTS[i] };
+            });
+
+            const pathD = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+
+            return (
+                <div className="relative w-full h-full">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                        {/* Grid Lines */}
+                        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#475569" strokeWidth="2" />
+                        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#475569" strokeWidth="2" />
+
+                        {/* Labels Y */}
+                        <text x={padding - 10} y={padding} fill="#94a3b8" fontSize="10" textAnchor="end">{Math.round(maxVal)}</text>
+                        <text x={padding - 10} y={height - padding} fill="#94a3b8" fontSize="10" textAnchor="end">0</text>
+
+                        {/* The Line */}
+                        <path d={pathD} fill="none" stroke="#64748b" strokeWidth="2" className="chart-line" />
+
+                        {/* Data Points */}
+                        {points.map((p, i) => (
+                            <g key={i} className="group cursor-pointer">
+                                {/* Invisible hit area */}
+                                <circle cx={p.x} cy={p.y} r="20" fill="transparent" />
+                                
+                                {/* Visible Dot */}
+                                <circle 
+                                    cx={p.x} cy={p.y} r="6" 
+                                    fill={getColor(p.el.struct)} 
+                                    stroke="#0f172a" strokeWidth="2"
+                                    className="chart-point z-10 relative"
+                                />
+
+                                {/* Label X (Symbol) */}
+                                <text x={p.x} y={height - padding + 20} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.symbol}</text>
+
+                                {/* Tooltip */}
+                                <g className="tooltip" transform={`translate(${p.x}, ${p.y - 15})`}>
+                                    <rect x="-60" y="-55" width="120" height="50" rx="6" fill="#1e293b" stroke="#475569" />
+                                    <text x="0" y="-35" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.name}</text>
+                                    <text x="0" y="-18" fill="#38bdf8" fontSize="12" fontWeight="bold" textAnchor="middle">{p.val} {data.unit}</text>
+                                    
+                                    {/* Triangle pointer */}
+                                    <path d="M -5 -5 L 0 0 L 5 -5" fill="#1e293b" stroke="#475569" strokeWidth="1" transform="translate(0, -2)" />
+                                </g>
+                            </g>
+                        ))}
+                    </svg>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activeProp, setActiveProp] = useState('mp');
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar Controls */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="activity" className="text-emerald-400" /> Trend Grapher
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Period 3 Elements</p>
+                        </div>
+
+                        <div className="p-4 space-y-2 overflow-y-auto">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-2 mb-2 block">Properties</label>
+                            {Object.entries(DATA_SETS).map(([key, data]) => (
+                                <button 
+                                    key={key}
+                                    onClick={() => setActiveProp(key)}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between
+                                        ${activeProp === key 
+                                            ? 'bg-slate-800 border-emerald-500 ring-1 ring-emerald-500/50' 
+                                            : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'}
+                                    `}
+                                >
+                                    <span className={`text-sm font-bold ${activeProp === key ? 'text-white' : 'text-slate-300'}`}>
+                                        {data.label.split('(')[0]}
+                                    </span>
+                                    {activeProp === key && <Icon name="chevron-right" className="w-4 h-4 text-emerald-400" />}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Legend */}
+                        <div className="mt-auto p-6 border-t border-slate-800">
+                            <div className="text-xs font-bold text-slate-500 uppercase mb-3">Structure Key</div>
+                            <div className="space-y-2 text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-emerald-400"></span>
+                                    <span className="text-slate-300">Giant Metallic (Na-Al)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-red-400"></span>
+                                    <span className="text-slate-300">Giant Covalent (Si)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-full bg-blue-400"></span>
+                                    <span className="text-slate-300">Simple Molecular (P-Cl)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+                        
+                        {/* Graph Area */}
+                        <div className="flex-1 bg-slate-900/50 p-4 md:p-12 flex items-center justify-center relative">
+                            {/* Background Grid Pattern */}
+                            <div className="absolute inset-0 opacity-10 pointer-events-none" 
+                                style={{backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
+                            </div>
+
+                            <div className="w-full max-w-4xl h-[400px] relative z-10">
+                                <Graph activeProp={activeProp} />
+                            </div>
+                        </div>
+
+                        {/* Info Panel */}
+                        <div className="bg-slate-800 border-t border-slate-700 p-6 md:p-8 shrink-0">
+                            <div className="max-w-4xl mx-auto">
+                                <div className="flex items-start gap-4">
+                                    <div className="p-3 bg-slate-700 rounded-xl hidden md:block">
+                                        <Icon name="info" className="w-6 h-6 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-bold text-white mb-2">Trend Analysis: <span className="text-emerald-400">{DATA_SETS[activeProp].label}</span></h2>
+                                        <p className="text-slate-400 text-sm leading-relaxed">
+                                            {DATA_SETS[activeProp].desc}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
