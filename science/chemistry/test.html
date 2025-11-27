@@ -3,388 +3,398 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>反應網絡探索器 (Reaction Map Explorer)</title>
+    <title>Organic Reaction Path Explorer - Luminous Learner</title>
+    
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap');
-        body { font-family: 'Noto Sans HK', sans-serif; }
-        .font-mono { font-family: 'Roboto Mono', monospace; }
-        
-        .node {
-            transition: filter 0.3s ease, transform 0.3s ease;
-            cursor: pointer;
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background-color: #f8fafc; /* bg-slate-50 */
         }
-        .node:hover {
-            filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));
-            transform: scale(1.05);
+        .font-mono {
+            font-family: 'Roboto Mono', monospace;
         }
-        .node-active rect {
-            stroke: #4f46e5;
-            stroke-width: 3px;
-            filter: drop-shadow(0 0 12px rgba(79, 70, 229, 0.8));
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
         }
-
-        .edge-path {
-            transition: stroke-width 0.3s ease, stroke 0.3s ease;
-            cursor: pointer;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .edge-path:hover {
-            stroke: #ef4444;
-            stroke-width: 6px;
-        }
-        .edge-active {
-            stroke: #ef4444 !important;
-            stroke-width: 5px !important;
-            animation: dash 1s linear infinite;
-        }
-        
-        @keyframes dash {
-            to { stroke-dashoffset: -20; }
-        }
-
-        .cursor-grab { cursor: grab; }
-        .cursor-grabbing { cursor: grabbing; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col overflow-hidden">
-
-    <div id="root" class="flex-grow flex flex-col h-full"></div>
+<body>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
+        const { useState, useEffect, useMemo } = React;
+        const { FlaskConical, ArrowRight, Beaker, Flame, AlertCircle, RefreshCw, Map, Search, Info } = lucide;
 
-        // --- Data: Nodes (Compounds) ---
-        const Nodes = [
-            // Hydrocarbons
-            { id: 'alkane', label: 'Alkane\n烷烴', x: 100, y: 300, color: '#475569' },
-            { id: 'alkene', label: 'Alkene\n烯烴', x: 350, y: 300, color: '#65a30d' },
-            { id: 'alkyne', label: 'Alkyne\n炔烴', x: 350, y: 550, color: '#16a34a' },
-            
-            // Halogenated
-            { id: 'haloalkane', label: 'Haloalkane\n鹵代烷', x: 350, y: 100, color: '#ca8a04' },
-            { id: 'gem_dihalide', label: 'Geminal Dihalide\n同碳二鹵化物', x: 100, y: 550, color: '#eab308' }, 
+        // --- Database: HKDSE Organic Reaction Map ---
+        // Nodes: Functional Groups
+        // Edges: Reactions
+        const reactionData = {
+            nodes: [
+                { id: 'alkane', label: '烷烴 (Alkane)', category: 'hydrocarbon' },
+                { id: 'alkene', label: '烯烴 (Alkene)', category: 'hydrocarbon' },
+                { id: 'haloalkane', label: '鹵代烷 (Haloalkane)', category: 'derivative' },
+                { id: 'alcohol_1', label: '伯醇 (1° Alcohol)', category: 'oxygen' },
+                { id: 'alcohol_2', label: '仲醇 (2° Alcohol)', category: 'oxygen' },
+                { id: 'alcohol_3', label: '叔醇 (3° Alcohol)', category: 'oxygen' },
+                { id: 'aldehyde', label: '醛 (Aldehyde)', category: 'carbonyl' },
+                { id: 'ketone', label: '酮 (Ketone)', category: 'carbonyl' },
+                { id: 'carboxylic_acid', label: '羧酸 (Carboxylic Acid)', category: 'acid' },
+                { id: 'ester', label: '酯 (Ester)', category: 'derivative' },
+                { id: 'amide', label: '酰胺 (Amide)', category: 'nitrogen' },
+                { id: 'nitrile', label: '腈 (Nitrile)', category: 'nitrogen', note: 'Carbon chain +1' },
+                { id: 'amine', label: '胺 (Amine)', category: 'nitrogen' },
+                { id: 'diol', label: '二醇 (Diol)', category: 'oxygen' }
+            ],
+            edges: [
+                // Alkane
+                { from: 'alkane', to: 'haloalkane', reagents: 'X₂ / UV light', type: 'Free Radical Substitution', note: '產物通常為混合物' },
+                
+                // Alkene
+                { from: 'alkene', to: 'alkane', reagents: 'H₂ / Pt or Ni, heat', type: 'Addition', note: 'Hardening of oils' },
+                { from: 'alkene', to: 'haloalkane', reagents: 'HX (g)', type: 'Addition', note: 'Follows Markovnikov\'s Rule' },
+                { from: 'alkene', to: 'alcohol_1', reagents: '1. conc. H₂SO₄ 2. H₂O, boil', type: 'Addition', note: 'Lab method' },
+                { from: 'alkene', to: 'diol', reagents: 'cold dil. KMnO₄ / H⁺', type: 'Oxidation', note: 'Purple to Colourless' },
+                
+                // Haloalkane
+                { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Substitution', note: 'Nucleophilic' },
+                { from: 'haloalkane', to: 'alkene', reagents: 'NaOH in alcohol, reflux', type: 'Elimination', note: '注意溶劑分別' },
+                { from: 'haloalkane', to: 'nitrile', reagents: 'KCN in alcohol, reflux', type: 'Substitution', note: 'Step-up (+1 Carbon)' },
+                { from: 'haloalkane', to: 'amine', reagents: 'excess conc. NH₃, heat in sealed tube', type: 'Substitution', note: '' },
 
-            // Oxygenates
-            { id: 'alcohol', label: 'Alcohol\n醇', x: 650, y: 300, color: '#0ea5e9' },
-            { id: 'ether', label: 'Ether\n醚', x: 650, y: 100, color: '#7dd3fc' },
-            { id: 'epoxide', label: 'Epoxide\n環氧化物', x: 650, y: 550, color: '#22d3ee' }, 
-            { id: 'vic_diol', label: 'Vicinal Diol\n鄰二醇', x: 650, y: 750, color: '#38bdf8' }, 
+                // Alcohol (1°)
+                { from: 'alcohol_1', to: 'aldehyde', reagents: 'K₂Cr₂O₇ / H⁺, distillation', type: 'Oxidation', note: 'Orange to Green' },
+                { from: 'alcohol_1', to: 'carboxylic_acid', reagents: 'K₂Cr₂O₇ / H⁺, reflux', type: 'Oxidation', note: 'Orange to Green' },
+                { from: 'alcohol_1', to: 'alkene', reagents: 'conc. H₂SO₄ or Al₂O₃, heat', type: 'Dehydration', note: 'Elimination' },
+                { from: 'alcohol_1', to: 'haloalkane', reagents: 'PCl₅ or SOCl₂', type: 'Substitution', note: 'Misty fumes (HCl)' },
+                { from: 'alcohol_1', to: 'ester', reagents: 'Carboxylic Acid + conc. H₂SO₄, reflux', type: 'Esterification', note: 'Fruity smell, Reversible' },
 
-            // Carbonyls
-            { id: 'aldehyde', label: 'Aldehyde\n醛', x: 950, y: 300, color: '#ec4899' },
-            { id: 'ketone', label: 'Ketone\n酮', x: 950, y: 550, color: '#db2777' },
-            
-            // Carboxylic Derivatives
-            { id: 'acid', label: 'Carboxylic Acid\n羧酸', x: 1250, y: 300, color: '#ef4444' },
-            { id: 'ester', label: 'Ester\n酯', x: 1250, y: 550, color: '#a855f7' },
-            { id: 'amide', label: 'Amide\n酰胺', x: 1500, y: 300, color: '#8b5cf6' },
-            
-            // Nitrogen
-            { id: 'nitrile', label: 'Nitrile\n腈', x: 950, y: 100, color: '#f59e0b' },
-            { id: 'amine', label: 'Amine\n胺', x: 1250, y: 100, color: '#6366f1' }
-        ];
+                // Alcohol (2°)
+                { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇ / H⁺, reflux', type: 'Oxidation', note: 'Orange to Green' },
+                
+                // Aldehyde & Ketone
+                { from: 'aldehyde', to: 'carboxylic_acid', reagents: 'K₂Cr₂O₇ / H⁺, reflux', type: 'Oxidation', note: '' },
+                { from: 'aldehyde', to: 'alcohol_1', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', note: 'Nucleophilic Addition' },
+                { from: 'ketone', to: 'alcohol_2', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', note: '' },
+                { from: 'aldehyde', to: '2-hydroxy-nitrile', reagents: 'HCN / trace NaOH', type: 'Addition', note: 'Step-up (+1 Carbon)' },
 
-        // --- Data: Edges (Reactions) ---
-        const Edges = [
-            // Alkyne Reactions
-            { from: 'alkyne', to: 'alkene', reagents: 'H₂, Lindlar Cat.', type: 'Reduction', desc: '還原至順式烯 (Syn-addition)' },
-            { from: 'alkyne', to: 'alkene', reagents: 'Na, NH₃(l)', type: 'Reduction', desc: '還原至反式烯 (Anti-addition)' },
-            { from: 'alkyne', to: 'alkane', reagents: 'H₂, Pt/Ni, heat', type: 'Reduction', desc: '完全氫化' },
-            { from: 'alkyne', to: 'gem_dihalide', reagents: 'Excess HX', type: 'Addition', desc: '加成反應' },
-            { from: 'alkyne', to: 'ketone', reagents: 'HgSO₄, H₂SO₄ (aq)', type: 'Hydration', desc: '酸催化水合 (Markovnikov)' },
-            { from: 'alkyne', to: 'aldehyde', reagents: '1) R₂BH, 2) H₂O₂, NaOH', type: 'Hydroboration', desc: '反馬氏水合 (Anti-Markovnikov)' },
+                // Nitrile (The Step-up Hub)
+                { from: 'nitrile', to: 'carboxylic_acid', reagents: 'H⁺(aq), reflux', type: 'Hydrolysis', note: 'Acid Hydrolysis' },
+                { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', note: 'Primary amine formed' },
 
-            // Alkene Reactions
-            { from: 'alkene', to: 'alkane', reagents: 'H₂, Ni, heat', type: 'Reduction', desc: '氫化' },
-            { from: 'alkene', to: 'haloalkane', reagents: 'HX (g)', type: 'Addition', desc: '氫鹵化 (Hydrohalogenation)' },
-            { from: 'alkene', to: 'alcohol', reagents: 'Steam, H₃PO₄, 300°C', type: 'Addition', desc: '水合 (Hydration)' },
-            { from: 'alkene', to: 'vic_diol', reagents: 'Cold dilute KMnO₄ / OH⁻', type: 'Oxidation', desc: '二羥基化 (Syn)' },
-            { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA', type: 'Oxidation', desc: '環氧化 (Epoxidation)' },
-            { from: 'alkene', to: 'aldehyde', reagents: '1) O₃, 2) Zn, H₂O', type: 'Oxidation', desc: '臭氧分解 (還原性後處理)' },
-            { from: 'alkene', to: 'ketone', reagents: '1) O₃, 2) Zn, H₂O', type: 'Oxidation', desc: '臭氧分解 (若有兩個烷基取代)' },
+                // Carboxylic Acid
+                { from: 'carboxylic_acid', to: 'alcohol_1', reagents: 'LiAlH₄ in dry ether', type: 'Reduction', note: 'NaBH₄ cannot reduce acid' },
+                { from: 'carboxylic_acid', to: 'ester', reagents: 'Alcohol + conc. H₂SO₄, reflux', type: 'Esterification', note: '' },
+                { from: 'carboxylic_acid', to: 'amide', reagents: '1. SOCl₂ 2. NH₃', type: 'Substitution', note: 'Via Acid Chloride' },
 
-            // Haloalkane Reactions
-            { from: 'haloalkane', to: 'alcohol', reagents: 'NaOH(aq), heat', type: 'Substitution', desc: '水解 (Hydrolysis)' },
-            { from: 'haloalkane', to: 'alkene', reagents: 'NaOH(alc), heat', type: 'Elimination', desc: '消除反應 (Dehydrohalogenation)' },
-            { from: 'haloalkane', to: 'amine', reagents: 'Conc. NH₃(alc), heat', type: 'Substitution', desc: '氨解' },
-            { from: 'haloalkane', to: 'nitrile', reagents: 'KCN(alc), reflux', type: 'Substitution', desc: '氰化 (增碳反應)' },
+                // Amide (The Step-down)
+                { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Hofmann Degradation', note: 'Step-down (-1 Carbon)' },
+                { from: 'amide', to: 'carboxylic_acid', reagents: 'H⁺(aq), reflux', type: 'Hydrolysis', note: '' },
+            ]
+        };
 
-            // Alkane Reactions
-            { from: 'alkane', to: 'haloalkane', reagents: 'X₂, UV light', type: 'Substitution', desc: '自由基取代' },
+        // --- Pathfinding Algorithm (BFS) ---
+        const findPath = (startId, endId) => {
+            if (startId === endId) return [{ node: startId, edge: null }];
 
-            // Alcohol Reactions
-            { from: 'alcohol', to: 'alkene', reagents: 'Conc. H₂SO₄, heat', type: 'Elimination', desc: '脫水 (Dehydration)' },
-            { from: 'alcohol', to: 'haloalkane', reagents: 'PCl₃ / PCl₅ / SOCl₂', type: 'Substitution', desc: '鹵化' },
-            { from: 'alcohol', to: 'ether', reagents: '1) Na, 2) R-X (Williamson)', type: 'Substitution', desc: '醚合成' },
-            { from: 'alcohol', to: 'aldehyde', reagents: 'PCC / K₂Cr₂O₇, distil', type: 'Oxidation', desc: '氧化 (1° 醇)' },
-            { from: 'alcohol', to: 'acid', reagents: 'K₂Cr₂O₇/H⁺, reflux', type: 'Oxidation', desc: '完全氧化 (1° 醇)' },
-            { from: 'alcohol', to: 'ketone', reagents: 'K₂Cr₂O₇/H⁺, reflux', type: 'Oxidation', desc: '氧化 (2° 醇)' },
-            { from: 'alcohol', to: 'ester', reagents: 'RCOOH, conc. H₂SO₄', type: 'Condensation', desc: '酯化' },
+            let queue = [[{ node: startId, edge: null }]];
+            let visited = new Set();
+            visited.add(startId);
 
-            // Epoxide Reactions
-            { from: 'epoxide', to: 'vic_diol', reagents: 'H₃O⁺, H₂O', type: 'Hydrolysis', desc: '酸催化開環' },
-            { from: 'epoxide', to: 'alcohol', reagents: '1) LiAlH₄, 2) H₃O⁺', type: 'Reduction', desc: '還原開環' },
+            while (queue.length > 0) {
+                let path = queue.shift();
+                let lastStep = path[path.length - 1];
+                let lastNodeId = lastStep.node;
 
-            // Aldehyde / Ketone
-            { from: 'aldehyde', to: 'alcohol', reagents: 'NaBH₄ / LiAlH₄', type: 'Reduction', desc: '還原' },
-            { from: 'aldehyde', to: 'acid', reagents: 'K₂Cr₂O₇/H⁺, reflux', type: 'Oxidation', desc: '氧化' },
-            { from: 'ketone', to: 'alcohol', reagents: 'NaBH₄ / LiAlH₄', type: 'Reduction', desc: '還原' },
+                if (lastNodeId === endId) return path;
 
-            // Nitrile
-            { from: 'nitrile', to: 'acid', reagents: 'H₃O⁺, heat', type: 'Hydrolysis', desc: '酸性水解' },
-            { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄', type: 'Reduction', desc: '還原' },
-
-            // Acid Derivatives
-            { from: 'acid', to: 'alcohol', reagents: 'LiAlH₄, dry ether', type: 'Reduction', desc: '還原' },
-            { from: 'acid', to: 'ester', reagents: 'ROH, H⁺, heat', type: 'Condensation', desc: '酯化' },
-            { from: 'acid', to: 'amide', reagents: '1) SOCl₂, 2) NH₃', type: 'Substitution', desc: '經酰氯生成酰胺' },
-            { from: 'ester', to: 'acid', reagents: 'H₃O⁺, heat', type: 'Hydrolysis', desc: '酸性水解' },
-            { from: 'ester', to: 'alcohol', reagents: '1) LiAlH₄, 2) H⁺', type: 'Reduction', desc: '還原' },
-            { from: 'amide', to: 'acid', reagents: 'H₃O⁺, heat', type: 'Hydrolysis', desc: '水解' }
-        ];
+                // Find neighbors
+                let neighbors = reactionData.edges.filter(e => e.from === lastNodeId);
+                
+                for (let edge of neighbors) {
+                    if (!visited.has(edge.to)) {
+                        visited.add(edge.to);
+                        let newPath = [...path, { node: edge.to, edge: edge }];
+                        queue.push(newPath);
+                    }
+                }
+            }
+            return null; // No path found
+        };
 
         const App = () => {
-            const [selectedNode, setSelectedNode] = useState(null);
-            const [selectedConnection, setSelectedConnection] = useState(null); // Stores { from, to, reactions: [] }
-            
-            // Pan & Zoom State
-            const [scale, setScale] = useState(0.7);
-            const [position, setPosition] = useState({ x: -100, y: -100 });
-            const [isDragging, setIsDragging] = useState(false);
-            const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+            const [startNode, setStartNode] = useState('alkene');
+            const [endNode, setEndNode] = useState('carboxylic_acid');
+            const [path, setPath] = useState(null);
 
-            // Compute Connections (Grouping edges between same nodes)
-            const connections = useMemo(() => {
-                const map = new Map();
-                Edges.forEach(edge => {
-                    // Sort IDs to treat A->B and B->A as same connection visually
-                    const key = [edge.from, edge.to].sort().join('-');
-                    if (!map.has(key)) {
-                        map.set(key, { from: edge.from, to: edge.to, reactions: [] });
-                    }
-                    map.get(key).reactions.push(edge);
-                });
-                return Array.from(map.values());
-            }, []);
+            // Compute path whenever start or end changes
+            useEffect(() => {
+                const result = findPath(startNode, endNode);
+                setPath(result);
+            }, [startNode, endNode]);
 
-            // Handlers
-            const handleNodeClick = (nodeId) => { setSelectedNode(nodeId); setSelectedConnection(null); };
-            const handleConnClick = (conn) => { setSelectedConnection(conn); setSelectedNode(null); };
-            const resetSelection = () => { setSelectedNode(null); setSelectedConnection(null); };
-            const resetView = () => { setScale(0.7); setPosition({ x: -100, y: -100 }); resetSelection(); };
-            
-            const handleWheel = (e) => {
-                e.preventDefault();
-                const zoomSensitivity = 0.001;
-                const newScale = Math.min(Math.max(0.2, scale - e.deltaY * zoomSensitivity), 3);
-                setScale(newScale);
-            };
+            // Helper to get node details
+            const getNode = (id) => reactionData.nodes.find(n => n.id === id);
 
-            const handleMouseDown = (e) => {
-                if (e.button === 0) {
-                    setIsDragging(true);
-                    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-                }
-            };
-            const handleMouseMove = (e) => {
-                if (isDragging) setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-            };
-            const handleMouseUp = () => setIsDragging(false);
-
-            const isNodeConnected = (nodeId) => {
-                if (!selectedNode) return false;
-                // Check if this node is directly connected to selected node
-                return connections.some(c => 
-                    (c.from === selectedNode && c.to === nodeId) || 
-                    (c.to === selectedNode && c.from === nodeId)
-                );
-            };
-
-            const isConnActive = (conn) => {
-                if (selectedConnection && selectedConnection === conn) return true;
-                if (selectedNode) {
-                    return conn.from === selectedNode || conn.to === selectedNode;
-                }
-                return false;
-            };
-
-            // Calculate Path
-            const getConnCoords = (conn) => {
-                const n1 = Nodes.find(n => n.id === conn.from);
-                const n2 = Nodes.find(n => n.id === conn.to);
-                const w = 160; const h = 70;
-                return {
-                    x1: n1.x + w/2, y1: n1.y + h/2,
-                    x2: n2.x + w/2, y2: n2.y + h/2
-                };
+            // Group nodes for dropdown
+            const groupedNodes = {
+                'Hydrocarbons': reactionData.nodes.filter(n => n.category === 'hydrocarbon'),
+                'Oxygen Containing': reactionData.nodes.filter(n => n.category === 'oxygen'),
+                'Carbonyls & Acids': reactionData.nodes.filter(n => ['carbonyl', 'acid', 'derivative'].includes(n.category)),
+                'Nitrogen Containing': reactionData.nodes.filter(n => n.category === 'nitrogen'),
             };
 
             return (
-                <div className="flex flex-col h-screen bg-slate-900 overflow-hidden relative font-sans">
+                <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
                     
                     {/* Header */}
-                    <div className="absolute top-0 left-0 w-full p-4 z-50 pointer-events-none flex justify-between items-start">
-                        <div className="pointer-events-auto bg-slate-900/80 p-2 rounded-xl border border-slate-700 backdrop-blur-md">
-                            <h1 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 flex items-center gap-2">
-                                <i data-lucide="network" className="text-cyan-400"/> 反應網絡探索器 v3.0
-                            </h1>
+                    <header className="max-w-6xl w-full mb-8 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-emerald-600 p-2 rounded-xl text-white shadow-lg">
+                                <FlaskConical size={28} />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-800">Organic Reaction Map</h1>
+                                <p className="text-slate-500 text-sm">HKDSE Chemistry • 有機合成路徑探索</p>
+                            </div>
                         </div>
-                        <div className="flex gap-2 pointer-events-auto">
-                            <button onClick={resetView} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600 text-xs font-bold transition-all shadow-lg">
-                                重置視圖
-                            </button>
+                        <div className="hidden md:block">
+                             <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-semibold">Synthesis Tool</span>
                         </div>
-                    </div>
+                    </header>
 
-                    {/* Main Map */}
-                    <div 
-                        className={`flex-grow bg-slate-900 overflow-hidden relative ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                        onWheel={handleWheel}
-                        onMouseDown={handleMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                    >
-                        <div 
-                            className="absolute w-[2400px] h-[1600px] origin-top-left transition-transform duration-75 ease-linear"
-                            style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})` }}
-                        >
-                            <svg width="2400" height="1600" className="overflow-visible">
-                                <defs>
-                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
-                                        <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
-                                    </marker>
-                                    <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
-                                        <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
-                                    </marker>
-                                </defs>
-
-                                {/* Connections */}
-                                {connections.map((conn, i) => {
-                                    const { x1, y1, x2, y2 } = getConnCoords(conn);
-                                    const active = isConnActive(conn);
-                                    
-                                    // Check if bidirectional
-                                    const hasForward = conn.reactions.some(r => r.from === conn.from);
-                                    const hasReverse = conn.reactions.some(r => r.from === conn.to);
-                                    const isBiDirectional = hasForward && hasReverse;
-
-                                    return (
-                                        <g key={i} onClick={(e) => { e.stopPropagation(); handleConnClick(conn); }}>
-                                            {/* Hit area */}
-                                            <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="30" />
-                                            
-                                            {/* Visual Line */}
-                                            <line 
-                                                x1={x1} y1={y1} x2={x2} y2={y2} 
-                                                className={`edge-path ${active ? 'edge-active' : ''}`}
-                                                stroke={active ? '#ef4444' : '#475569'} 
-                                                strokeWidth={active ? 4 : 2}
-                                                markerEnd={active ? "url(#arrowhead-active)" : "url(#arrowhead)"}
-                                                markerStart={isBiDirectional ? (active ? "url(#arrowhead-active)" : "url(#arrowhead)") : ""}
-                                            />
-                                        </g>
-                                    );
-                                })}
-
-                                {/* Nodes */}
-                                {Nodes.map(node => {
-                                    const active = selectedNode === node.id;
-                                    const connected = selectedNode && isNodeConnected(node.id);
-                                    
-                                    return (
-                                        <foreignObject key={node.id} x={node.x} y={node.y} width="160" height="70">
-                                            <div 
-                                                className={`
-                                                    w-full h-full rounded-xl flex items-center justify-center text-center p-2
-                                                    shadow-lg border-2 select-none node transition-all duration-300
-                                                    ${active ? 'node-active bg-indigo-900/90 text-white ring-4 ring-indigo-500/30' : 
-                                                      connected ? 'bg-slate-700 text-white border-white scale-105' : 'bg-slate-800 text-slate-300 border-slate-600'}
-                                                `}
-                                                style={{ borderColor: active ? '#818cf8' : (connected ? '#fff' : node.color) }}
-                                                onClick={(e) => { e.stopPropagation(); handleNodeClick(node.id); }}
-                                            >
-                                                <div>
-                                                    <div className="text-sm font-bold">{node.label.split('\n')[0]}</div>
-                                                    <div className="text-xs opacity-70 font-bold">{node.label.split('\n')[1]}</div>
-                                                </div>
-                                            </div>
-                                        </foreignObject>
-                                    );
-                                })}
-                            </svg>
-                        </div>
-                    </div>
-
-                    {/* Info Panel */}
-                    <div className={`absolute bottom-0 left-0 w-full bg-slate-800/95 backdrop-blur-md border-t-4 border-slate-700 transition-transform duration-300 z-50 shadow-2xl max-h-[50vh] overflow-y-auto
-                        ${selectedNode || selectedConnection ? 'translate-y-0' : 'translate-y-full'}
-                    `}>
-                        <div className="container mx-auto max-w-5xl p-6 relative">
-                            <button onClick={resetSelection} className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-700 rounded-full p-1"><i data-lucide="x" size={20}/></button>
+                    {/* Main Layout */}
+                    <main className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-12 gap-6">
+                        
+                        {/* Left Panel: Controls (4 cols) */}
+                        <div className="md:col-span-4 flex flex-col gap-6">
                             
-                            {/* Connection Details (Show ALL reactions between A and B) */}
-                            {selectedConnection && (
-                                <div className="animate-in fade-in slide-in-from-bottom-4">
-                                    <div className="flex items-center gap-3 mb-4 pb-2 border-b border-slate-700">
-                                        <div className="bg-cyan-500/20 text-cyan-400 px-3 py-1 rounded text-xs font-bold uppercase tracking-widest border border-cyan-500/50">Pathways</div>
-                                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                            {Nodes.find(n => n.id === selectedConnection.from).label.split('\n')[0]} 
-                                            <i data-lucide="arrow-left-right" className="text-slate-500"/> 
-                                            {Nodes.find(n => n.id === selectedConnection.to).label.split('\n')[0]}
-                                        </h2>
+                            {/* Input Card */}
+                            <div className="bg-white rounded-3xl shadow-md border border-slate-200 p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Search size={20} className="text-emerald-600"/> 設定路徑
+                                </h2>
+
+                                <div className="space-y-4">
+                                    {/* Start Node */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">起始物 (Starting Material)</label>
+                                        <div className="relative">
+                                            <select 
+                                                value={startNode} 
+                                                onChange={(e) => setStartNode(e.target.value)}
+                                                className="w-full p-3 pl-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 appearance-none text-slate-700 font-medium cursor-pointer transition-all hover:bg-slate-100"
+                                            >
+                                                {Object.entries(groupedNodes).map(([group, nodes]) => (
+                                                    <optgroup key={group} label={group}>
+                                                        {nodes.map(node => (
+                                                            <option key={node.id} value={node.id}>{node.label}</option>
+                                                        ))}
+                                                    </optgroup>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-3 top-3 pointer-events-none text-slate-400">
+                                                <Beaker size={18} />
+                                            </div>
+                                        </div>
                                     </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {selectedConnection.reactions.map((reaction, idx) => {
-                                            const fromLabel = Nodes.find(n => n.id === reaction.from).label.split('\n')[0];
-                                            const toLabel = Nodes.find(n => n.id === reaction.to).label.split('\n')[0];
-                                            
+
+                                    <div className="flex justify-center -my-2 z-10 relative">
+                                        <div className="bg-slate-200 rounded-full p-1">
+                                            <ArrowRight className="text-slate-500 rotate-90" size={20} />
+                                        </div>
+                                    </div>
+
+                                    {/* End Node */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">目標產物 (Target Product)</label>
+                                        <div className="relative">
+                                            <select 
+                                                value={endNode} 
+                                                onChange={(e) => setEndNode(e.target.value)}
+                                                className="w-full p-3 pl-4 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 appearance-none text-slate-700 font-medium cursor-pointer transition-all hover:bg-slate-100"
+                                            >
+                                                {Object.entries(groupedNodes).map(([group, nodes]) => (
+                                                    <optgroup key={group} label={group}>
+                                                        {nodes.map(node => (
+                                                            <option key={node.id} value={node.id} disabled={node.id === startNode}>{node.label}</option>
+                                                        ))}
+                                                    </optgroup>
+                                                ))}
+                                            </select>
+                                             <div className="absolute right-3 top-3 pointer-events-none text-slate-400">
+                                                <FlagIcon size={18} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => {
+                                            const temp = startNode;
+                                            setStartNode(endNode);
+                                            setEndNode(temp);
+                                        }}
+                                        className="w-full mt-2 py-2 flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors"
+                                    >
+                                        <RefreshCw size={16} /> 交換起點與終點
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* DSE Tips Card */}
+                            <div className="bg-purple-50 rounded-3xl p-6 border border-purple-100">
+                                <h3 className="text-purple-800 font-bold flex items-center gap-2 mb-3">
+                                    <Info size={20}/> DSE Synthesis Tips
+                                </h3>
+                                <ul className="text-sm text-purple-900 space-y-2 list-disc pl-4">
+                                    <li><strong>碳鏈增長 (Step-up):</strong> 常用 <span className="font-mono bg-purple-200 px-1 rounded">KCN</span> 將鹵代烷轉為腈 (-CN)。</li>
+                                    <li><strong>碳鏈縮短 (Step-down):</strong> 常用 <span className="font-mono bg-purple-200 px-1 rounded">Amide Degradation</span>。</li>
+                                    <li><strong>回流 (Reflux):</strong> 確保反應完全並防止揮發。</li>
+                                    <li><strong>氧化劑顏色:</strong> <span className="text-orange-600 font-bold">Cr₂O₇²⁻</span> (Orange → Green), <span className="text-purple-600 font-bold">MnO₄⁻</span> (Purple → Colourless)。</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Right Panel: Visualization (8 cols) */}
+                        <div className="md:col-span-8">
+                            <div className="bg-white rounded-3xl shadow-lg border border-slate-200 min-h-[500px] p-8 relative overflow-hidden">
+                                
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                                        <Map className="text-purple-600"/> 反應路徑圖
+                                    </h2>
+                                    {path && (
+                                        <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-mono">
+                                            {path.length - 1} {path.length - 1 === 1 ? 'Step' : 'Steps'}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Path Visualization */}
+                                <div className="space-y-0 relative z-10">
+                                    {!path ? (
+                                        <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                                            <AlertCircle size={48} className="mb-4 opacity-50"/>
+                                            <p>找不到可行的反應路徑</p>
+                                            <p className="text-xs mt-2">請嘗試從較簡單的官能基開始</p>
+                                        </div>
+                                    ) : (
+                                        path.map((step, index) => {
+                                            const nodeInfo = getNode(step.node);
+                                            const edgeInfo = step.edge;
+                                            const isLast = index === path.length - 1;
+
                                             return (
-                                                <div key={idx} className="bg-slate-900 p-4 rounded-xl border border-slate-600 shadow-inner hover:border-slate-500 transition-colors">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-xs font-bold text-slate-400 uppercase">{reaction.type}</span>
-                                                        <div className="flex items-center gap-1 text-xs font-mono text-indigo-400 bg-indigo-900/30 px-2 py-0.5 rounded">
-                                                            {fromLabel} <i data-lucide="arrow-right" size={12}/> {toLabel}
+                                                <div key={index} className="fade-in" style={{animationDelay: `${index * 0.15}s`}}>
+                                                    
+                                                    {/* The Reaction Arrow (if not first item) */}
+                                                    {edgeInfo && (
+                                                        <div className="flex pl-8 py-2">
+                                                            {/* Vertical Line */}
+                                                            <div className="w-1 bg-slate-200 mr-8 rounded-full relative"></div>
+                                                            
+                                                            {/* Reaction Card */}
+                                                            <div className="flex-1 bg-gradient-to-r from-emerald-50 to-white border-l-4 border-emerald-400 p-3 rounded-r-xl shadow-sm my-2">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div>
+                                                                        <div className="text-xs font-bold text-emerald-700 uppercase mb-1 flex items-center gap-1">
+                                                                            <Flame size={12}/> Reagents & Conditions
+                                                                        </div>
+                                                                        <div className="font-mono text-slate-800 font-semibold text-sm md:text-base">
+                                                                            {edgeInfo.reagents}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                         <span className="inline-block px-2 py-0.5 bg-white border border-emerald-200 rounded text-xs text-emerald-600 font-medium">
+                                                                            {edgeInfo.type}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                {edgeInfo.note && (
+                                                                    <div className="mt-2 text-xs text-slate-500 italic border-t border-emerald-100 pt-1">
+                                                                        💡 Tip: {edgeInfo.note}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* The Compound Node */}
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`
+                                                            w-16 h-16 rounded-2xl flex items-center justify-center shadow-md border-2
+                                                            ${isLast ? 'bg-purple-600 border-purple-600 text-white' : 
+                                                              index === 0 ? 'bg-emerald-600 border-emerald-600 text-white' : 
+                                                              'bg-white border-slate-200 text-slate-600'}
+                                                            font-bold text-xl relative z-10 transition-transform hover:scale-105
+                                                        `}>
+                                                            {index === 0 ? 'Start' : isLast ? 'End' : (index)}
+                                                        </div>
+                                                        <div className={`
+                                                            flex-1 p-4 rounded-2xl border shadow-sm flex justify-between items-center
+                                                            ${isLast ? 'bg-purple-50 border-purple-200' : 
+                                                              index === 0 ? 'bg-emerald-50 border-emerald-200' : 
+                                                              'bg-white border-slate-200'}
+                                                        `}>
+                                                            <div>
+                                                                <h3 className="font-bold text-lg text-slate-800">{nodeInfo.label}</h3>
+                                                                <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">{nodeInfo.category}</span>
+                                                            </div>
+                                                            {nodeInfo.note && (
+                                                                <div className="hidden md:block text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                                                    {nodeInfo.note}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                    <div className="text-lg text-yellow-400 font-mono font-bold mb-1 leading-tight">{reaction.reagents}</div>
-                                                    <div className="text-sm text-slate-300">{reaction.desc}</div>
+
                                                 </div>
                                             );
-                                        })}
-                                    </div>
+                                        })
+                                    )}
                                 </div>
-                            )}
 
-                            {/* Node Details */}
-                            {selectedNode && (
-                                <div className="animate-in fade-in slide-in-from-bottom-4">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded text-xs font-bold uppercase tracking-widest border border-indigo-500/50">Compound Class</div>
-                                        <h2 className="text-3xl font-bold text-white">{Nodes.find(n => n.id === selectedNode).label.replace('\n', ' ')}</h2>
-                                    </div>
-                                    <p className="text-slate-400 mt-2 flex items-center gap-2">
-                                        <i data-lucide="mouse-pointer-2" size={16}/> 點擊與此物質相連的線條，查看詳細反應條件。
-                                    </p>
+                                {/* Background decoration */}
+                                <div className="absolute top-0 right-0 opacity-5 pointer-events-none">
+                                    <svg width="300" height="300" viewBox="0 0 100 100">
+                                        <path d="M50 0 L93.3 25 V75 L50 100 L6.7 75 V25 Z" fill="currentColor"/>
+                                    </svg>
                                 </div>
-                            )}
+                            </div>
                         </div>
-                    </div>
+                    </main>
 
+                    {/* Footer */}
+                    <footer className="max-w-6xl w-full mt-12 text-center text-slate-400 text-sm pb-8">
+                        <p>© Luminous Learner • Designed for HKDSE Chemistry</p>
+                    </footer>
                 </div>
             );
         };
 
-        lucide.createIcons();
+        const FlagIcon = ({size}) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                <line x1="4" y1="22" x2="4" y2="15"></line>
+            </svg>
+        );
+
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
 </html>
-```
