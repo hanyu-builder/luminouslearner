@@ -51,86 +51,83 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
         const Icon = ({ name, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
             return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- POLYMER DATABASE ---
-        const POLYMERS = {
-            addition: [
-                { 
-                    id: 'pe', name: 'Polyethene (PE)', short: 'PE',
-                    monomer: 'Ethene',
-                    groups: ['H', 'H', 'H', 'H'], // Top-L, Top-R, Bot-L, Bot-R
-                    desc: 'Used in plastic bags and bottles. The simplest addition polymer.'
-                },
-                { 
-                    id: 'pvc', name: 'Polyvinyl Chloride (PVC)', short: 'PVC',
-                    monomer: 'Chloroethene',
-                    groups: ['H', 'H', 'H', 'Cl'], 
-                    desc: 'Used in pipes and wire insulation. Note the Chlorine atom.'
-                },
-                { 
-                    id: 'ps', name: 'Polystyrene (PS)', short: 'PS',
-                    monomer: 'Styrene',
-                    groups: ['H', 'H', 'H', 'Ph'], // Ph = Phenyl group
-                    desc: 'Used in packaging and foam. Contains a Benzene ring.'
-                },
-                { 
-                    id: 'pp', name: 'Polypropene (PP)', short: 'PP',
-                    monomer: 'Propene',
-                    groups: ['H', 'H', 'H', 'CH₃'], 
-                    desc: 'Used in ropes and crates. Note the Methyl group.'
-                },
-                { 
-                    id: 'ptfe', name: 'Polytetrafluoroethene (PTFE)', short: 'Teflon',
-                    monomer: 'Tetrafluoroethene',
-                    groups: ['F', 'F', 'F', 'F'], 
-                    desc: 'Non-stick coating. Carbon-Fluorine bonds are very strong.'
-                }
-            ],
-            condensation: [
-                {
-                    id: 'pet', name: 'Polyester (PET)', short: 'Terylene',
-                    type: 'ester',
-                    monomers: ['Benzene-1,4-dicarboxylic acid', 'Ethane-1,2-diol'],
-                    linkage: '-COO-',
-                    smallMol: 'H₂O',
-                    blocks: { A: 'HOOC-Ph-COOH', B: 'HO-CH₂CH₂-OH' },
-                    desc: 'Used in clothing and bottles. Formed by Acid + Alcohol.'
-                },
-                {
-                    id: 'nylon', name: 'Nylon-6,6', short: 'Nylon',
-                    type: 'amide',
-                    monomers: ['Hexanedioic acid', '1,6-diaminohexane'],
-                    linkage: '-CONH-',
-                    smallMol: 'H₂O',
-                    blocks: { A: 'HOOC-(CH₂)₄-COOH', B: 'H₂N-(CH₂)₆-NH₂' },
-                    desc: 'Strong fiber. Formed by Acid + Amine.'
-                }
-            ]
-        };
+        // --- POLYMER DATA (Raw) ---
+        const RAW_ADDITION = [
+            { 
+                id: 'pe', name: 'Polyethene (PE)', short: 'PE',
+                monomer: 'Ethene',
+                groups: ['H', 'H', 'H', 'H'], 
+                desc: 'Used in plastic bags and bottles. The simplest addition polymer.'
+            },
+            { 
+                id: 'pvc', name: 'Polyvinyl Chloride (PVC)', short: 'PVC',
+                monomer: 'Chloroethene',
+                groups: ['H', 'H', 'H', 'Cl'], 
+                desc: 'Used in pipes and wire insulation. Note the Chlorine atom.'
+            },
+            { 
+                id: 'ps', name: 'Polystyrene (PS)', short: 'PS',
+                monomer: 'Styrene',
+                groups: ['H', 'H', 'H', 'Ph'], 
+                desc: 'Used in packaging and foam. Contains a Benzene ring.'
+            },
+            { 
+                id: 'pp', name: 'Polypropene (PP)', short: 'PP',
+                monomer: 'Propene',
+                groups: ['H', 'H', 'H', 'CH₃'], 
+                desc: 'Used in ropes and crates. Note the Methyl group.'
+            },
+            { 
+                id: 'ptfe', name: 'Polytetrafluoroethene', short: 'Teflon',
+                monomer: 'Tetrafluoroethene',
+                groups: ['F', 'F', 'F', 'F'], 
+                desc: 'Non-stick coating. Carbon-Fluorine bonds are very strong.'
+            }
+        ];
 
-        // --- COMPONENTS ---
+        const RAW_CONDENSATION = [
+            {
+                id: 'pet', name: 'Polyester (PET)', short: 'Terylene',
+                type: 'ester',
+                monomers: ['Benzene-1,4-dicarboxylic acid', 'Ethane-1,2-diol'],
+                linkage: '-COO-',
+                smallMol: 'H₂O',
+                blocks: { A: 'HOOC-Ph-COOH', B: 'HO-CH₂CH₂-OH' },
+                desc: 'Used in clothing and bottles. Formed by Acid + Alcohol.'
+            },
+            {
+                id: 'nylon', name: 'Nylon-6,6', short: 'Nylon',
+                type: 'amide',
+                monomers: ['Hexanedioic acid', '1,6-diaminohexane'],
+                linkage: '-CONH-',
+                smallMol: 'H₂O',
+                blocks: { A: 'HOOC-(CH₂)₄-COOH', B: 'H₂N-(CH₂)₆-NH₂' },
+                desc: 'Strong fiber. Formed by Acid + Amine.'
+            }
+        ];
 
-        // 1. ADDITION POLYMER VISUALIZER (SVG)
+        // --- MERGED LIST (Flattened for safety) ---
+        const ALL_POLYMERS = [
+            ...RAW_ADDITION.map(p => ({ ...p, category: 'addition' })),
+            ...RAW_CONDENSATION.map(p => ({ ...p, category: 'condensation' }))
+        ];
+
+        // --- VISUALIZER COMPONENTS ---
+
         const AdditionVisualizer = ({ groups = [], progress }) => {
-            // progress: 0 (Monomer) -> 1 (Polymer)
-            
-            // Interpolation helpers
             const p = progress;
-            const bondGap = 20 * p; // Gap opens up for double bond breaking
-            const bracketAlpha = p; // Brackets fade in
-            const doubleBondOpacity = 1 - p; // Double bond fades out
+            const bracketAlpha = p; 
+            const doubleBondOpacity = 1 - p;
             const singleBondStroke = 4;
-            const sideBondExtension = 40 * p; // Bonds extending out
+            const sideBondExtension = 40 * p;
 
-            // Group Positions (Dynamic)
-            // Monomer State: Close to center
-            // Polymer State: Upright and rigid
             const gPos = {
                 tl: { x: 100 - (10*p), y: 80 - (20*p) },
                 tr: { x: 200 + (10*p), y: 80 - (20*p) },
@@ -138,7 +135,6 @@
                 br: { x: 200 + (10*p), y: 220 + (20*p) }
             };
 
-            // Safely get groups with fallbacks
             const g0 = groups[0] || '';
             const g1 = groups[1] || '';
             const g2 = groups[2] || '';
@@ -146,44 +142,28 @@
 
             return (
                 <svg width="300" height="300" viewBox="0 0 300 300" className="overflow-visible transition-all-slow">
-                    {/* Central Carbon Bond */}
-                    {/* The Single Bond (Always there) */}
                     <line x1="100" y1="150" x2="200" y2="150" stroke="#94a3b8" strokeWidth={singleBondStroke} strokeLinecap="round" />
-                    
-                    {/* The Double Bond (Fades out and moves) */}
-                    <line x1="100" y1="150" x2="200" y2="150" 
-                        stroke="#10b981" strokeWidth={singleBondStroke} strokeLinecap="round" 
-                        style={{ opacity: doubleBondOpacity, transform: `translateY(-12px)` }} 
-                    />
-                    
-                    {/* Side Bonds (Extending out) */}
+                    <line x1="100" y1="150" x2="200" y2="150" stroke="#10b981" strokeWidth={singleBondStroke} strokeLinecap="round" style={{ opacity: doubleBondOpacity, transform: `translateY(-12px)` }} />
                     <line x1="100" y1="150" x2={100 - sideBondExtension} y2="150" stroke="#94a3b8" strokeWidth={singleBondStroke} strokeLinecap="round" style={{opacity: p}} />
                     <line x1="200" y1="150" x2={200 + sideBondExtension} y2="150" stroke="#94a3b8" strokeWidth={singleBondStroke} strokeLinecap="round" style={{opacity: p}} />
 
-                    {/* Atoms C-C */}
                     <circle cx="100" cy="150" r="12" fill="#334155" />
                     <circle cx="200" cy="150" r="12" fill="#334155" />
                     <text x="100" y="155" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" dominantBaseline="middle">C</text>
                     <text x="200" y="155" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" dominantBaseline="middle">C</text>
 
-                    {/* Substituents (Groups) */}
-                    {/* Top Left */}
                     <line x1="100" y1="150" x2={gPos.tl.x} y2={gPos.tl.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.tl.x} y={gPos.tl.y} text={g0} align="middle" />
+                    <GroupLabel x={gPos.tl.x} y={gPos.tl.y} text={g0} />
 
-                    {/* Top Right */}
                     <line x1="200" y1="150" x2={gPos.tr.x} y2={gPos.tr.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.tr.x} y={gPos.tr.y} text={g1} align="middle" />
+                    <GroupLabel x={gPos.tr.x} y={gPos.tr.y} text={g1} />
 
-                    {/* Bot Left */}
                     <line x1="100" y1="150" x2={gPos.bl.x} y2={gPos.bl.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.bl.x} y={gPos.bl.y} text={g2} align="middle" />
+                    <GroupLabel x={gPos.bl.x} y={gPos.bl.y} text={g2} />
 
-                    {/* Bot Right */}
                     <line x1="200" y1="150" x2={gPos.br.x} y2={gPos.br.y} stroke="#94a3b8" strokeWidth="3" />
-                    <GroupLabel x={gPos.br.x} y={gPos.br.y} text={g3} align="middle" />
+                    <GroupLabel x={gPos.br.x} y={gPos.br.y} text={g3} />
 
-                    {/* Brackets & 'n' (Polymer Only) */}
                     <g style={{ opacity: bracketAlpha }}>
                         <path d="M 60 80 L 50 80 L 50 220 L 60 220" fill="none" stroke="#facc15" strokeWidth="4" />
                         <path d="M 240 80 L 250 80 L 250 220 L 240 220" fill="none" stroke="#facc15" strokeWidth="4" />
@@ -193,11 +173,9 @@
             );
         };
 
-        const GroupLabel = ({ x, y, text = '', align }) => {
-            // Defensive check: Ensure text is a string
+        const GroupLabel = ({ x, y, text = '' }) => {
             const safeText = String(text || '');
-            const isComplex = safeText.length > 2; // e.g. Ph, CH3
-            
+            const isComplex = safeText.length > 2;
             return (
                 <g transform={`translate(${x}, ${y})`}>
                     <circle r={isComplex ? 18 : 12} fill={isComplex ? '#ec4899' : '#0ea5e9'} />
@@ -206,117 +184,83 @@
             );
         };
 
-        // 2. CONDENSATION POLYMER VISUALIZER
         const CondensationVisualizer = ({ data = {}, progress }) => {
             const p = progress;
-            
-            // Box dimensions
             const boxW = 80, boxH = 50;
-            const gap = 100 - (80 * p); // Gap closes as they polymerize
-            
-            // Functional Groups reacting
-            // Acid end: -COOH or -COCl
-            // Alcohol/Amine end: -OH or -NH2
+            const gap = 100 - (80 * p);
             
             const isAmide = data.type === 'amide';
-            const leftGroup = isAmide ? 'C=O' : 'C=O'; 
-            const leavingLeft = 'OH'; // from acid
+            const leftGroup = 'C=O'; 
+            const leavingLeft = 'OH';
             const rightGroup = isAmide ? 'N-H' : 'O';
-            const leavingRight = 'H'; // from amine/alcohol
+            const leavingRight = 'H';
 
             return (
                 <svg width="400" height="200" viewBox="0 0 400 200" className="overflow-visible">
-                    
-                    {/* Left Monomer (Acid) */}
                     <g transform={`translate(${150 - gap/2}, 75)`}>
                         <rect x="-40" y="-25" width={boxW} height={boxH} rx="8" fill="#3b82f6" opacity="0.8" />
                         <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="12" fontWeight="bold">Monomer A</text>
-                        {/* Right active group */}
                         <text x="50" y="0" textAnchor="start" dominantBaseline="middle" fill="#facc15" fontSize="14" fontWeight="bold">{leftGroup}</text>
-                        
-                        {/* Leaving Group OH */}
                         <g style={{ opacity: 1-p, transform: `translate(${p * 20}px, ${p * -50}px)` }}>
                              <text x="80" y="0" textAnchor="start" dominantBaseline="middle" fill="#ef4444" fontSize="14" fontWeight="bold">{leavingLeft}</text>
                         </g>
                     </g>
 
-                    {/* Right Monomer (Alcohol/Amine) */}
                     <g transform={`translate(${250 + gap/2}, 75)`}>
                         <rect x="-40" y="-25" width={boxW} height={boxH} rx="8" fill="#a855f7" opacity="0.8" />
                         <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="12" fontWeight="bold">Monomer B</text>
-                        {/* Left active group */}
                         <text x="-50" y="0" textAnchor="end" dominantBaseline="middle" fill="#facc15" fontSize="14" fontWeight="bold">{rightGroup}</text>
-
-                        {/* Leaving Group H */}
                         <g style={{ opacity: 1-p, transform: `translate(${p * -20}px, ${p * -50}px)` }}>
                              <text x="-80" y="0" textAnchor="end" dominantBaseline="middle" fill="#ef4444" fontSize="14" fontWeight="bold">{leavingRight}</text>
                         </g>
                     </g>
 
-                    {/* New Bond Formed */}
                     <line x1={190} y1="75" x2={210} y2="75" stroke="#10b981" strokeWidth="4" style={{ opacity: p }} />
 
-                    {/* Small Molecule Dropping out */}
                     <g style={{ opacity: p, transform: `translate(200px, ${75 + (p*50)}px)` }}>
                         <circle r="15" fill="#ef4444" opacity="0.2" />
                         <text x="0" y="0" textAnchor="middle" dominantBaseline="middle" fill="#ef4444" fontSize="14" fontWeight="bold">{data.smallMol || ''}</text>
                         <text x="0" y="20" textAnchor="middle" fill="#94a3b8" fontSize="10">Small Molecule</text>
                     </g>
 
-                    {/* Polymer Brackets */}
                     <g style={{ opacity: p }}>
                         <path d="M 80 40 L 70 40 L 70 110 L 80 110" fill="none" stroke="#facc15" strokeWidth="3" />
                         <path d="M 320 40 L 330 40 L 330 110 L 320 110" fill="none" stroke="#facc15" strokeWidth="3" />
                         <line x1="70" y1="75" x2="50" y2="75" stroke="#94a3b8" strokeWidth="3" />
                         <line x1="330" y1="75" x2="350" y2="75" stroke="#94a3b8" strokeWidth="3" />
                     </g>
-
                 </svg>
             );
         };
 
         // --- MAIN APP ---
         const App = () => {
-            const [mode, setMode] = useState('addition'); // addition | condensation
-            const [selectedId, setSelectedId] = useState(0);
-            const [progress, setProgress] = useState(0); // 0 = Monomer, 1 = Polymer
+            const [selectedIndex, setSelectedIndex] = useState(0);
+            const [progress, setProgress] = useState(0); 
             const [animating, setAnimating] = useState(false);
 
-            // SAFETY FIX: Ensure currentData is never undefined (fallback to first item)
-            // This prevents crashes during mode switching where selectedId might be out of bounds
-            const currentList = POLYMERS[mode];
-            const currentData = currentList[selectedId] || currentList[0];
+            // Safe Access: Always get a valid object
+            const currentData = ALL_POLYMERS[selectedIndex] || ALL_POLYMERS[0];
+            const isAddition = currentData.category === 'addition';
 
-            // Reset when switching modes
-            useEffect(() => {
-                setSelectedId(0);
-                setProgress(0);
-            }, [mode]);
-
-            // Animation Loop Helper
+            // Animation Loop
             const toggleAnimation = () => {
                 if (animating) return;
                 setAnimating(true);
                 let start = null;
-                const duration = 2000; // 2s
-                const target = progress > 0.5 ? 0 : 1; // Toggle direction
+                const duration = 2000;
+                const target = progress > 0.5 ? 0 : 1; 
 
                 const step = (timestamp) => {
                     if (!start) start = timestamp;
                     const elapsed = timestamp - start;
                     const rawP = elapsed / duration;
                     const p = Math.min(rawP, 1);
-                    
-                    // Ease in-out
                     const eased = p < .5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
-
                     setProgress(target === 1 ? eased : 1 - eased);
 
-                    if (p < 1) {
-                        requestAnimationFrame(step);
-                    } else {
-                        setAnimating(false);
-                    }
+                    if (p < 1) requestAnimationFrame(step);
+                    else setAnimating(false);
                 };
                 requestAnimationFrame(step);
             };
@@ -325,96 +269,87 @@
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
                     
                     {/* Sidebar */}
-                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl">
-                        <div className="p-6 border-b border-slate-800">
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen">
+                        <div className="p-6 border-b border-slate-800 shrink-0">
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 <Icon name="link" className="text-emerald-400" /> Structure Decoder
                             </h1>
                             <p className="text-xs text-slate-400 mt-1">Monomer ↔ Polymer Converter</p>
                         </div>
 
-                        {/* Mode Switch */}
-                        <div className="p-4 grid grid-cols-2 gap-2 bg-slate-800/50 m-4 rounded-xl">
-                            <button 
-                                onClick={() => setMode('addition')}
-                                className={`py-2 px-3 rounded-lg text-sm font-bold transition-all ${mode === 'addition' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700'}`}
-                            >
-                                Addition
-                            </button>
-                            <button 
-                                onClick={() => setMode('condensation')}
-                                className={`py-2 px-3 rounded-lg text-sm font-bold transition-all ${mode === 'condensation' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-700'}`}
-                            >
-                                Condensation
-                            </button>
-                        </div>
-
-                        {/* List */}
+                        {/* Unified List */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                            {POLYMERS[mode].map((item, idx) => (
+                            {ALL_POLYMERS.map((item, idx) => (
                                 <button 
                                     key={item.id}
-                                    onClick={() => { setSelectedId(idx); setProgress(0); }}
-                                    className={`w-full text-left p-4 rounded-xl border transition-all group
-                                        ${currentData.id === item.id 
-                                            ? (mode === 'addition' ? 'bg-emerald-900/20 border-emerald-500/50' : 'bg-purple-900/20 border-purple-500/50') 
-                                            : 'bg-slate-800 border-slate-700 hover:border-slate-500'}
+                                    onClick={() => { setSelectedIndex(idx); setProgress(0); }}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all relative
+                                        ${selectedIndex === idx 
+                                            ? 'bg-slate-800 border-emerald-500 ring-1 ring-emerald-500/50' 
+                                            : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'}
                                     `}
                                 >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className={`font-bold ${currentData.id === item.id ? 'text-white' : 'text-slate-300'}`}>{item.short}</span>
-                                        {currentData.id === item.id && <Icon name="check-circle" className="w-4 h-4 text-emerald-400" />}
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className={`font-bold ${selectedIndex === idx ? 'text-white' : 'text-slate-300'}`}>
+                                            {item.short}
+                                        </span>
+                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                                            item.category === 'addition' 
+                                            ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' 
+                                            : 'bg-purple-900/30 text-purple-400 border border-purple-800'
+                                        }`}>
+                                            {item.category === 'addition' ? 'Add' : 'Cond'}
+                                        </span>
                                     </div>
-                                    <div className="text-xs text-slate-400">{item.name}</div>
+                                    <div className="text-xs text-slate-400 truncate">{item.name}</div>
                                 </button>
                             ))}
                         </div>
                     </div>
 
                     {/* Main Stage */}
-                    <div className="flex-1 relative flex flex-col">
+                    <div className="flex-1 relative flex flex-col h-screen overflow-hidden">
                         
                         {/* Visualizer Area */}
                         <div className="flex-1 bg-slate-900/50 flex items-center justify-center relative overflow-hidden">
-                            {/* Grid Background */}
                             <div className="absolute inset-0 opacity-10 pointer-events-none" 
                                 style={{backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
                             </div>
 
                             <div className="relative z-10 transform scale-110 md:scale-125">
-                                {mode === 'addition' ? (
+                                {isAddition ? (
                                     <AdditionVisualizer key={currentData.id} groups={currentData.groups} progress={progress} />
                                 ) : (
                                     <CondensationVisualizer key={currentData.id} data={currentData} progress={progress} />
                                 )}
                             </div>
 
-                            {/* Labels Overlay */}
-                            <div className="absolute top-8 left-0 right-0 flex justify-between px-12 md:px-24 pointer-events-none">
+                            {/* Labels */}
+                            <div className="absolute top-8 left-0 right-0 flex justify-between px-8 md:px-24 pointer-events-none">
                                 <div className={`transition-all duration-500 ${progress < 0.5 ? 'opacity-100 transform translate-y-0' : 'opacity-30 transform -translate-y-2'}`}>
-                                    <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">Monomer</div>
+                                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Monomer</div>
                                     <div className="text-2xl font-bold text-white mt-1">
-                                        {mode === 'addition' ? currentData.monomer : 'Monomers A + B'}
+                                        {isAddition ? currentData.monomer : 'Monomers A + B'}
                                     </div>
                                 </div>
                                 <div className={`transition-all duration-500 text-right ${progress > 0.5 ? 'opacity-100 transform translate-y-0' : 'opacity-30 transform -translate-y-2'}`}>
-                                    <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">Polymer</div>
+                                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Polymer</div>
                                     <div className="text-2xl font-bold text-emerald-400 mt-1">{currentData.name}</div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Control Deck */}
-                        <div className="h-48 bg-slate-800 border-t border-slate-700 p-6 md:p-8 flex flex-col md:flex-row gap-8 items-center">
+                        <div className="shrink-0 bg-slate-800 border-t border-slate-700 p-6 md:p-8 flex flex-col lg:flex-row gap-8 items-center safe-area-bottom">
                             
-                            {/* Slider Control */}
-                            <div className="flex-1 w-full max-w-lg">
+                            {/* Slider */}
+                            <div className="flex-1 w-full max-w-xl">
                                 <div className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-4 tracking-wider">
                                     <span>Decode (Monomer)</span>
                                     <span>Polymerize</span>
                                 </div>
                                 <div className="relative flex items-center gap-4">
-                                    <button onClick={toggleAnimation} className="p-3 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors shadow-lg">
+                                    <button onClick={toggleAnimation} className="p-3 rounded-full bg-slate-700 hover:bg-slate-600 transition-colors shadow-lg shrink-0">
                                         <Icon name={progress > 0.5 ? "rewind" : "play"} className="w-6 h-6 text-emerald-400" />
                                     </button>
                                     <div className="flex-1 relative">
@@ -422,9 +357,8 @@
                                             type="range" min="0" max="1" step="0.01" 
                                             value={progress} 
                                             onChange={(e) => setProgress(parseFloat(e.target.value))}
-                                            className="w-full z-20 relative"
+                                            className="w-full z-20 relative block"
                                         />
-                                        {/* Custom Track Background */}
                                         <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-600 rounded-full transform -translate-y-1/2 z-10 pointer-events-none">
                                             <div className="h-full bg-emerald-500 rounded-full" style={{width: `${progress * 100}%`}}></div>
                                         </div>
@@ -432,28 +366,25 @@
                                 </div>
                             </div>
 
-                            {/* Info Box */}
-                            <div className="flex-1 w-full bg-slate-900/80 p-4 rounded-xl border border-slate-600">
+                            {/* Info */}
+                            <div className="flex-1 w-full bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
                                 <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
-                                    <Icon name="info" className="w-4 h-4 text-blue-400" /> Key Features
+                                    <Icon name="info" className="w-4 h-4 text-blue-400" /> Reaction Details
                                 </h3>
-                                <p className="text-sm text-slate-400 leading-relaxed">
+                                <p className="text-sm text-slate-400 leading-relaxed mb-3">
                                     {currentData.desc}
                                 </p>
-                                <div className="mt-3 flex gap-2">
-                                    {mode === 'condensation' && (
-                                        <span className="text-xs bg-purple-900/50 text-purple-300 px-2 py-1 rounded border border-purple-500/30">
-                                            Linkage: {currentData.linkage}
-                                        </span>
-                                    )}
-                                    {mode === 'condensation' && (
-                                        <span className="text-xs bg-red-900/50 text-red-300 px-2 py-1 rounded border border-red-500/30">
+                                <div className="flex gap-2 flex-wrap">
+                                    <span className={`text-[10px] px-2 py-1 rounded border uppercase font-bold tracking-wider ${
+                                        isAddition 
+                                        ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800' 
+                                        : 'bg-purple-900/30 text-purple-300 border-purple-800'
+                                    }`}>
+                                        {isAddition ? 'Addition Mechanism' : 'Condensation Mechanism'}
+                                    </span>
+                                    {!isAddition && (
+                                        <span className="text-[10px] bg-red-900/30 text-red-300 px-2 py-1 rounded border border-red-800 uppercase font-bold tracking-wider">
                                             Lost: {currentData.smallMol}
-                                        </span>
-                                    )}
-                                    {mode === 'addition' && (
-                                        <span className="text-xs bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded border border-emerald-500/30">
-                                            No atom loss
                                         </span>
                                     )}
                                 </div>
