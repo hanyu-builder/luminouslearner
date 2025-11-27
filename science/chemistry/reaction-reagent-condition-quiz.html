@@ -15,10 +15,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
         .animate-slide-up { animation: slideUp 0.5s ease-out; }
-        
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
@@ -28,13 +25,11 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Safe Icon Component
         const Icon = ({ name, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
             return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- QUESTION BANK ---
         const questionBank = [
             // ALIPHATIC
             { from: "Alkene", to: "Alkane", correct: "H₂ / Pt", distractors: ["H₂SO₄", "LiAlH₄", "NaBH₄"], note: "Catalytic Hydrogenation adds H₂." },
@@ -62,38 +57,41 @@
         const shuffleArray = (array) => [...array].sort(() => Math.random() - 0.5);
 
         const App = () => {
-            const [gameState, setGameState] = useState('menu'); 
+            const [shuffledQuestions, setShuffledQuestions] = useState([]);
             const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+            const [currentOptions, setCurrentOptions] = useState([]);
+            
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
-            const [shuffledQuestions, setShuffledQuestions] = useState([]);
-            const [currentOptions, setCurrentOptions] = useState([]);
             const [feedback, setFeedback] = useState(null); 
             const [selectedOption, setSelectedOption] = useState(null);
+            const [isGameOver, setIsGameOver] = useState(false);
 
-            const startGame = () => {
+            // Initialize Game on Mount
+            useEffect(() => {
+                initGame();
+            }, []);
+
+            const initGame = () => {
                 const q = shuffleArray(questionBank).slice(0, 10);
                 setShuffledQuestions(q);
                 setCurrentQuestionIndex(0);
                 setScore(0);
                 setStreak(0);
-                // Important: Load the first question options immediately
-                const firstQ = q[0];
-                const opts = shuffleArray([firstQ.correct, ...firstQ.distractors]);
-                setCurrentOptions(opts);
-                
-                setGameState('playing');
-            };
-
-            const loadQuestion = (question) => {
                 setFeedback(null);
                 setSelectedOption(null);
-                const opts = shuffleArray([question.correct, ...question.distractors]);
-                setCurrentOptions(opts);
+                setIsGameOver(false);
+                
+                // Set first question options safely
+                if (q.length > 0) {
+                    const firstQ = q[0];
+                    setCurrentOptions(shuffleArray([firstQ.correct, ...firstQ.distractors]));
+                }
             };
 
             const handleAnswer = (option) => {
                 if (feedback) return;
+                
                 const currentQ = shuffledQuestions[currentQuestionIndex];
                 const isCorrect = option === currentQ.correct;
                 setSelectedOption(option);
@@ -111,46 +109,28 @@
             const nextQuestion = () => {
                 if (currentQuestionIndex < shuffledQuestions.length - 1) {
                     const nextIdx = currentQuestionIndex + 1;
+                    const nextQ = shuffledQuestions[nextIdx];
+                    
                     setCurrentQuestionIndex(nextIdx);
-                    loadQuestion(shuffledQuestions[nextIdx]);
+                    setFeedback(null);
+                    setSelectedOption(null);
+                    setCurrentOptions(shuffleArray([nextQ.correct, ...nextQ.distractors]));
                 } else {
-                    setGameState('result');
+                    setIsGameOver(true);
                 }
             };
 
-            // --- MENU SCREEN ---
-            if (gameState === 'menu') {
+            // --- LOADING STATE (Crash Prevention) ---
+            if (shuffledQuestions.length === 0) {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0F172A] relative overflow-hidden">
-                        <div className="absolute inset-0 opacity-10 pointer-events-none">
-                             <svg width="100%" height="100%">
-                                <pattern id="pattern-circles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-                                    <circle cx="20" cy="20" r="1.5" fill="#fff"/>
-                                </pattern>
-                                <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)"/>
-                             </svg>
-                        </div>
-                        <div className="text-center space-y-8 z-10 animate-fade-in">
-                            <div className="inline-block p-4 rounded-full bg-slate-800 border-2 border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.3)] mb-4">
-                                <Icon name="flask-conical" className="w-16 h-16 text-emerald-400" />
-                            </div>
-                            <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
-                                Reagent Master
-                            </h1>
-                            <p className="text-slate-400 text-lg max-w-md mx-auto">
-                                測試你對有機化學反應條件的熟悉程度。準備好挑戰 DSE 級別的試劑庫了嗎？
-                            </p>
-                            <button onClick={startGame} className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all duration-200 bg-emerald-600 font-lg rounded-full hover:bg-emerald-500 hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] focus:outline-none ring-offset-2 focus:ring-2 ring-emerald-400">
-                                <span className="mr-2">開始挑戰</span>
-                                <Icon name="arrow-right" className="w-5 h-5 group-hover:translate-x-1 transition-transform"/>
-                            </button>
-                        </div>
+                    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center">
+                        <div className="text-emerald-400 font-mono animate-pulse">Initializing Reactor...</div>
                     </div>
                 );
             }
 
             // --- RESULT SCREEN ---
-            if (gameState === 'result') {
+            if (isGameOver) {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0F172A] text-center">
                         <div className="bg-slate-800/80 backdrop-blur p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-md w-full animate-slide-up">
@@ -170,7 +150,7 @@
                                     <div className="text-xl font-bold text-yellow-400">x{streak}</div>
                                 </div>
                             </div>
-                            <button onClick={() => setGameState('menu')} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
+                            <button onClick={initGame} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
                                 <Icon name="rotate-ccw" className="w-4 h-4"/> 再玩一次
                             </button>
                         </div>
@@ -178,11 +158,8 @@
                 );
             }
 
-            // --- PLAYING STATE ---
-            
-            // ★ CRITICAL FIX: Guard Clause to prevent crash if data isn't ready
+            // --- QUIZ INTERFACE ---
             const currentQ = shuffledQuestions[currentQuestionIndex];
-            if (!currentQ) return <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-emerald-400">Loading...</div>;
 
             return (
                 <div className="min-h-screen bg-[#0F172A] flex flex-col items-center p-4 md:p-8">
@@ -208,9 +185,11 @@
 
                     {/* Question Card */}
                     <div className="w-full max-w-2xl bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 overflow-hidden mb-6 relative">
+                        {/* Progress Bar */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-slate-700">
                             <div className="h-full bg-emerald-500 transition-all duration-300" style={{width: `${((currentQuestionIndex) / 10) * 100}%`}}></div>
                         </div>
+
                         <div className="p-8 text-center space-y-6">
                             <h2 className="text-slate-400 uppercase tracking-widest text-xs font-bold">Conversion Task</h2>
                             <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 my-4">
