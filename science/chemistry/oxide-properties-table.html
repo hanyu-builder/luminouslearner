@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oxide Properties Table</title>
+    <title>Oxide Properties Table v3.0</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -53,132 +53,152 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- DATASET ---
-        const OXIDES = [
-            {
-                element: 'Na',
-                formula: 'Na₂O',
-                name: 'Sodium Oxide',
-                state: 'Solid',
-                bonding: 'Ionic',
-                structure: 'Giant Ionic',
-                acidBase: 'Basic',
-                ph: '13-14',
-                reaction: 'Na₂O(s) + H₂O(l) → 2NaOH(aq)',
-                desc: 'Vigorous reaction with water to form a strong alkali.',
-                color: 'text-purple-400',
-                bgColor: 'bg-purple-900/20',
-                borderColor: 'border-purple-500/50'
-            },
-            {
-                element: 'Mg',
-                formula: 'MgO',
-                name: 'Magnesium Oxide',
-                state: 'Solid',
-                bonding: 'Ionic',
-                structure: 'Giant Ionic',
-                acidBase: 'Basic',
-                ph: '9-10',
-                reaction: 'MgO(s) + H₂O(l) ⇌ Mg(OH)₂(s/aq)',
-                desc: 'Slightly soluble in water. Forms a weak alkaline solution.',
-                color: 'text-purple-400',
-                bgColor: 'bg-purple-900/20',
-                borderColor: 'border-purple-500/50'
-            },
-            {
-                element: 'Al',
-                formula: 'Al₂O₃',
-                name: 'Aluminium Oxide',
-                state: 'Solid',
-                bonding: 'Ionic (with covalent character)',
-                structure: 'Giant Ionic',
-                acidBase: 'Amphoteric',
-                ph: '7 (Insoluble)',
-                reaction: 'Insoluble in water',
-                desc: 'Reacts with both acids and bases. High melting point.',
-                color: 'text-emerald-400',
-                bgColor: 'bg-emerald-900/20',
-                borderColor: 'border-emerald-500/50'
-            },
-            {
-                element: 'Si',
-                formula: 'SiO₂',
-                name: 'Silicon Dioxide',
-                state: 'Solid',
-                bonding: 'Covalent',
-                structure: 'Giant Covalent',
-                acidBase: 'Acidic',
-                ph: '7 (Insoluble)',
-                reaction: 'Insoluble in water',
-                desc: 'Sand/Quartz. Reacts with hot conc. NaOH but not water.',
-                color: 'text-orange-400',
-                bgColor: 'bg-orange-900/20',
-                borderColor: 'border-orange-500/50'
-            },
-            {
-                element: 'P',
-                formula: 'P₄O₁₀',
-                name: 'Phosphorus(V) Oxide',
-                state: 'Solid',
-                bonding: 'Covalent',
-                structure: 'Simple Molecular',
-                acidBase: 'Acidic',
-                ph: '1-2',
-                reaction: 'P₄O₁₀(s) + 6H₂O(l) → 4H₃PO₄(aq)',
-                desc: 'Violent reaction. Forms phosphoric acid.',
-                color: 'text-red-400',
-                bgColor: 'bg-red-900/20',
-                borderColor: 'border-red-500/50'
-            },
-            {
-                element: 'S',
-                formula: 'SO₂ / SO₃',
-                name: 'Sulphur Dioxide / Trioxide',
-                state: 'Gas / Liquid',
-                bonding: 'Covalent',
-                structure: 'Simple Molecular',
-                acidBase: 'Acidic',
-                ph: '1-2',
-                reaction: 'SO₂(g) + H₂O(l) ⇌ H₂SO₃(aq)',
-                desc: 'Forms sulphurous acid (SO₂) or sulphuric acid (SO₃).',
-                color: 'text-red-400',
-                bgColor: 'bg-red-900/20',
-                borderColor: 'border-red-500/50'
-            },
-            {
-                element: 'Cl',
-                formula: 'Cl₂O₇',
-                name: 'Dichlorine Heptoxide',
-                state: 'Liquid',
-                bonding: 'Covalent',
-                structure: 'Simple Molecular',
-                acidBase: 'Acidic',
-                ph: '1-2',
-                reaction: 'Cl₂O₇(l) + H₂O(l) → 2HClO₄(aq)',
-                desc: 'Forms perchloric acid, a very strong acid.',
-                color: 'text-red-400',
-                bgColor: 'bg-red-900/20',
-                borderColor: 'border-red-500/50'
-            }
-        ];
+        // --- EXTENDED DATASET ---
+        const DATABASE = {
+            3: [
+                {
+                    element: 'Na', formula: 'Na₂O', name: 'Sodium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Basic', ph: '13-14',
+                    reaction: 'Na₂O(s) + H₂O(l) → 2NaOH(aq)',
+                    desc: 'Vigorous reaction with water to form a strong alkali.',
+                    color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
+                },
+                {
+                    element: 'Mg', formula: 'MgO', name: 'Magnesium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Basic', ph: '9-10',
+                    reaction: 'MgO(s) + H₂O(l) ⇌ Mg(OH)₂(s/aq)',
+                    desc: 'Slightly soluble in water. Forms a weak alkaline solution.',
+                    color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
+                },
+                {
+                    element: 'Al', formula: 'Al₂O₃', name: 'Aluminium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Amphoteric', ph: '7 (Insoluble)',
+                    reaction: 'Insoluble in water',
+                    desc: 'Reacts with both acids and bases. High melting point.',
+                    color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
+                },
+                {
+                    element: 'Si', formula: 'SiO₂', name: 'Silicon Dioxide',
+                    state: 'Solid', bonding: 'Covalent', structure: 'Giant Covalent',
+                    acidBase: 'Acidic', ph: '7 (Insoluble)',
+                    reaction: 'Insoluble in water',
+                    desc: 'Sand/Quartz. Reacts with hot conc. NaOH but not water.',
+                    color: 'text-orange-400', bgColor: 'bg-orange-900/20', borderColor: 'border-orange-500/50'
+                },
+                {
+                    element: 'P', formula: 'P₄O₁₀', name: 'Phosphorus(V) Oxide',
+                    state: 'Solid', bonding: 'Covalent', structure: 'Simple Molecular',
+                    acidBase: 'Acidic', ph: '1-2',
+                    reaction: 'P₄O₁₀(s) + 6H₂O(l) → 4H₃PO₄(aq)',
+                    desc: 'Violent reaction. Forms phosphoric acid.',
+                    color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
+                },
+                {
+                    element: 'S', formula: 'SO₂ / SO₃', name: 'Sulphur Dioxide / Trioxide',
+                    state: 'Gas / Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
+                    acidBase: 'Acidic', ph: '1-2',
+                    reaction: 'SO₂(g) + H₂O(l) ⇌ H₂SO₃(aq)',
+                    desc: 'Forms sulphurous acid (SO₂) or sulphuric acid (SO₃).',
+                    color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
+                },
+                {
+                    element: 'Cl', formula: 'Cl₂O₇', name: 'Dichlorine Heptoxide',
+                    state: 'Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
+                    acidBase: 'Acidic', ph: '1-2',
+                    reaction: 'Cl₂O₇(l) + H₂O(l) → 2HClO₄(aq)',
+                    desc: 'Forms perchloric acid, a very strong acid.',
+                    color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
+                }
+            ],
+            4: [
+                {
+                    element: 'K', formula: 'K₂O', name: 'Potassium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Basic', ph: '13-14',
+                    reaction: 'K₂O(s) + H₂O(l) → 2KOH(aq)',
+                    desc: 'Very vigorous reaction. Forms a strong alkali.',
+                    color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
+                },
+                {
+                    element: 'Ca', formula: 'CaO', name: 'Calcium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Basic', ph: '10-12',
+                    reaction: 'CaO(s) + H₂O(l) → Ca(OH)₂(aq)',
+                    desc: 'Quicklime. Exothermic reaction forming limewater.',
+                    color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-500/50'
+                },
+                {
+                    element: 'Ga', formula: 'Ga₂O₃', name: 'Gallium Oxide',
+                    state: 'Solid', bonding: 'Ionic', structure: 'Giant Ionic',
+                    acidBase: 'Amphoteric', ph: '7 (Insoluble)',
+                    reaction: 'Insoluble in water',
+                    desc: 'Similar to Al₂O₃. Reacts with both acids and alkalis.',
+                    color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
+                },
+                {
+                    element: 'Ge', formula: 'GeO₂', name: 'Germanium Dioxide',
+                    state: 'Solid', bonding: 'Covalent', structure: 'Giant Covalent',
+                    acidBase: 'Acidic', ph: '7 (Insoluble)',
+                    reaction: 'Insoluble in water',
+                    desc: 'Similar to SiO₂ but can form rutile structure.',
+                    color: 'text-orange-400', bgColor: 'bg-orange-900/20', borderColor: 'border-orange-500/50'
+                },
+                {
+                    element: 'As', formula: 'As₄O₆', name: 'Arsenic(III) Oxide',
+                    state: 'Solid', bonding: 'Covalent', structure: 'Simple Molecular',
+                    acidBase: 'Amphoteric', ph: '4-5', // Slightly acidic but amphoteric
+                    reaction: 'As₄O₆(s) + 6H₂O(l) ⇌ 4H₃AsO₃(aq)',
+                    desc: 'White solid. Amphoteric but more acidic character.',
+                    color: 'text-emerald-400', bgColor: 'bg-emerald-900/20', borderColor: 'border-emerald-500/50'
+                },
+                {
+                    element: 'Se', formula: 'SeO₂', name: 'Selenium Dioxide',
+                    state: 'Solid', bonding: 'Covalent', structure: 'Polymeric/Molecular',
+                    acidBase: 'Acidic', ph: '2-3',
+                    reaction: 'SeO₂(s) + H₂O(l) → H₂SeO₃(aq)',
+                    desc: 'White solid. Forms selenous acid.',
+                    color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
+                },
+                {
+                    element: 'Br', formula: 'Br₂O', name: 'Bromine Monoxide',
+                    state: 'Liquid', bonding: 'Covalent', structure: 'Simple Molecular',
+                    acidBase: 'Acidic', ph: '2-3',
+                    reaction: 'Br₂O(l) + H₂O(l) → 2HBrO(aq)',
+                    desc: 'Unstable dark brown liquid. Forms hypobromous acid.',
+                    color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-500/50'
+                }
+            ]
+        };
 
         const App = () => {
+            const [period, setPeriod] = useState(3);
             const [selectedIdx, setSelectedIdx] = useState(0);
-            const [filter, setFilter] = useState('All'); // All, Basic, Acidic, Amphoteric
+            const [filter, setFilter] = useState('All'); 
+
+            const oxides = DATABASE[period];
 
             const filteredIndices = useMemo(() => {
-                if (filter === 'All') return OXIDES.map((_, i) => i);
-                return OXIDES.map((ox, i) => ox.acidBase === filter ? i : -1).filter(i => i !== -1);
-            }, [filter]);
+                if (filter === 'All') return oxides.map((_, i) => i);
+                return oxides.map((ox, i) => ox.acidBase === filter ? i : -1).filter(i => i !== -1);
+            }, [filter, oxides]);
 
-            // Auto-select first item when filter changes if current selection is invalid
             useEffect(() => {
                 if (!filteredIndices.includes(selectedIdx)) {
                     if (filteredIndices.length > 0) setSelectedIdx(filteredIndices[0]);
+                    else setSelectedIdx(0);
                 }
             }, [filter, filteredIndices, selectedIdx]);
 
-            const current = OXIDES[selectedIdx];
+            // Reset selection when period changes
+            useEffect(() => {
+                setSelectedIdx(0);
+                setFilter('All');
+            }, [period]);
+
+            const current = oxides[selectedIdx] || oxides[0];
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
@@ -189,12 +209,25 @@
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 <Icon name="flask-conical" className="text-blue-400" /> Oxide Properties
                             </h1>
-                            <p className="text-xs text-slate-400 mt-1">Period 3 Elements</p>
+                            <div className="flex items-center gap-2 mt-3">
+                                <button 
+                                    onClick={() => setPeriod(3)}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${period === 3 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    Period 3
+                                </button>
+                                <button 
+                                    onClick={() => setPeriod(4)}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${period === 4 ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    Period 4
+                                </button>
+                            </div>
                         </div>
 
-                        {/* List - Note: Filter Tabs removed from here */}
+                        {/* List */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                            {OXIDES.map((ox, idx) => {
+                            {oxides.map((ox, idx) => {
                                 const isVisible = filteredIndices.includes(idx);
                                 if (!isVisible) return null;
                                 
@@ -228,9 +261,9 @@
                     {/* Main Content */}
                     <div className="flex-1 overflow-y-auto p-6 md:p-12 relative flex flex-col items-center">
                         
-                        {/* NEW: Central Navigation Bar */}
-                        <div className="w-full max-w-4xl mb-8 flex justify-center">
-                            <div className="bg-slate-800/80 backdrop-blur p-1 rounded-xl border border-slate-700 shadow-lg inline-flex gap-1 overflow-x-auto max-w-full">
+                        {/* Central Navigation Bar */}
+                        <div className="w-full max-w-4xl mb-8 flex justify-center sticky top-0 z-20">
+                            <div className="bg-slate-800/80 backdrop-blur-md p-1 rounded-xl border border-slate-700 shadow-lg inline-flex gap-1 overflow-x-auto max-w-full">
                                 {['All', 'Basic', 'Acidic', 'Amphoteric'].map(f => (
                                     <button 
                                         key={f} 
@@ -247,7 +280,7 @@
                             </div>
                         </div>
 
-                        <div className="w-full max-w-4xl space-y-8 card-enter" key={current.element}>
+                        <div className="w-full max-w-4xl space-y-8 card-enter pb-10" key={current.element}>
                             
                             {/* Header Card */}
                             <div className="bg-slate-800 rounded-3xl border border-slate-700 p-8 relative overflow-hidden shadow-2xl">
