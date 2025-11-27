@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Periodic Trend Grapher v2.2</title>
+    <title>Periodic Trend Grapher v2.3</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -151,7 +151,7 @@
             return '#94a3b8'; // Grey (Noble Gas)
         };
 
-        // Modified Graph to accept onHover callback
+        // Graph Component
         const Graph = ({ activeProp, activePeriod, onHover }) => {
             const periodData = PERIOD_DATA[activePeriod];
             const values = periodData.data[activeProp];
@@ -301,12 +301,12 @@
                         </div>
 
                         {/* Graph Area */}
-                        <div className="flex-1 bg-slate-900/50 p-4 md:p-12 flex items-center justify-center relative">
+                        <div className="flex-1 bg-slate-900/50 p-4 md:p-12 flex items-center justify-center relative min-h-0">
                             <div className="absolute inset-0 opacity-10 pointer-events-none" 
                                 style={{backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
                             </div>
 
-                            <div className="w-full max-w-4xl h-[400px] relative z-10 pt-10">
+                            <div className="w-full max-w-5xl h-full max-h-[500px] relative z-10 pt-16">
                                 <Graph 
                                     key={`${activeProp}-${activePeriod}`} 
                                     activeProp={activeProp} 
@@ -316,54 +316,57 @@
                             </div>
                         </div>
 
-                        {/* Info Panel (Dynamic) */}
-                        <div className="bg-slate-800 border-t border-slate-700 p-6 md:p-8 shrink-0 safe-area-bottom min-h-[140px]">
-                            <div className="max-w-4xl mx-auto">
-                                {hoveredData ? (
-                                    // Single Element View
-                                    <div className="flex items-center gap-6 animate-in">
-                                        <div className="p-4 bg-slate-700 rounded-2xl border border-slate-600 shadow-lg">
-                                            <span className="text-4xl font-black text-white" style={{color: getColor(hoveredData.el.struct)}}>{hoveredData.el.symbol}</span>
+                        {/* --- NEW SECTION: Element Data Box (Middle) --- */}
+                        <div className="bg-slate-800 border-t border-slate-700 p-4 h-24 flex items-center justify-center shrink-0 z-20 shadow-lg">
+                            {hoveredData ? (
+                                <div className="flex items-center gap-8 fade-in w-full max-w-4xl px-4">
+                                    {/* Element Symbol & Name */}
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-2xl bg-slate-700 shadow-inner" style={{color: getColor(hoveredData.el.struct)}}>
+                                            {hoveredData.el.symbol}
                                         </div>
                                         <div>
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                                                    {hoveredData.el.struct}
-                                                </span>
-                                                <span className="text-slate-600 text-xs">•</span>
-                                                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                                                    {hoveredData.el.type}
-                                                </span>
-                                            </div>
-                                            <div className="text-3xl font-bold text-white flex items-baseline gap-2">
-                                                {hoveredData.el.name}
-                                            </div>
-                                            <div className="text-emerald-400 font-mono text-xl mt-1 font-bold">
-                                                {hoveredData.val} <span className="text-sm text-emerald-400/60">{currentPropConfig.unit}</span>
-                                            </div>
+                                            <div className="text-white font-bold text-lg leading-none">{hoveredData.el.name}</div>
+                                            <div className="text-slate-400 text-xs font-mono mt-1 uppercase tracking-wide">{hoveredData.el.struct}</div>
                                         </div>
                                     </div>
-                                ) : (
-                                    // Trend Analysis View (Default)
-                                    <div className="flex items-start gap-4 animate-in">
-                                        <div className="p-3 bg-slate-700 rounded-xl hidden md:block">
-                                            <Icon name="trending-up" className="text-blue-400" size={28} />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="bg-slate-700 text-xs px-2 py-0.5 rounded text-slate-300 border border-slate-600">
-                                                    Trend Analysis
-                                                </span>
-                                                <h2 className="text-lg font-bold text-white">
-                                                    {currentPropConfig.label}
-                                                </h2>
-                                            </div>
-                                            <p className="text-slate-400 text-sm leading-relaxed max-w-3xl">
-                                                {currentNote}
-                                            </p>
+                                    
+                                    {/* Separator */}
+                                    <div className="w-px h-10 bg-slate-700 hidden sm:block"></div>
+
+                                    {/* Value Display */}
+                                    <div className="flex-1">
+                                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">{currentPropConfig.label}</div>
+                                        <div className="text-emerald-400 font-mono text-2xl font-bold flex items-baseline gap-2">
+                                            {hoveredData.val} 
+                                            <span className="text-sm text-emerald-400/60 font-normal">{currentPropConfig.unit}</span>
                                         </div>
                                     </div>
-                                )}
+                                </div>
+                            ) : (
+                                <div className="text-slate-500 text-sm flex items-center gap-2 animate-pulse">
+                                    <Icon name="mouse-pointer-2" className="w-4 h-4" />
+                                    Hover over any data point on the graph to reveal detailed element statistics
+                                </div>
+                            )}
+                        </div>
+
+                        {/* --- NEW SECTION: Trend Analysis (Bottom Footer) --- */}
+                        <div className="bg-slate-900 border-t border-slate-800 p-6 shrink-0 z-30">
+                            <div className="max-w-4xl mx-auto flex items-start gap-4">
+                                <div className="p-2 bg-slate-800 rounded-lg hidden md:block shrink-0">
+                                    <Icon name="trending-up" className="text-blue-400" size={24} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Overall Trend</span>
+                                        <span className="text-slate-600">•</span>
+                                        <span className="text-xs text-slate-400">{PERIOD_DATA[activePeriod].label}</span>
+                                    </div>
+                                    <p className="text-slate-300 text-sm leading-relaxed">
+                                        {currentNote}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
