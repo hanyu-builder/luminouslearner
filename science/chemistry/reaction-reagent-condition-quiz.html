@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reagent Master - Ultimate Database</title>
+    <title>Reagent Master - Full Revision Mode</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -25,7 +25,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- EXPANDED QUESTION BANK (50+ Questions) ---
+        // --- DATA: 52 Questions ---
         const RAW_QUESTIONS = [
             // === 1. ALKENES & ALKANES ===
             { from: "Alkene", to: "Alkane", correct: "H₂ / Pt, Heat", distractors: ["H₂SO₄", "LiAlH₄", "NaBH₄"], note: "Catalytic Hydrogenation (Hardening of oils)." },
@@ -44,7 +44,7 @@
             { from: "Haloalkane", to: "Grignard Reagent", correct: "Mg / Dry Ether", distractors: ["Mg / Water", "Zn / HCl", "LiAlH₄"], note: "Formation of Organometallic reagent." },
 
             // === 3. ALCOHOLS ===
-            { from: "1° Alcohol", to: "Aldehyde", correct: "K₂Cr₂O₇ / H⁺, Distil", distractors: ["KMnO₄ / Reflux", "LiAlH₄", "Conc. H₂SO₄"], note: "Distillation removes aldehyde preventing further oxidation." },
+            { from: "1° Alcohol", to: "Aldehyde", correct: "K₂Cr₂O₇ / H⁺, Distil", distractors: ["KMnO₄ / Reflux", "LiAlH₄", "Conc. H₂SO₄"], note: "Distillation removes the aldehyde preventing further oxidation." },
             { from: "1° Alcohol", to: "Carboxylic Acid", correct: "KMnO₄ / H⁺, Reflux", distractors: ["PCC", "NaBH₄", "NaOH"], note: "Strong oxidation ensures complete conversion." },
             { from: "2° Alcohol", to: "Ketone", correct: "K₂Cr₂O₇ / H⁺, Reflux", distractors: ["LiAlH₄", "Tollens' Reagent", "NaOH"], note: "Ketones cannot be oxidized further easily." },
             { from: "Alcohol", to: "Alkene", correct: "Conc. H₂SO₄, 170°C", distractors: ["Dilute H₂SO₄", "NaOH", "H₂ / Pt"], note: "Dehydration (Elimination of water)." },
@@ -94,7 +94,6 @@
             { from: "Test for Amide", to: "NH₃ gas", correct: "NaOH(aq), Heat", distractors: ["HCl", "H₂O", "Na₂CO₃"], note: "Pungent smell, turns red litmus blue." }
         ];
 
-        // Simple Shuffle Function
         const shuffle = (array) => {
             const newArr = [...array];
             for (let i = newArr.length - 1; i > 0; i--) {
@@ -109,19 +108,20 @@
             const [questions, setQuestions] = useState([]); 
             const [index, setIndex] = useState(0);
             const [score, setScore] = useState(0);
+            const [correctCount, setCorrectCount] = useState(0); // Added for precise accuracy
             const [streak, setStreak] = useState(0);
             const [finished, setFinished] = useState(false);
             
-            // UI States
             const [feedback, setFeedback] = useState(null); 
             const [selectedOption, setSelectedOption] = useState(null);
 
             // --- INITIALIZATION ---
             useEffect(() => {
-                // Pick 20 random questions from the massive pool each game
-                const selectedQuestions = shuffle(RAW_QUESTIONS).slice(0, 20);
+                // Shuffle the questions so the order is different each time, 
+                // BUT take ALL of them (no .slice)
+                const allQuestionsShuffled = shuffle(RAW_QUESTIONS);
                 
-                const prepared = selectedQuestions.map(q => ({
+                const prepared = allQuestionsShuffled.map(q => ({
                     ...q,
                     options: shuffle([q.correct, ...q.distractors])
                 }));
@@ -133,7 +133,6 @@
                 if (window.lucide) window.lucide.createIcons();
             });
 
-            // --- HANDLERS ---
             const handleAnswer = (option) => {
                 if (feedback) return;
 
@@ -143,6 +142,7 @@
 
                 if (isCorrect) {
                     setScore(s => s + 10 + (streak * 2));
+                    setCorrectCount(c => c + 1);
                     setStreak(s => s + 1);
                     setFeedback({ isCorrect: true, message: "Correct! " + currentQ.note });
                 } else {
@@ -164,36 +164,49 @@
             const handleRestart = () => {
                 setIndex(0);
                 setScore(0);
+                setCorrectCount(0);
                 setStreak(0);
                 setFeedback(null);
                 setSelectedOption(null);
                 setFinished(false);
                 
-                // Reshuffle and pick new questions
-                const selectedQuestions = shuffle(RAW_QUESTIONS).slice(0, 20);
-                const prepared = selectedQuestions.map(q => ({
+                const allQuestionsShuffled = shuffle(RAW_QUESTIONS);
+                const prepared = allQuestionsShuffled.map(q => ({
                     ...q,
                     options: shuffle([q.correct, ...q.distractors])
                 }));
                 setQuestions(prepared);
             };
 
-            // --- SAFETY CHECK ---
-            if (questions.length === 0) return <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center animate-pulse">Loading Lab Data...</div>;
+            if (questions.length === 0) return <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center animate-pulse">Initializing Quiz Database...</div>;
 
             // --- RENDER: RESULT ---
             if (finished) {
+                const accuracy = Math.round((correctCount / questions.length) * 100);
+                
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0F172A] text-center">
                         <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-md w-full animate-in">
                             <div className="text-center mb-6">
-                                <div className="text-6xl mb-4">{score > 300 ? '🧪' : '📝'}</div>
-                                <h2 className="text-3xl font-bold text-white mb-2">Quiz Complete!</h2>
-                                <p className="text-slate-400">Final Score</p>
+                                <div className="text-6xl mb-4">{accuracy > 80 ? '🎓' : (accuracy > 50 ? '📚' : '📝')}</div>
+                                <h2 className="text-3xl font-bold text-white mb-2">Revision Complete!</h2>
+                                <p className="text-slate-400">You answered all questions.</p>
                             </div>
-                            <div className="text-5xl font-black text-emerald-400 mb-8">{score}</div>
+                            <div className="text-5xl font-black text-emerald-400 mb-8">{score} <span className="text-lg text-slate-500">pts</span></div>
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-slate-500 text-xs uppercase font-bold">Correct</div>
+                                    <div className="text-xl font-bold text-white">{correctCount} / {questions.length}</div>
+                                </div>
+                                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-slate-500 text-xs uppercase font-bold">Accuracy</div>
+                                    <div className={`text-xl font-bold ${accuracy >= 80 ? 'text-emerald-400' : accuracy >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                        {accuracy}%
+                                    </div>
+                                </div>
+                            </div>
                             <button onClick={handleRestart} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-                                <i data-lucide="rotate-ccw" class="w-5 h-5"></i> Restart Quiz
+                                <i data-lucide="rotate-ccw" class="w-5 h-5"></i> Review Again
                             </button>
                         </div>
                     </div>
@@ -205,7 +218,6 @@
 
             return (
                 <div className="min-h-screen bg-[#0F172A] flex flex-col items-center p-4 md:p-8">
-                    
                     {/* Header */}
                     <div className="w-full max-w-2xl flex justify-between items-center mb-8 bg-slate-800/50 p-4 rounded-2xl border border-slate-700">
                         <div className="flex items-center gap-3">
