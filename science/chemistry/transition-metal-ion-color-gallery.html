@@ -82,7 +82,8 @@
                 desc: 'Green solution. Common in CrCl₃.',
                 reactions: {
                     oh: { prod: 'Cr(OH)₃', state: 'ppt', color: 'bg-green-500', hex: '#22c55e', note: 'Green precipitate formed.' },
-                    excess_oh: { prod: '[Cr(OH)₆]³⁻', state: 'aq', color: 'bg-green-700', hex: '#15803d', note: 'Precipitate dissolves (Amphoteric).' }
+                    excess_oh: { prod: '[Cr(OH)₆]³⁻', state: 'aq', color: 'bg-green-700', hex: '#15803d', note: 'Precipitate dissolves (Amphoteric).' },
+                    nh3: { prod: '[Cr(NH₃)₆]³⁺', state: 'aq', color: 'bg-purple-600', hex: '#9333ea', note: 'Precipitate dissolves to purple solution (Slow).' }
                 }
             },
             {
@@ -118,7 +119,8 @@
                 desc: 'Pink solution ([Co(H₂O)₆]²⁺).',
                 reactions: {
                     oh: { prod: 'Co(OH)₂', state: 'ppt', color: 'bg-blue-600', hex: '#2563eb', note: 'Blue precipitate.' },
-                    excess_oh: { prod: 'Co(OH)₂', state: 'ppt', color: 'bg-blue-600', hex: '#2563eb', note: 'Insoluble in excess.' }
+                    excess_oh: { prod: 'Co(OH)₂', state: 'ppt', color: 'bg-blue-600', hex: '#2563eb', note: 'Insoluble in excess.' },
+                    nh3: { prod: '[Co(NH₃)₆]²⁺', state: 'aq', color: 'bg-yellow-600', hex: '#ca8a04', note: 'Precipitate dissolves to yellow/brown solution.' }
                 }
             },
             {
@@ -127,7 +129,8 @@
                 desc: 'Green solution.',
                 reactions: {
                     oh: { prod: 'Ni(OH)₂', state: 'ppt', color: 'bg-green-400', hex: '#4ade80', note: 'Green precipitate.' },
-                    excess_oh: { prod: 'Ni(OH)₂', state: 'ppt', color: 'bg-green-400', hex: '#4ade80', note: 'Insoluble in excess.' }
+                    excess_oh: { prod: 'Ni(OH)₂', state: 'ppt', color: 'bg-green-400', hex: '#4ade80', note: 'Insoluble in excess.' },
+                    nh3: { prod: '[Ni(NH₃)₆]²⁺', state: 'aq', color: 'bg-blue-600', hex: '#2563eb', note: 'Precipitate dissolves to blue solution.' }
                 }
             },
             {
@@ -240,15 +243,22 @@
                 } 
                 // Logic for "Add in excess" (Step 2)
                 else if (reactionState.type === 'step1') {
-                    if (reagent === 'NaOH' && currentIon.reactions.excess_oh) {
-                        result = currentIon.reactions.excess_oh;
-                        nextType = 'step2';
-                    } else if (reagent === 'NH3' && currentIon.reactions.nh3) {
-                        result = currentIon.reactions.nh3;
-                        nextType = 'step2';
-                    } else {
-                        // If no special excess reaction, it stays as ppt
-                        return; 
+                    nextType = 'step2';
+                    
+                    if (reagent === 'NaOH') {
+                        if (currentIon.reactions.excess_oh) {
+                            result = currentIon.reactions.excess_oh;
+                        } else {
+                            // Default to insoluble if no specific excess reaction defined
+                            result = { ...currentIon.reactions.oh, note: 'Insoluble in excess NaOH.' };
+                        }
+                    } else if (reagent === 'NH3') {
+                        if (currentIon.reactions.nh3) {
+                            result = currentIon.reactions.nh3;
+                        } else {
+                            // Default to insoluble if no specific excess reaction defined
+                            result = { ...currentIon.reactions.oh, note: 'Insoluble in excess NH₃.' };
+                        }
                     }
                 }
 
