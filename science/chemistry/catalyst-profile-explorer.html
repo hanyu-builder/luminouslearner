@@ -110,8 +110,6 @@
                     }
 
                     // 2. Reactants (Adsorption -> Reaction -> Desorption)
-                    const yOffset = Math.sin(step * 0.05) * 5; 
-                    
                     // Molecule A (Red)
                     ctx.beginPath();
                     ctx.arc(100, 100 + (step < 100 ? step : 100) * 0.5, 10, 0, 2 * Math.PI);
@@ -150,6 +148,143 @@
                 if (isPlaying) draw();
                 else {
                     // Static initial state
+                    step = 0;
+                    draw();
+                }
+
+                return () => cancelAnimationFrame(animationFrameId);
+            }, [isPlaying]);
+
+            return <canvas ref={canvasRef} width={400} height={200} className="w-full h-full bg-slate-800 rounded-xl" />;
+        };
+
+        // --- HOMOGENEOUS ANIMATION (Canvas) ---
+        const HomoAnimation = ({ isPlaying }) => {
+            const canvasRef = useRef(null);
+            
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+                let step = 0;
+
+                const draw = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Background (Solution)
+                    // Clear makes it transparent, but we can add a slight tint if needed
+                    // ctx.fillStyle = 'rgba(30, 41, 59, 0.5)';
+                    // ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+
+                    // Initial Positions
+                    let catX = centerX, catY = centerY + 50; // Catalyst (Purple)
+                    let aX = centerX - 60, aY = centerY - 30; // Reactant A (Red)
+                    let bX = centerX + 60, bY = centerY - 30; // Reactant B (Blue)
+
+                    // Calculate positions based on step
+                    if (step < 100) {
+                        // Phase 1: Catalyst approaches A
+                        const progress = step / 100;
+                        catX = centerX - (progress * 30); 
+                        catY = centerY + 50 - (progress * 40); 
+                        aX = centerX - 60 + (progress * 30);
+                        aY = centerY - 30 + (progress * 40);
+                        bX = centerX + 60 + Math.sin(step * 0.1) * 5; // Idle hover
+                    } else if (step < 200) {
+                        // Phase 2: Intermediate AC moves to B
+                        const progress = (step - 100) / 100;
+                        const acX = centerX - 30 + (progress * 60);
+                        const acY = centerY + 10 - (progress * 40);
+                        catX = acX; catY = acY + 10;
+                        aX = acX; aY = acY - 10;
+                        bX = centerX + 60 - (progress * 30);
+                        bY = centerY - 30;
+                    } else {
+                        // Phase 3: Product AB forms, Catalyst leaves
+                        const progress = (step - 200) / 100;
+                        catX = centerX + 30; 
+                        catY = centerY - 30 + 60 * progress; // Drops down
+                        
+                        // Product moves up
+                        aX = centerX + 20; aY = centerY - 30 - progress * 40;
+                        bX = centerX + 40; bY = centerY - 30 - progress * 40;
+                    }
+
+                    // Draw Catalyst (C)
+                    ctx.beginPath();
+                    ctx.arc(catX, catY, 15, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#a855f7'; // Purple
+                    ctx.fill();
+                    ctx.fillStyle = 'white';
+                    ctx.font = '10px Arial';
+                    ctx.fillText("Cat", catX-8, catY+4);
+
+                    // Draw Reactants/Product
+                    if (step < 200) {
+                        // A
+                        ctx.beginPath();
+                        ctx.arc(aX, aY, 12, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#ef4444'; // Red
+                        ctx.fill();
+                        ctx.fillStyle = 'white';
+                        ctx.fillText("A", aX-4, aY+4);
+
+                        // B
+                        ctx.beginPath();
+                        ctx.arc(bX, bY, 12, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#3b82f6'; // Blue
+                        ctx.fill();
+                        ctx.fillStyle = 'white';
+                        ctx.fillText("B", bX-4, bY+4);
+                        
+                        // Intermediate Bond (A-C)
+                        if (step >= 100) {
+                            ctx.beginPath();
+                            ctx.strokeStyle = 'white';
+                            ctx.lineWidth = 2;
+                            ctx.moveTo(aX, aY);
+                            ctx.lineTo(catX, catY);
+                            ctx.stroke();
+                        }
+                    } else {
+                        // Product Bond (A-B)
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#22c55e'; // Green bond
+                        ctx.lineWidth = 4;
+                        ctx.moveTo(aX, aY);
+                        ctx.lineTo(bX, bY);
+                        ctx.stroke();
+
+                        // A
+                        ctx.beginPath();
+                        ctx.arc(aX, aY, 12, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#ef4444';
+                        ctx.fill();
+                        // B
+                        ctx.beginPath();
+                        ctx.arc(bX, bY, 12, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#3b82f6';
+                        ctx.fill();
+                    }
+
+                    // Labels
+                    ctx.fillStyle = 'white';
+                    ctx.font = '12px Arial';
+                    if (step < 100) ctx.fillText("1. Catalyst approaches Reactant A", 10, 30);
+                    else if (step < 200) ctx.fillText("2. Intermediate Species Forms", 10, 30);
+                    else ctx.fillText("3. Product Forms & Catalyst Regenerates", 10, 30);
+
+                    if (isPlaying) {
+                        step = (step + 1) % 300;
+                        animationFrameId = requestAnimationFrame(draw);
+                    }
+                };
+                
+                if (isPlaying) draw();
+                else {
                     step = 0;
                     draw();
                 }
@@ -363,13 +498,7 @@
                                         {mechanismType === 'hetero' ? (
                                             <HeteroAnimation isPlaying={isPlaying} />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-500">
-                                                <div className="text-center">
-                                                    <Icon name="flask-conical" className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                                    <p>Homogeneous Animation Placeholder</p>
-                                                    <p className="text-xs mt-2">(Reactants and catalyst in same phase, forming intermediate)</p>
-                                                </div>
-                                            </div>
+                                            <HomoAnimation isPlaying={isPlaying} />
                                         )}
                                     </div>
 
