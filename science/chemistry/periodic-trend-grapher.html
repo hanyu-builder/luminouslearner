@@ -35,22 +35,34 @@
         const { useState, useEffect, useMemo } = React;
 
         // --- SAFE ICON COMPONENT ---
-        // Converts kebab-case (e.g. "chevron-right") to PascalCase (e.g. "ChevronRight")
-        // and renders using React to avoid DOM conflicts.
+        // Uses lucide.createElement to generate SVG and renders it as HTML string
+        // This prevents React hydration mismatches and DOM conflicts
         const Icon = ({ name, className = "", size = 24 }) => {
             const [svgHtml, setSvgHtml] = useState('');
 
             useEffect(() => {
                 if (window.lucide && window.lucide.icons) {
+                    // Convert kebab-case to PascalCase (e.g. arrow-right -> ArrowRight)
                     const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
                     const iconData = window.lucide.icons[pascalName];
-                    if (iconData) {
-                        setSvgHtml(iconData.toSVG({ class: className, width: size, height: size }));
+                    
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        try {
+                            const svgElement = window.lucide.createElement(iconData);
+                            // Set attributes
+                            svgElement.setAttribute('class', className);
+                            svgElement.setAttribute('width', size);
+                            svgElement.setAttribute('height', size);
+                            
+                            setSvgHtml(svgElement.outerHTML);
+                        } catch (e) {
+                            console.error("Icon render error:", e);
+                        }
                     }
                 }
             }, [name, className, size]);
 
-            if (!svgHtml) return <span className={className}></span>;
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
