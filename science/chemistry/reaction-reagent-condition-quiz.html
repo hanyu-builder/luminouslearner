@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reagent Master - Organic Chemistry Quiz</title>
+    <title>Reagent Master - Ultimate Database</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -25,30 +25,76 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // --- DATA ---
-        // 定義所有題目
+        // --- EXPANDED QUESTION BANK (50+ Questions) ---
         const RAW_QUESTIONS = [
-            { from: "Alkene", to: "Alkane", correct: "H₂ / Pt", distractors: ["H₂SO₄", "LiAlH₄", "NaBH₄"], note: "Catalytic Hydrogenation adds H₂." },
-            { from: "Alkene", to: "Haloalkane", correct: "HX (g)", distractors: ["X₂ / UV light", "KOH (alc)", "PCl₅"], note: "Electrophilic Addition (Markovnikov)." },
-            { from: "Alkene", to: "Diol", correct: "Cold dil. KMnO₄ / H⁺", distractors: ["Conc. H₂SO₄", "K₂Cr₂O₇ / H⁺", "O₃"], note: "Mild oxidation." },
-            { from: "Haloalkane", to: "Alcohol", correct: "NaOH (aq), heat", distractors: ["NaOH (alc), heat", "Conc. H₂SO₄", "H₂O"], note: "Aqueous = Substitution." },
-            { from: "Haloalkane", to: "Alkene", correct: "NaOH (alc), heat", distractors: ["NaOH (aq), heat", "Conc. H₂SO₄", "H₂ / Pt"], note: "Alcoholic = Elimination." },
+            // === 1. ALKENES & ALKANES ===
+            { from: "Alkene", to: "Alkane", correct: "H₂ / Pt, Heat", distractors: ["H₂SO₄", "LiAlH₄", "NaBH₄"], note: "Catalytic Hydrogenation (Hardening of oils)." },
+            { from: "Alkene", to: "Haloalkane", correct: "HX (g)", distractors: ["X₂ / UV", "KOH (alc)", "PCl₅"], note: "Electrophilic Addition (Markovnikov)." },
+            { from: "Alkene", to: "Dihaloalkane", correct: "Br₂ (in solvent)", distractors: ["HBr", "NaBr", "Br₂ (aq)"], note: "Orange to Colourless (Test for unsaturation)." },
+            { from: "Alkene", to: "Diol", correct: "Cold dil. KMnO₄ / H⁺", distractors: ["Conc. H₂SO₄", "K₂Cr₂O₇", "O₃"], note: "Mild oxidation (Syn-addition)." },
+            { from: "Alkene", to: "Alcohol (2°)", correct: "Conc. H₂SO₄ then H₂O", distractors: ["NaOH", "KOH", "KMnO₄"], note: "Industrial Hydration (Markovnikov)." },
+            { from: "Alkane", to: "Haloalkane", correct: "Cl₂ / UV Light", distractors: ["HCl", "Cl₂ (dark)", "SOCl₂"], note: "Free Radical Substitution (Requires energy)." },
+            { from: "Long Alkane", to: "Short Alkene + Alkane", correct: "Heat, Porous Pot (Al₂O₃)", distractors: ["H₂ / Pt", "Conc. H₂SO₄", "O₂"], note: "Cracking (Thermal decomposition)." },
+
+            // === 2. HALOALKANES ===
+            { from: "Haloalkane", to: "Alcohol", correct: "NaOH (aq), heat", distractors: ["NaOH (alc)", "Conc. H₂SO₄", "H₂O"], note: "Nucleophilic Substitution (Hydrolysis)." },
+            { from: "Haloalkane", to: "Alkene", correct: "NaOH (alc), reflux", distractors: ["NaOH (aq)", "Conc. H₂SO₄", "H₂ / Pt"], note: "Elimination reaction (Dehydrohalogenation)." },
             { from: "Haloalkane", to: "Nitrile", correct: "KCN (alc), reflux", distractors: ["HCN", "NH₃", "HNO₃"], note: "Step-up reaction (+1 Carbon)." },
-            { from: "1° Alcohol", to: "Aldehyde", correct: "K₂Cr₂O₇ / H⁺, Distil", distractors: ["KMnO₄ / H⁺, Reflux", "LiAlH₄", "Conc. H₂SO₄"], note: "Distillation removes aldehyde." },
-            { from: "1° Alcohol", to: "Carboxylic Acid", correct: "KMnO₄ / H⁺, Reflux", distractors: ["PCC", "NaBH₄", "NaOH"], note: "Reflux ensures complete oxidation." },
-            { from: "Carboxylic Acid", to: "1° Alcohol", correct: "LiAlH₄ in dry ether", distractors: ["NaBH₄", "H₂ / Pt", "Sn / HCl"], note: "Only LiAlH₄ reduces acids." },
-            { from: "Carboxylic Acid", to: "Acyl Chloride", correct: "SOCl₂", distractors: ["Cl₂", "HCl", "NaCl"], note: "Thionyl chloride replaces -OH with -Cl." },
-            { from: "Acyl Chloride", to: "Amide", correct: "NH₃ (conc)", distractors: ["HNO₃", "NH₄Cl", "NaNO₂"], note: "Nucleophilic substitution." },
-            { from: "Benzene", to: "Nitrobenzene", correct: "Conc. HNO₃ / Conc. H₂SO₄", distractors: ["Dil. HNO₃", "HNO₃ / Reflux", "NaNO₂ / HCl"], note: "Nitration mixture." },
-            { from: "Benzene", to: "Bromobenzene", correct: "Br₂ / FeBr₃", distractors: ["Br₂ (aq)", "Br₂ / UV light", "HBr"], note: "Lewis Acid catalyst required." },
-            { from: "Methylbenzene", to: "Benzoic Acid", correct: "KMnO₄ / OH⁻, Reflux", distractors: ["K₂Cr₂O₇ / H⁺", "O₃", "Conc. HNO₃"], note: "Side-chain oxidation." },
+            { from: "Haloalkane", to: "Amine", correct: "Excess Conc. NH₃, heat", distractors: ["Dilute NH₃", "HNO₃", "NaNO₂"], note: "Nucleophilic substitution (Sealed tube)." },
+            { from: "Haloalkane", to: "Grignard Reagent", correct: "Mg / Dry Ether", distractors: ["Mg / Water", "Zn / HCl", "LiAlH₄"], note: "Formation of Organometallic reagent." },
+
+            // === 3. ALCOHOLS ===
+            { from: "1° Alcohol", to: "Aldehyde", correct: "K₂Cr₂O₇ / H⁺, Distil", distractors: ["KMnO₄ / Reflux", "LiAlH₄", "Conc. H₂SO₄"], note: "Distillation removes aldehyde preventing further oxidation." },
+            { from: "1° Alcohol", to: "Carboxylic Acid", correct: "KMnO₄ / H⁺, Reflux", distractors: ["PCC", "NaBH₄", "NaOH"], note: "Strong oxidation ensures complete conversion." },
+            { from: "2° Alcohol", to: "Ketone", correct: "K₂Cr₂O₇ / H⁺, Reflux", distractors: ["LiAlH₄", "Tollens' Reagent", "NaOH"], note: "Ketones cannot be oxidized further easily." },
+            { from: "Alcohol", to: "Alkene", correct: "Conc. H₂SO₄, 170°C", distractors: ["Dilute H₂SO₄", "NaOH", "H₂ / Pt"], note: "Dehydration (Elimination of water)." },
+            { from: "Alcohol", to: "Haloalkane", correct: "SOCl₂", distractors: ["NaCl", "Cl₂", "HCl (aq)"], note: "Produces gaseous by-products (best lab method)." },
+            { from: "Alcohol", to: "Alkoxide (Salt)", correct: "Na (s)", distractors: ["NaOH", "Na₂CO₃", "NaCl"], note: "Redox reaction (H₂ gas evolved)." },
+
+            // === 4. CARBONYLS (Aldehydes & Ketones) ===
+            { from: "Aldehyde", to: "1° Alcohol", correct: "LiAlH₄ in dry ether", distractors: ["NaOH", "KMnO₄", "Conc. H₂SO₄"], note: "Reduction (Nucleophilic addition of H⁻)." },
+            { from: "Ketone", to: "2° Alcohol", correct: "NaBH₄ in methanol", distractors: ["H₂SO₄", "K₂Cr₂O₇", "NaOH"], note: "NaBH₄ is milder and safer than LiAlH₄." },
+            { from: "Carbonyl", to: "Hydroxynitrile", correct: "HCN / Trace NaOH", distractors: ["KCN / Reflux", "Conc. H₂SO₄", "NH₃"], note: "Nucleophilic Addition (Step-up)." },
+            { from: "Aldehyde", to: "Carboxylic Acid", correct: "Tollens' Reagent, warm", distractors: ["NaBH₄", "2,4-DNP", "H₂ / Pt"], note: "Silver Mirror Test (Distinction from Ketone)." },
+            { from: "Methyl Ketone", to: "Carboxylate", correct: "I₂ / NaOH, warm", distractors: ["Cl₂", "Br₂ / FeBr₃", "HCl"], note: "Iodoform Test (Yellow ppt CHI₃)." },
+
+            // === 5. ACIDS & DERIVATIVES ===
+            { from: "Carboxylic Acid", to: "1° Alcohol", correct: "LiAlH₄ in dry ether", distractors: ["NaBH₄", "H₂ / Pt", "Sn / HCl"], note: "NaBH₄ is too weak to reduce acids." },
+            { from: "Carboxylic Acid", to: "Ester", correct: "Alcohol, Conc. H₂SO₄, Reflux", distractors: ["Alcohol, NaOH", "Alcohol, Water", "Alcohol only"], note: "Fischer Esterification (Reversible)." },
+            { from: "Carboxylic Acid", to: "Acyl Chloride", correct: "PCl₅ (s)", distractors: ["Cl₂", "HCl", "NaCl"], note: "Misty fumes of HCl evolved." },
+            { from: "Acyl Chloride", to: "Amide", correct: "Conc. NH₃", distractors: ["HNO₃", "NH₄Cl", "NaNO₂"], note: "Vigorous reaction (White smoke)." },
+            { from: "Ester", to: "Carboxylate Salt + Alcohol", correct: "NaOH (aq), Reflux", distractors: ["H₂SO₄", "H₂O", "LiAlH₄"], note: "Alkaline Hydrolysis (Saponification, Irreversible)." },
+            { from: "Amide", to: "Carboxylic Acid", correct: "H⁺ (aq), Reflux", distractors: ["NaOH", "LiAlH₄", "NH₃"], note: "Acid Hydrolysis." },
+            { from: "Amide", to: "Amine (-1 C)", correct: "Br₂ / NaOH", distractors: ["LiAlH₄", "H₂ / Pt", "Sn / HCl"], note: "Hofmann Degradation (Step-down reaction)." },
+
+            // === 6. NITROGEN COMPOUNDS ===
+            { from: "Nitrile", to: "Carboxylic Acid", correct: "H⁺ (aq), Reflux", distractors: ["NaOH (alc)", "LiAlH₄", "KMnO₄"], note: "Complete Hydrolysis of -CN." },
+            { from: "Nitrile", to: "Amine", correct: "LiAlH₄ in dry ether", distractors: ["NaBH₄", "Sn / HCl", "NaOH"], note: "Reduction of triple bond." },
+
+            // === 7. AROMATIC CHEMISTRY (BENZENE) ===
+            { from: "Benzene", to: "Nitrobenzene", correct: "Conc. HNO₃ / Conc. H₂SO₄", distractors: ["Dil. HNO₃", "HNO₃ / Reflux", "NaNO₂ / HCl"], note: "Nitration (< 60°C)." },
+            { from: "Benzene", to: "Bromobenzene", correct: "Br₂ / FeBr₃", distractors: ["Br₂ (aq)", "Br₂ / UV", "HBr"], note: "Halogenation (EAS)." },
+            { from: "Benzene", to: "Alkylbenzene", correct: "CH₃Cl / AlCl₃", distractors: ["CH₃Cl / UV", "CH₃Cl / NaOH", "CH₃OH"], note: "Friedel-Crafts Alkylation." },
+            { from: "Benzene", to: "Acylbenzene", correct: "CH₃COCl / AlCl₃", distractors: ["CH₃COOH", "CH₃CHO", "CH₃Cl"], note: "Friedel-Crafts Acylation." },
+            { from: "Benzene", to: "Cyclohexane", correct: "3H₂ / Ni, High T/P", distractors: ["LiAlH₄", "NaBH₄", "H₂SO₄"], note: "Destruction of aromatic ring (Difficult)." },
+            
+            // === 8. AROMATIC SIDE CHAINS & PHENOL ===
+            { from: "Methylbenzene", to: "Benzoic Acid", correct: "KMnO₄ / OH⁻, Reflux", distractors: ["K₂Cr₂O₇", "O₃", "Conc. HNO₃"], note: "Side-chain oxidation." },
             { from: "Nitrobenzene", to: "Phenylamine", correct: "Sn / Conc. HCl", distractors: ["LiAlH₄", "H₂ / Pt", "NaBH₄"], note: "Reduction of Nitro group." },
-            { from: "Phenylamine", to: "Diazonium Salt", correct: "NaNO₂ / HCl, < 5°C", distractors: ["HNO₃", "NH₃", "Reflux"], note: "Must be cold (< 5°C)." },
+            { from: "Phenylamine", to: "Diazonium Salt", correct: "NaNO₂ / HCl, < 5°C", distractors: ["HNO₃", "NH₃", "Reflux"], note: "Diazotization (Must be cold)." },
             { from: "Diazonium Salt", to: "Benzonitrile", correct: "CuCN", distractors: ["KCN", "HCN", "CH₃CN"], note: "Sandmeyer Reaction." },
-            { from: "Diazonium Salt", to: "Phenol", correct: "H₂O, Warm", distractors: ["NaOH", "OH⁻", "Alcohol"], note: "Hydrolysis releases N₂." }
+            { from: "Diazonium Salt", to: "Phenol", correct: "H₂O, Warm", distractors: ["NaOH", "OH⁻", "Alcohol"], note: "Hydrolysis releases N₂." },
+            { from: "Phenol", to: "Tribromophenol", correct: "Br₂ (aq)", distractors: ["Br₂ / FeBr₃", "HBr", "NaBr"], note: "White ppt. No catalyst needed (Activation)." },
+            
+            // === 9. DISTINCTION TESTS (Flashcard Style) ===
+            { from: "Test for C=C", to: "Colourless", correct: "Br₂ in organic solvent", distractors: ["Tollens'", "2,4-DNP", "NaOH"], note: "Orange bromine decolourizes." },
+            { from: "Test for Carbonyls", to: "Orange ppt", correct: "2,4-DNP", distractors: ["Tollens'", "Fehling's", "KMnO₄"], note: "Condensation reaction." },
+            { from: "Test for Aldehyde", to: "Silver Mirror", correct: "Tollens' Reagent", distractors: ["2,4-DNP", "NaOH", "HCl"], note: "Ag⁺ reduced to Ag(s)." },
+            { from: "Test for Carboxylic Acid", to: "CO₂ gas", correct: "Na₂CO₃ (aq)", distractors: ["NaOH", "Na", "Ethanol"], note: "Effervescence turns limewater milky." },
+            { from: "Test for Amide", to: "NH₃ gas", correct: "NaOH(aq), Heat", distractors: ["HCl", "H₂O", "Na₂CO₃"], note: "Pungent smell, turns red litmus blue." }
         ];
 
-        // 簡單的洗牌函數
+        // Simple Shuffle Function
         const shuffle = (array) => {
             const newArr = [...array];
             for (let i = newArr.length - 1; i > 0; i--) {
@@ -60,7 +106,7 @@
 
         const App = () => {
             // --- STATE ---
-            const [questions, setQuestions] = useState([]); // 存儲處理好的題目
+            const [questions, setQuestions] = useState([]); 
             const [index, setIndex] = useState(0);
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
@@ -72,9 +118,10 @@
 
             // --- INITIALIZATION ---
             useEffect(() => {
-                // 初始化時，一次過準備好所有題目和選項
-                // 這樣之後點擊 "Next" 就只是簡單的翻頁，不會有運算錯誤
-                const prepared = RAW_QUESTIONS.map(q => ({
+                // Pick 20 random questions from the massive pool each game
+                const selectedQuestions = shuffle(RAW_QUESTIONS).slice(0, 20);
+                
+                const prepared = selectedQuestions.map(q => ({
                     ...q,
                     options: shuffle([q.correct, ...q.distractors])
                 }));
@@ -82,7 +129,6 @@
             }, []);
 
             // --- EFFECT: Render Icons ---
-            // 每次畫面更新後，重新掃描 Icon
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
             });
@@ -122,8 +168,10 @@
                 setFeedback(null);
                 setSelectedOption(null);
                 setFinished(false);
-                // 重新洗牌選項
-                const prepared = RAW_QUESTIONS.map(q => ({
+                
+                // Reshuffle and pick new questions
+                const selectedQuestions = shuffle(RAW_QUESTIONS).slice(0, 20);
+                const prepared = selectedQuestions.map(q => ({
                     ...q,
                     options: shuffle([q.correct, ...q.distractors])
                 }));
@@ -131,17 +179,21 @@
             };
 
             // --- SAFETY CHECK ---
-            if (questions.length === 0) return <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center">Loading Quiz...</div>;
+            if (questions.length === 0) return <div className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center animate-pulse">Loading Lab Data...</div>;
 
             // --- RENDER: RESULT ---
             if (finished) {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0F172A] text-center">
                         <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-md w-full animate-in">
-                            <h2 className="text-3xl font-bold text-white mb-2">Quiz Completed!</h2>
-                            <div className="text-5xl font-black text-emerald-400 my-6">{score} <span className="text-lg text-slate-500">pts</span></div>
+                            <div className="text-center mb-6">
+                                <div className="text-6xl mb-4">{score > 300 ? '🧪' : '📝'}</div>
+                                <h2 className="text-3xl font-bold text-white mb-2">Quiz Complete!</h2>
+                                <p className="text-slate-400">Final Score</p>
+                            </div>
+                            <div className="text-5xl font-black text-emerald-400 mb-8">{score}</div>
                             <button onClick={handleRestart} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-                                <i data-lucide="rotate-ccw" class="w-5 h-5"></i> Play Again
+                                <i data-lucide="rotate-ccw" class="w-5 h-5"></i> Restart Quiz
                             </button>
                         </div>
                     </div>
@@ -168,16 +220,16 @@
                         </div>
                     </div>
 
-                    {/* Question Card (Uses key={index} to force fresh render on change) */}
+                    {/* Question Card */}
                     <div key={index} className="w-full max-w-2xl bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden mb-6 animate-in">
                         <div className="p-8 text-center">
                             <h2 className="text-slate-400 uppercase tracking-widest text-xs font-bold mb-6">Conversion Task</h2>
                             <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8">
-                                <div className="bg-slate-900 px-6 py-4 rounded-xl border border-slate-600 text-xl font-bold text-white w-full md:w-auto">
+                                <div className="bg-slate-900 px-6 py-4 rounded-xl border border-slate-600 text-xl font-bold text-white w-full md:w-auto min-w-[120px]">
                                     {currentQ.from}
                                 </div>
                                 <i data-lucide="arrow-right" class="text-slate-500 w-6 h-6 rotate-90 md:rotate-0"></i>
-                                <div className="bg-slate-900 px-6 py-4 rounded-xl border border-emerald-500/30 text-xl font-bold text-emerald-400 w-full md:w-auto shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                                <div className="bg-slate-900 px-6 py-4 rounded-xl border border-emerald-500/30 text-xl font-bold text-emerald-400 w-full md:w-auto min-w-[120px] shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                                     {currentQ.to}
                                 </div>
                             </div>
@@ -187,7 +239,7 @@
                     {/* Options */}
                     <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
                         {currentQ.options.map((opt, i) => {
-                            let btnClass = "p-4 rounded-xl font-mono text-sm font-bold border-2 transition-all duration-200 relative min-h-[70px] ";
+                            let btnClass = "p-4 rounded-xl font-mono text-sm font-bold border-2 transition-all duration-200 relative min-h-[70px] flex items-center justify-center text-center ";
                             if (feedback) {
                                 if (opt === currentQ.correct) btnClass += "bg-emerald-600 border-emerald-500 text-white opacity-100";
                                 else if (opt === selectedOption) btnClass += "bg-red-900/50 border-red-500 text-red-200 opacity-50";
