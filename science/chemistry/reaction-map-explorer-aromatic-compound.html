@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aromatic Reaction Explorer</title>
+    <title>Aromatic Reaction Map v2.0 (Connected)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,16 +16,14 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; margin: 0; overflow: hidden; color: #e2e8f0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Node Styling */
         .node-container { transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); cursor: pointer; }
         .node-container:hover { 
             transform: translateY(-5px) scale(1.02); 
-            box-shadow: 0 0 25px rgba(244, 114, 182, 0.2); /* Pink glow for Aromatic */
+            box-shadow: 0 0 25px rgba(244, 114, 182, 0.2); 
             z-index: 10;
             border-color: #f472b6;
         }
         
-        /* Edge Styling */
         .edge { transition: all 0.3s; cursor: pointer; opacity: 0.3; }
         .edge:hover { opacity: 1; stroke-width: 3px; filter: drop-shadow(0 0 4px #fff); }
         .edge-active { opacity: 1 !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: flow 1.5s linear infinite; filter: drop-shadow(0 0 6px #f472b6); }
@@ -44,80 +42,77 @@
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
             return <i data-lucide={name} className={className}></i>;
         };
-
-        // --- AROMATIC DATASET ---
         
         const Nodes = [
+            // --- THE BRIDGE FROM ALIPHATIC ---
+            // This node represents the connection from your previous map
+            { id: 'aliphatic', label: 'Aliphatic Chain\n(Alkene/Alkyne)', x: -100, y: 350, color: '#4ade80', cat: 'From Aliphatic Map' },
+
             // CENTER HUB
-            { id: 'benzene', label: 'Benzene', x: 200, y: 350, color: '#f472b6', cat: 'Aromatic' },
+            { id: 'benzene', label: 'Benzene', x: 250, y: 350, color: '#f472b6', cat: 'Aromatic' },
 
             // TOP: CARBON CHAINS
-            { id: 'alkylbenzene', label: 'Alkylbenzene\n(Toluene)', x: 500, y: 100, color: '#94a3b8', cat: 'Hydrocarbon' },
-            { id: 'benzoic_acid', label: 'Benzoic Acid', x: 850, y: 100, color: '#ef4444', cat: 'Acid' },
-            { id: 'acylbenzene', label: 'Acylbenzene', x: 500, y: -50, color: '#f472b6', cat: 'Ketone' },
+            { id: 'alkylbenzene', label: 'Alkylbenzene\n(Toluene)', x: 550, y: 100, color: '#94a3b8', cat: 'Hydrocarbon' },
+            { id: 'benzoic_acid', label: 'Benzoic Acid', x: 900, y: 100, color: '#ef4444', cat: 'Acid' },
+            { id: 'acylbenzene', label: 'Acylbenzene', x: 550, y: -50, color: '#f472b6', cat: 'Ketone' },
 
             // MIDDLE: HALOGENS & SULFUR
-            { id: 'halobenzene', label: 'Halobenzene', x: 500, y: 250, color: '#facc15', cat: 'Halide' },
-            { id: 'sulfonic_acid', label: 'Benzenesulfonic\nAcid', x: 500, y: 450, color: '#fbbf24', cat: 'Acid' },
+            { id: 'halobenzene', label: 'Halobenzene', x: 550, y: 250, color: '#facc15', cat: 'Halide' },
+            { id: 'sulfonic_acid', label: 'Benzenesulfonic\nAcid', x: 550, y: 450, color: '#fbbf24', cat: 'Acid' },
 
-            // BOTTOM: NITROGEN PATHWAY (The Big One)
-            { id: 'nitrobenzene', label: 'Nitrobenzene', x: 200, y: 600, color: '#818cf8', cat: 'Nitrogen' },
-            { id: 'phenylamine', label: 'Phenylamine\n(Aniline)', x: 500, y: 600, color: '#818cf8', cat: 'Nitrogen' },
+            // BOTTOM: NITROGEN PATHWAY
+            { id: 'nitrobenzene', label: 'Nitrobenzene', x: 250, y: 600, color: '#818cf8', cat: 'Nitrogen' },
+            { id: 'phenylamine', label: 'Phenylamine\n(Aniline)', x: 550, y: 600, color: '#818cf8', cat: 'Nitrogen' },
             
             // THE DIAZONIUM HUB
-            { id: 'diazonium', label: 'Diazonium Salt', x: 800, y: 600, color: '#c084fc', cat: 'Unstable Intermediate' },
+            { id: 'diazonium', label: 'Diazonium Salt', x: 850, y: 600, color: '#c084fc', cat: 'Unstable Intermediate' },
 
             // DIAZONIUM DERIVATIVES
-            { id: 'phenol', label: 'Phenol', x: 1100, y: 450, color: '#ec4899', cat: 'Oxygen' },
-            { id: 'nitrile', label: 'Benzonitrile', x: 1100, y: 600, color: '#fb923c', cat: 'Nitrogen' },
-            { id: 'azo_dye', label: 'Azo Dye', x: 1100, y: 750, color: '#a855f7', cat: 'Dye' },
-            { id: 'halo_aryl', label: 'Aryl Halide', x: 1100, y: 300, color: '#facc15', cat: 'Halide' },
+            { id: 'phenol', label: 'Phenol', x: 1150, y: 450, color: '#ec4899', cat: 'Oxygen' },
+            { id: 'nitrile', label: 'Benzonitrile', x: 1150, y: 600, color: '#fb923c', cat: 'Nitrogen' },
+            { id: 'azo_dye', label: 'Azo Dye', x: 1150, y: 750, color: '#a855f7', cat: 'Dye' },
+            { id: 'halo_aryl', label: 'Aryl Halide', x: 1150, y: 300, color: '#facc15', cat: 'Halide' },
         ];
 
         const Edges = [
+            // --- THE BRIDGE REACTION ---
+            { from: 'aliphatic', to: 'benzene', reagents: 'Pt / Heat / Pressure', type: 'Reform', desc: 'Catalytic Reforming (Dehydrogenation/Cyclization)', note: 'Converts Hexene/Ethyne to Benzene' },
+
             // --- BENZENE REACTIONS (EAS) ---
-            { from: 'benzene', to: 'nitrobenzene', reagents: 'Conc. HNO₃ / Conc. H₂SO₄', type: 'Sub', desc: 'Nitration (Electrophilic Subst.)' },
-            { from: 'benzene', to: 'halobenzene', reagents: 'Br₂ / FeBr₃', type: 'Sub', desc: 'Halogenation (Requires Lewis Acid)' },
+            { from: 'benzene', to: 'nitrobenzene', reagents: 'Conc. HNO₃ / Conc. H₂SO₄', type: 'Sub', desc: 'Nitration' },
+            { from: 'benzene', to: 'halobenzene', reagents: 'Br₂ / FeBr₃', type: 'Sub', desc: 'Halogenation' },
             { from: 'benzene', to: 'alkylbenzene', reagents: 'R-Cl / AlCl₃', type: 'Sub', desc: 'Friedel-Crafts Alkylation' },
             { from: 'benzene', to: 'acylbenzene', reagents: 'R-COCl / AlCl₃', type: 'Sub', desc: 'Friedel-Crafts Acylation' },
             { from: 'benzene', to: 'sulfonic_acid', reagents: 'Conc. H₂SO₄, Reflux', type: 'Sub', desc: 'Sulfonation' },
-            { from: 'benzene', to: 'cyclohexane', reagents: '3H₂ / Ni, High T, P', type: 'Add', desc: 'Full Hydrogenation (Destroys Ring)' }, // Virtual Node handling
 
-            // --- SIDE CHAIN REACTIONS ---
+            // --- SIDE CHAIN ---
             { from: 'alkylbenzene', to: 'benzoic_acid', reagents: 'KMnO₄ / OH⁻, Reflux', type: 'Ox', desc: 'Side-chain Oxidation' },
-            { from: 'alkylbenzene', to: 'halobenzene', reagents: 'Cl₂ / UV Light', type: 'Sub', desc: 'Free Radical Sub. (on Methyl group)', note: 'Forms Benzyl Chloride' }, // Logic note: Node stays approx same, but fundamentally different
-            
-            // --- ACYL TO ALKYL (Clemmensen) ---
-            { from: 'acylbenzene', to: 'alkylbenzene', reagents: 'Zn(Hg) / Conc. HCl', type: 'Red', desc: 'Clemmensen Reduction (C=O to CH₂)' },
+            { from: 'alkylbenzene', to: 'halobenzene', reagents: 'Cl₂ / UV Light', type: 'Sub', desc: 'Free Radical Sub. (Side chain)', note: 'Forms Benzyl Chloride' },
+            { from: 'acylbenzene', to: 'alkylbenzene', reagents: 'Zn(Hg) / Conc. HCl', type: 'Red', desc: 'Clemmensen Reduction' },
 
             // --- NITROGEN PATHWAY ---
-            { from: 'nitrobenzene', to: 'phenylamine', reagents: 'Sn / Conc. HCl', type: 'Red', desc: 'Reduction (Tin/Acid)' },
-            { from: 'phenylamine', to: 'diazonium', reagents: 'NaNO₂ / HCl, < 5°C', type: 'Conv', desc: 'Diazotization (Must be cold!)' },
-            { from: 'phenylamine', to: 'tribromoaniline', reagents: 'Br₂(aq)', type: 'Sub', desc: 'White ppt. (2,4,6-tribromo...)' }, // Virtual
+            { from: 'nitrobenzene', to: 'phenylamine', reagents: 'Sn / Conc. HCl', type: 'Red', desc: 'Reduction' },
+            { from: 'phenylamine', to: 'diazonium', reagents: 'NaNO₂ / HCl, < 5°C', type: 'Conv', desc: 'Diazotization' },
 
-            // --- DIAZONIUM REACTIONS (Sandmeyer & Others) ---
-            { from: 'diazonium', to: 'phenol', reagents: 'H₂O, Warm', type: 'Hyd', desc: 'Hydrolysis (N₂ gas evolved)' },
+            // --- DIAZONIUM REACTIONS ---
+            { from: 'diazonium', to: 'phenol', reagents: 'H₂O, Warm', type: 'Hyd', desc: 'Hydrolysis' },
             { from: 'diazonium', to: 'nitrile', reagents: 'CuCN', type: 'Sub', desc: 'Sandmeyer Reaction' },
             { from: 'diazonium', to: 'halo_aryl', reagents: 'CuCl / CuBr', type: 'Sub', desc: 'Sandmeyer Reaction' },
-            { from: 'diazonium', to: 'azo_dye', reagents: 'Phenol / NaOH', type: 'Cpl', desc: 'Coupling (Orange/Red Dye)' },
+            { from: 'diazonium', to: 'azo_dye', reagents: 'Phenol / NaOH', type: 'Cpl', desc: 'Coupling (Azo Dye)' },
             { from: 'diazonium', to: 'benzene', reagents: 'H₃PO₂', type: 'Red', desc: 'Deamination' },
-
-            // --- PHENOL REACTIONS ---
-            { from: 'phenol', to: 'tribromophenol', reagents: 'Br₂(aq)', type: 'Sub', desc: 'White ppt. (No catalyst needed)' }, // Virtual
-            { from: 'phenol', to: 'sodium_phenoxide', reagents: 'NaOH(aq)', type: 'Acid', desc: 'Acidity (Soluble salt)' }, // Virtual
         ];
 
         const App = () => {
             const [selectedNode, setSelectedNode] = useState(null);
             const [selectedEdge, setSelectedEdge] = useState(null);
-            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.75 });
+            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.7 });
             const [isDragging, setIsDragging] = useState(false);
             const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
             useEffect(() => {
-                const cx = window.innerWidth / 2 - 600 * 0.75;
-                const cy = window.innerHeight / 2 - 400 * 0.75;
-                setTransform({ x: cx, y: cy, scale: 0.75 });
+                const cx = window.innerWidth / 2 - 500 * 0.7;
+                const cy = window.innerHeight / 2 - 400 * 0.7;
+                setTransform({ x: cx, y: cy, scale: 0.7 });
             }, []);
 
             const getOffsetCoords = (s, e, offsetAmount = 14) => {
@@ -151,13 +146,13 @@
                             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                                  <Icon name="hexagon" className="text-pink-500" /> Aromatic Kingdom
                             </h1>
-                            <p className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-widest">Benzene & Diazonium Chemistry</p>
+                            <p className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-widest">Connected to Aliphatic Map</p>
                         </div>
                     </div>
 
                     {/* Canvas */}
                     <div className="absolute origin-top-left will-change-transform" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
-                        <svg width="2000" height="1200" className="overflow-visible">
+                        <svg width="2200" height="1200" className="overflow-visible">
                             <defs>
                                 <marker id="arrow" markerWidth="6" markerHeight="4" refX="16" refY="2" orient="auto">
                                     <path d="M0,0 L6,2 L0,4" fill="#475569" />
@@ -168,9 +163,7 @@
                             </defs>
 
                             {Edges.map((edge, i) => {
-                                // Filter out edges linking to non-existent nodes (virtual nodes check)
                                 if (!getNode(edge.from) || !getNode(edge.to)) return null;
-
                                 const s = getNode(edge.from);
                                 const e = getNode(edge.to);
                                 const { x1, y1, x2, y2 } = getOffsetCoords(s, e, 15); 
@@ -181,8 +174,9 @@
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" />
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} 
                                             className={`edge ${active ? 'edge-active' : ''}`}
-                                            stroke={active ? "#f472b6" : "#475569"} 
+                                            stroke={active ? "#f472b6" : (edge.from === 'aliphatic' ? '#4ade80' : "#475569")} 
                                             strokeWidth="2"
+                                            strokeDasharray={edge.from === 'aliphatic' ? '5,5' : '0'}
                                             markerEnd={active ? "url(#arrow-active)" : "url(#arrow)"}
                                         />
                                         {transform.scale > 0.5 && (
@@ -212,7 +206,7 @@
                                                     ? 'bg-slate-800 border-pink-500 ring-2 ring-pink-500/30 text-white' 
                                                     : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500'
                                                 }
-                                                ${isRelated && !isActive ? 'border-cyan-500/50 bg-slate-800/80 text-cyan-100' : ''}
+                                                ${node.id === 'aliphatic' ? 'border-green-500/50 text-green-100 bg-green-900/20' : ''}
                                             `}
                                         >
                                             <div className="text-base font-bold text-center tracking-tight whitespace-pre-line">{node.label}</div>
@@ -256,11 +250,6 @@
                                                 {selectedEdge.desc}
                                             </div>
                                         </div>
-                                        {selectedEdge.note && (
-                                            <div className="text-amber-400 text-xs mt-2 italic border-l-2 border-amber-500 pl-2">
-                                                Note: {selectedEdge.note}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             )}
@@ -268,11 +257,10 @@
                             {selectedNode && (
                                 <div className="text-center py-2">
                                     <h2 className="text-4xl font-bold text-white mb-3">{getNode(selectedNode).label.replace('\n', ' ')}</h2>
-                                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-sm font-mono text-slate-400 mb-6">
-                                        Category: <span style={{color: getNode(selectedNode).color}}>{getNode(selectedNode).cat}</span>
-                                    </div>
                                     <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
-                                        Central Hub of Aromatic Chemistry.
+                                        {selectedNode === 'aliphatic' 
+                                            ? 'This node represents the entire Aliphatic Reaction Map. Reacting long chains via Catalytic Reforming creates the Benzene ring.' 
+                                            : 'Click on arrows to explore the chemistry of Benzene and its derivatives.'}
                                     </p>
                                 </div>
                             )}
