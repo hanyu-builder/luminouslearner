@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultimate Reaction Map v6.0 (Dark Mode)</title>
+    <title>Aliphatic Reaction Master Map v7.0</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,22 +16,18 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; margin: 0; overflow: hidden; color: #e2e8f0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Interactive Nodes */
         .node-container { transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); cursor: pointer; }
         .node-container:hover { 
             transform: translateY(-5px) scale(1.02); 
             box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); 
-            border-color: #38bdf8;
             z-index: 10;
         }
         
-        /* Edges */
         .edge { transition: all 0.3s; cursor: pointer; opacity: 0.3; }
         .edge:hover { opacity: 1; stroke-width: 3px; filter: drop-shadow(0 0 4px #fff); }
         .edge-active { opacity: 1 !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: flow 1.5s linear infinite; filter: drop-shadow(0 0 6px #a78bfa); }
         @keyframes flow { to { stroke-dashoffset: -16; } }
 
-        /* Badge Styles */
         .badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
     </style>
 </head>
@@ -46,108 +42,124 @@
             return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- EXTENDED DATASET v6.0 ---
+        // --- DATASET v7.0: The Aliphatic Masterpiece ---
         
         const Nodes = [
             // --- Col 1: Hydrocarbons ---
             { id: 'alkane', label: 'Alkane', x: 50, y: 200, color: '#94a3b8', cat: 'Hydrocarbon' },
-            { id: 'alkyne', label: 'Alkyne', x: 50, y: 450, color: '#f59e0b', cat: 'Hydrocarbon' }, // NEW
+            { id: 'alkyne', label: 'Alkyne', x: 50, y: 500, color: '#f59e0b', cat: 'Hydrocarbon' },
 
-            // --- Col 2: The Hubs ---
+            // --- Col 2: Halides & Grignard ---
             { id: 'haloalkane', label: 'Haloalkane', x: 350, y: 100, color: '#facc15', cat: 'Derivative' },
-            { id: 'alkene', label: 'Alkene', x: 350, y: 300, color: '#4ade80', cat: 'Hydrocarbon' }, 
-            { id: 'epoxide', label: 'Epoxide', x: 350, y: 550, color: '#22d3ee', cat: 'Ether (Adv)' },
+            { id: 'grignard', label: 'Grignard Reagent', x: 350, y: -50, color: '#ec4899', cat: 'Organometallic' }, // NEW: Top layer
+            { id: 'alkene', label: 'Alkene', x: 350, y: 350, color: '#4ade80', cat: 'Hydrocarbon' }, 
+            { id: 'epoxide', label: 'Epoxide', x: 350, y: 650, color: '#22d3ee', cat: 'Ether (Adv)' },
             
-            // --- Col 2.5: Sulfur Series (NEW - Bottom) ---
-            { id: 'thiol', label: 'Thiol', x: 450, y: 750, color: '#fbbf24', cat: 'Sulfur (Adv)' },
-            { id: 'sulfide', label: 'Sulfide', x: 750, y: 750, color: '#fbbf24', cat: 'Sulfur (Adv)' },
-            { id: 'disulfide', label: 'Disulfide', x: 200, y: 750, color: '#d97706', cat: 'Sulfur (Adv)' },
+            // --- Col 2.5: Sulfur (Bottom) ---
+            { id: 'thiol', label: 'Thiol', x: 500, y: 800, color: '#fbbf24', cat: 'Sulfur (Adv)' },
+            { id: 'sulfide', label: 'Sulfide', x: 800, y: 800, color: '#fbbf24', cat: 'Sulfur (Adv)' },
+            { id: 'disulfide', label: 'Disulfide', x: 200, y: 800, color: '#d97706', cat: 'Sulfur (Adv)' },
 
             // --- Col 3: Oxygenates ---
             { id: 'ether', label: 'Ether', x: 750, y: 100, color: '#60a5fa', cat: 'Ether (Adv)' },
-            { id: 'alcohol_1', label: '1° Alcohol', x: 750, y: 300, color: '#38bdf8', cat: 'Oxygen' },
-            { id: 'alcohol_2', label: '2° Alcohol', x: 750, y: 500, color: '#38bdf8', cat: 'Oxygen' },
-            { id: 'diol', label: 'Diol', x: 550, y: 450, color: '#38bdf8', cat: 'Oxygen' },
+            { id: 'alcohol_1', label: '1° Alcohol', x: 750, y: 250, color: '#38bdf8', cat: 'Oxygen' },
+            { id: 'alcohol_2', label: '2° Alcohol', x: 750, y: 450, color: '#38bdf8', cat: 'Oxygen' },
+            { id: 'alcohol_3', label: '3° Alcohol', x: 750, y: 650, color: '#0ea5e9', cat: 'Oxygen' }, // NEW
+            { id: 'diol', label: 'Diol', x: 550, y: 550, color: '#38bdf8', cat: 'Oxygen' },
 
             // --- Col 4: Carbonyls ---
-            { id: 'nitrile', label: 'Nitrile', x: 1100, y: 100, color: '#fb923c', cat: 'Nitrogen' },
-            { id: 'aldehyde', label: 'Aldehyde', x: 1100, y: 300, color: '#f472b6', cat: 'Carbonyl' },
-            { id: 'ketone', label: 'Ketone', x: 1100, y: 500, color: '#f472b6', cat: 'Carbonyl' },
+            { id: 'nitrile', label: 'Nitrile', x: 1100, y: 50, color: '#fb923c', cat: 'Nitrogen' },
+            { id: 'aldehyde', label: 'Aldehyde', x: 1100, y: 250, color: '#f472b6', cat: 'Carbonyl' },
+            { id: 'ketone', label: 'Ketone', x: 1100, y: 450, color: '#f472b6', cat: 'Carbonyl' },
 
-            // --- Col 5: Acids ---
-            { id: 'acid', label: 'Carboxylic Acid', x: 1450, y: 300, color: '#ef4444', cat: 'Acid' },
-            { id: 'ester', label: 'Ester', x: 1450, y: 550, color: '#c084fc', cat: 'Derivative' },
+            // --- Col 5: Acids & Acyl Chlorides ---
+            { id: 'acid', label: 'Carboxylic Acid', x: 1450, y: 250, color: '#ef4444', cat: 'Acid' },
+            { id: 'acyl_chloride', label: 'Acyl Chloride', x: 1450, y: 450, color: '#ef4444', cat: 'Acid Derivative' }, // NEW
+            { id: 'ester', label: 'Ester', x: 1750, y: 450, color: '#c084fc', cat: 'Derivative' }, // Shifted Right
 
             // --- Col 6: Nitrogen ---
-            { id: 'amine', label: 'Amine', x: 1800, y: 100, color: '#818cf8', cat: 'Nitrogen' },
-            { id: 'amide', label: 'Amide', x: 1800, y: 300, color: '#a78bfa', cat: 'Nitrogen' },
+            { id: 'amine', label: 'Amine', x: 1800, y: 50, color: '#818cf8', cat: 'Nitrogen' },
+            { id: 'amide', label: 'Amide', x: 1800, y: 250, color: '#a78bfa', cat: 'Nitrogen' },
         ];
 
         const Edges = [
-            // ALKANES
+            // HYDROCARBONS
             { from: 'alkane', to: 'haloalkane', reagents: 'X₂ / UV light', type: 'Sub', desc: 'Free Radical Substitution' },
-
-            // ALKYNES (NEW)
-            { from: 'alkyne', to: 'alkene', reagents: 'H₂ / Lindlar Cat.', type: 'Add', desc: 'Reduction to cis-alkene' },
-            { from: 'alkyne', to: 'ketone', reagents: 'HgSO₄ / H₂SO₄', type: 'Add', desc: 'Hydration (Markovnikov)' },
+            { from: 'alkyne', to: 'alkene', reagents: 'H₂ / Lindlar', type: 'Add', desc: 'Reduction to cis-alkene' },
+            { from: 'alkyne', to: 'ketone', reagents: 'HgSO₄ / H₂SO₄', type: 'Add', desc: 'Hydration (Mark.)' },
             { from: 'alkyne', to: 'alkane', reagents: '2H₂ / Pt', type: 'Add', desc: 'Full Reduction' },
 
-            // ALKENES
+            // ALKENE REACTIONS (Updated with Anti-Mark)
             { from: 'alkene', to: 'alkane', reagents: 'H₂ / Pt', type: 'Add', desc: 'Hydrogenation' },
             { from: 'alkene', to: 'haloalkane', reagents: 'HX(g)', type: 'Add', desc: 'Markovnikov Addition' },
-            { from: 'alkene', to: 'alcohol_1', reagents: 'H₂SO₄ then H₂O', type: 'Add', desc: 'Hydration' },
-            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄', type: 'Ox', desc: 'Oxidation (Syn-diol)' },
+            { from: 'alkene', to: 'haloalkane', reagents: 'HBr / Peroxide', type: 'Add', desc: '★ Anti-Markovnikov Addition' }, // NEW
+            { from: 'alkene', to: 'alcohol_2', reagents: 'H₂SO₄ / H₂O', type: 'Add', desc: 'Hydration (Markovnikov)' }, // Corrected to 2 deg
+            { from: 'alkene', to: 'alcohol_1', reagents: '1.BH₃ 2.H₂O₂/OH⁻', type: 'Add', desc: '★ Hydroboration (Anti-Mark)' }, // NEW
+            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄', type: 'Ox', desc: 'Oxidation' },
             { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA', type: 'Ox', desc: 'Epoxidation' },
-            
-            // OZONOLYSIS (NEW - The "Breaking" Reactions)
-            { from: 'alkene', to: 'aldehyde', reagents: '1. O₃  2. Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis (Reductive Workup)' },
-            { from: 'alkene', to: 'ketone', reagents: '1. O₃  2. Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis (If substituted C)' },
+            { from: 'alkene', to: 'aldehyde', reagents: '1.O₃ 2.Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis' },
+            { from: 'alkene', to: 'ketone', reagents: '1.O₃ 2.Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis (Substituted)' },
 
-            // SULFUR SERIES (NEW)
-            { from: 'haloalkane', to: 'thiol', reagents: 'NaSH', type: 'Sub', desc: 'Nucleophilic Substitution (SH⁻)' },
-            { from: 'thiol', to: 'sulfide', reagents: '1. NaH  2. R-X', type: 'Sub', desc: 'Thioether Synthesis' },
-            { from: 'thiol', to: 'disulfide', reagents: 'I₂ (Oxidation)', type: 'Ox', desc: 'Disulfide Bridge Formation' },
-            { from: 'disulfide', to: 'thiol', reagents: 'Zn / H⁺', type: 'Red', desc: 'Disulfide Reduction' },
+            // GRIGNARD MAGIC (NEW)
+            { from: 'haloalkane', to: 'grignard', reagents: 'Mg / Dry Ether', type: 'Add', desc: 'Grignard Formation' },
+            { from: 'grignard', to: 'alcohol_1', reagents: '1.HCHO 2.H₃O⁺', type: 'Syn', desc: 'Synthesis with Methanal' },
+            { from: 'grignard', to: 'alcohol_2', reagents: '1.Aldehyde 2.H₃O⁺', type: 'Syn', desc: 'Synthesis with Aldehyde' },
+            { from: 'grignard', to: 'alcohol_3', reagents: '1.Ketone 2.H₃O⁺', type: 'Syn', desc: 'Synthesis with Ketone' },
+            { from: 'grignard', to: 'acid', reagents: '1.CO₂ 2.H₃O⁺', type: 'Syn', desc: 'Synthesis with CO₂' },
 
             // HALOALKANES
-            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Sub', desc: 'Hydrolysis' },
-            { from: 'haloalkane', to: 'alkene', reagents: 'NaOH(alc), heat', type: 'Elim', desc: 'Elimination' },
-            { from: 'haloalkane', to: 'nitrile', reagents: 'KCN, reflux', type: 'Sub', desc: 'Step-up (+1 C)' },
-            { from: 'haloalkane', to: 'amine', reagents: 'conc. NH₃', type: 'Sub', desc: 'Nucleophilic Substitution' },
+            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq)', type: 'Sub', desc: 'Hydrolysis' },
+            { from: 'haloalkane', to: 'alkene', reagents: 'NaOH(alc)', type: 'Elim', desc: 'Elimination' },
+            { from: 'haloalkane', to: 'nitrile', reagents: 'KCN', type: 'Sub', desc: 'Step-up (+1 C)' },
+            { from: 'haloalkane', to: 'amine', reagents: 'NH₃', type: 'Sub', desc: 'Substitution' },
+            
+            // SULFUR
+            { from: 'haloalkane', to: 'thiol', reagents: 'NaSH', type: 'Sub', desc: 'Substitution' },
+            { from: 'thiol', to: 'sulfide', reagents: '1.NaH 2.RX', type: 'Sub', desc: 'Synthesis' },
+            { from: 'thiol', to: 'disulfide', reagents: 'I₂', type: 'Ox', desc: 'Oxidation' },
+            { from: 'disulfide', to: 'thiol', reagents: 'Zn/H⁺', type: 'Red', desc: 'Reduction' },
 
             // ALCOHOLS
             { from: 'alcohol_1', to: 'haloalkane', reagents: 'SOCl₂', type: 'Sub', desc: 'Substitution' },
-            { from: 'alcohol_1', to: 'aldehyde', reagents: 'K₂Cr₂O₇/H⁺ Distil', type: 'Ox', desc: 'Partial Oxidation' },
-            { from: 'alcohol_1', to: 'acid', reagents: 'KMnO₄/H⁺ Reflux', type: 'Ox', desc: 'Full Oxidation' },
-            { from: 'alcohol_1', to: 'alkene', reagents: 'conc. H₂SO₄', type: 'Elim', desc: 'Dehydration' },
-            { from: 'alcohol_1', to: 'ester', reagents: 'Acid / H₂SO₄', type: 'Cond', desc: 'Esterification' },
-            { from: 'alcohol_1', to: 'ether', reagents: 'Na then RX', type: 'Sub', desc: 'Williamson Synthesis' },
-            { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇/H⁺ Reflux', type: 'Ox', desc: 'Oxidation' },
+            { from: 'alcohol_1', to: 'aldehyde', reagents: 'PCC / DMP', type: 'Ox', desc: 'Mild Oxidation' },
+            { from: 'alcohol_1', to: 'acid', reagents: 'KMnO₄/H⁺', type: 'Ox', desc: 'Full Oxidation' },
+            { from: 'alcohol_1', to: 'ester', reagents: 'Acid/H⁺', type: 'Cond', desc: 'Esterification' },
+            { from: 'alcohol_1', to: 'ether', reagents: '1.Na 2.RX', type: 'Sub', desc: 'Williamson Synthesis' },
+            { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇/H⁺', type: 'Ox', desc: 'Oxidation' },
+            // 3 deg alcohol cannot be oxidized easily
 
-            // OTHER
-            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺', type: 'Hyd', desc: 'Hydrolysis' },
+            // CARBONYLS
             { from: 'aldehyde', to: 'acid', reagents: 'K₂Cr₂O₇/H⁺', type: 'Ox', desc: 'Oxidation' },
             { from: 'aldehyde', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
             { from: 'ketone', to: 'alcohol_2', reagents: 'NaBH₄', type: 'Red', desc: 'Reduction' },
+
+            // ACIDS & DERIVATIVES (Updated with Acyl Chloride)
+            { from: 'acid', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
+            { from: 'acid', to: 'acyl_chloride', reagents: 'SOCl₂', type: 'Sub', desc: 'Formation of Acid Chloride' },
+            { from: 'acyl_chloride', to: 'acid', reagents: 'H₂O', type: 'Hyd', desc: 'Vigorous Hydrolysis' },
+            { from: 'acyl_chloride', to: 'ester', reagents: 'Alcohol', type: 'Cond', desc: 'Fast Esterification' },
+            { from: 'acyl_chloride', to: 'amide', reagents: 'NH₃', type: 'Sub', desc: 'Fast Amide Formation' },
+            { from: 'acid', to: 'ester', reagents: 'Alcohol/H⁺', type: 'Cond', desc: 'Slow Esterification' },
+
+            // NITROGEN
             { from: 'nitrile', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' },
             { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
-            { from: 'acid', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
-            { from: 'acid', to: 'amide', reagents: '1.SOCl₂ 2.NH₃', type: 'Sub', desc: 'Via Acid Chloride' },
-            { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Deg', desc: 'Hofmann Degradation' },
-            { from: 'amide', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' }
+            { from: 'amide', to: 'amine', reagents: 'Br₂/NaOH', type: 'Deg', desc: 'Hofmann Degradation' },
+            { from: 'amide', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' },
+            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺', type: 'Hyd', desc: 'Hydrolysis' },
         ];
 
         const App = () => {
             const [selectedNode, setSelectedNode] = useState(null);
             const [selectedEdge, setSelectedEdge] = useState(null);
-            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.65 });
+            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.6 });
             const [isDragging, setIsDragging] = useState(false);
             const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
             useEffect(() => {
-                const cx = window.innerWidth / 2 - 900 * 0.65;
-                const cy = window.innerHeight / 2 - 500 * 0.65;
-                setTransform({ x: cx, y: cy, scale: 0.65 });
+                const cx = window.innerWidth / 2 - 900 * 0.6;
+                const cy = window.innerHeight / 2 - 400 * 0.6;
+                setTransform({ x: cx, y: cy, scale: 0.6 });
             }, []);
 
             const getOffsetCoords = (s, e, offsetAmount = 14) => {
@@ -173,23 +185,15 @@
                     onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - transform.x, y: e.clientY - transform.y }); }}
                     onMouseMove={(e) => { if(isDragging) setTransform(p => ({ ...p, x: e.clientX - dragStart.x, y: e.clientY - dragStart.y })); }}
                     onMouseUp={() => setIsDragging(false)}
-                    onWheel={(e) => setTransform(p => ({ ...p, scale: Math.min(Math.max(0.3, p.scale - e.deltaY * 0.001), 2) }))}
+                    onWheel={(e) => setTransform(p => ({ ...p, scale: Math.min(Math.max(0.25, p.scale - e.deltaY * 0.001), 2) }))}
                 >
                     {/* Header */}
                     <div className="absolute top-6 left-6 z-10 pointer-events-none">
                         <div className="bg-slate-900/80 backdrop-blur p-5 rounded-2xl border border-slate-700 shadow-2xl pointer-events-auto">
                             <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                                 <Icon name="flask-round" className="text-cyan-400" /> Reaction Map v6.0
+                                 <Icon name="flask-conical" className="text-pink-500" /> Aliphatic Master Map
                             </h1>
-                            <p className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-widest">Universal • Advanced Edition</p>
-                            <div className="mt-4 flex gap-2">
-                                <div className="text-[10px] flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600">
-                                    <Icon name="mouse-pointer-2" className="w-3 h-3"/> Drag
-                                </div>
-                                <div className="text-[10px] flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600">
-                                    <Icon name="zoom-in" className="w-3 h-3"/> Scroll
-                                </div>
-                            </div>
+                            <p className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-widest">Includes Grignard & Acyl Chlorides</p>
                         </div>
                     </div>
 
@@ -217,14 +221,15 @@
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" />
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} 
                                             className={`edge ${active ? 'edge-active' : ''}`}
-                                            stroke={active ? "#a78bfa" : "#475569"} 
+                                            stroke={active ? "#a78bfa" : (edge.from === 'grignard' ? '#ec4899' : "#475569")} 
                                             strokeWidth="2"
+                                            strokeDasharray={edge.from === 'grignard' ? '5,5' : '0'}
                                             markerEnd={active ? "url(#arrow-active)" : "url(#arrow)"}
                                         />
-                                        {transform.scale > 0.5 && (
+                                        {transform.scale > 0.45 && (
                                             <foreignObject x={(x1+x2)/2 - 60} y={(y1+y2)/2 - 12} width="120" height="24" style={{pointerEvents:'none'}}>
                                                 <div className={`text-[10px] text-center rounded font-mono transition-opacity duration-300
-                                                    ${active ? 'bg-purple-900/90 text-purple-200 border border-purple-500/50 shadow-lg' : 'opacity-0'}`}>
+                                                    ${active ? 'bg-purple-900/90 text-purple-200 shadow-lg' : 'opacity-0'}`}>
                                                     {edge.reagents.split(' ')[0]}
                                                 </div>
                                             </foreignObject>
@@ -304,7 +309,7 @@
                                         Family: <span style={{color: getNode(selectedNode).color}}>{getNode(selectedNode).cat}</span>
                                     </div>
                                     <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
-                                        Explore the chemical pathways connected to this compound by clicking the arrows on the map.
+                                        Interactive Aliphatic Map. Click arrows to view synthetic pathways.
                                     </p>
                                 </div>
                             )}
