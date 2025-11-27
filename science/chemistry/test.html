@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Reaction Explorer (Dark Mode)</title>
+    <title>Ultimate Reaction Map v6.0 (Dark Mode)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,25 +16,23 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; margin: 0; overflow: hidden; color: #e2e8f0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Node Styling */
-        .node-container { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+        /* Interactive Nodes */
+        .node-container { transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); cursor: pointer; }
         .node-container:hover { 
-            transform: translateY(-4px); 
-            box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); /* Purple Glow */
-            border-color: #a78bfa;
+            transform: translateY(-5px) scale(1.02); 
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.2); 
+            border-color: #38bdf8;
+            z-index: 10;
         }
         
-        /* Edge Styling */
-        .edge { transition: all 0.3s; cursor: pointer; opacity: 0.4; }
-        .edge:hover { opacity: 1; stroke-width: 3px; filter: drop-shadow(0 0 3px #fff); }
-        .edge-active { opacity: 1 !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: flow 1s linear infinite; filter: drop-shadow(0 0 5px #a78bfa); }
+        /* Edges */
+        .edge { transition: all 0.3s; cursor: pointer; opacity: 0.3; }
+        .edge:hover { opacity: 1; stroke-width: 3px; filter: drop-shadow(0 0 4px #fff); }
+        .edge-active { opacity: 1 !important; stroke-width: 3px !important; stroke-dasharray: 8; animation: flow 1.5s linear infinite; filter: drop-shadow(0 0 6px #a78bfa); }
         @keyframes flow { to { stroke-dashoffset: -16; } }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        /* Badge Styles */
+        .badge { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -43,99 +41,115 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- Safe Icon Component ---
         const Icon = ({ name, className = "" }) => {
             useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
             return <i data-lucide={name} className={className}></i>;
         };
 
-        // --- DATASET: SPACED OUT & ENGLISH ONLY ---
-        // Strategy: Increase X distance significantly (approx +300px per column)
+        // --- EXTENDED DATASET v6.0 ---
+        
         const Nodes = [
-            // Column 1: Hydrocarbons Start
-            { id: 'alkane', label: 'Alkane', x: 50, y: 300, color: '#94a3b8', cat: 'Hydrocarbon' },
-            
-            // Column 2: The Hubs (Expanded Right)
+            // --- Col 1: Hydrocarbons ---
+            { id: 'alkane', label: 'Alkane', x: 50, y: 200, color: '#94a3b8', cat: 'Hydrocarbon' },
+            { id: 'alkyne', label: 'Alkyne', x: 50, y: 450, color: '#f59e0b', cat: 'Hydrocarbon' }, // NEW
+
+            // --- Col 2: The Hubs ---
             { id: 'haloalkane', label: 'Haloalkane', x: 350, y: 100, color: '#facc15', cat: 'Derivative' },
             { id: 'alkene', label: 'Alkene', x: 350, y: 300, color: '#4ade80', cat: 'Hydrocarbon' }, 
-            { id: 'epoxide', label: 'Epoxide', x: 350, y: 600, color: '#22d3ee', cat: 'Ether (Adv)' }, // Moved down
+            { id: 'epoxide', label: 'Epoxide', x: 350, y: 550, color: '#22d3ee', cat: 'Ether (Adv)' },
             
-            // Column 2.5: Intermediates
-            { id: 'diol', label: 'Diol', x: 550, y: 450, color: '#38bdf8', cat: 'Oxygen' }, // Positioned in gap
+            // --- Col 2.5: Sulfur Series (NEW - Bottom) ---
+            { id: 'thiol', label: 'Thiol', x: 450, y: 750, color: '#fbbf24', cat: 'Sulfur (Adv)' },
+            { id: 'sulfide', label: 'Sulfide', x: 750, y: 750, color: '#fbbf24', cat: 'Sulfur (Adv)' },
+            { id: 'disulfide', label: 'Disulfide', x: 200, y: 750, color: '#d97706', cat: 'Sulfur (Adv)' },
 
-            // Column 3: Alcohols & Ethers
+            // --- Col 3: Oxygenates ---
             { id: 'ether', label: 'Ether', x: 750, y: 100, color: '#60a5fa', cat: 'Ether (Adv)' },
             { id: 'alcohol_1', label: '1° Alcohol', x: 750, y: 300, color: '#38bdf8', cat: 'Oxygen' },
             { id: 'alcohol_2', label: '2° Alcohol', x: 750, y: 500, color: '#38bdf8', cat: 'Oxygen' },
+            { id: 'diol', label: 'Diol', x: 550, y: 450, color: '#38bdf8', cat: 'Oxygen' },
 
-            // Column 4: Carbonyls & Nitriles
-            { id: 'nitrile', label: 'Nitrile', x: 1100, y: 100, color: '#fb923c', cat: 'Nitrogen (Step-up)' },
+            // --- Col 4: Carbonyls ---
+            { id: 'nitrile', label: 'Nitrile', x: 1100, y: 100, color: '#fb923c', cat: 'Nitrogen' },
             { id: 'aldehyde', label: 'Aldehyde', x: 1100, y: 300, color: '#f472b6', cat: 'Carbonyl' },
             { id: 'ketone', label: 'Ketone', x: 1100, y: 500, color: '#f472b6', cat: 'Carbonyl' },
 
-            // Column 5: Acids
+            // --- Col 5: Acids ---
             { id: 'acid', label: 'Carboxylic Acid', x: 1450, y: 300, color: '#ef4444', cat: 'Acid' },
             { id: 'ester', label: 'Ester', x: 1450, y: 550, color: '#c084fc', cat: 'Derivative' },
 
-            // Column 6: Nitrogen End
+            // --- Col 6: Nitrogen ---
             { id: 'amine', label: 'Amine', x: 1800, y: 100, color: '#818cf8', cat: 'Nitrogen' },
             { id: 'amide', label: 'Amide', x: 1800, y: 300, color: '#a78bfa', cat: 'Nitrogen' },
         ];
 
         const Edges = [
+            // ALKANES
             { from: 'alkane', to: 'haloalkane', reagents: 'X₂ / UV light', type: 'Sub', desc: 'Free Radical Substitution' },
+
+            // ALKYNES (NEW)
+            { from: 'alkyne', to: 'alkene', reagents: 'H₂ / Lindlar Cat.', type: 'Add', desc: 'Reduction to cis-alkene' },
+            { from: 'alkyne', to: 'ketone', reagents: 'HgSO₄ / H₂SO₄', type: 'Add', desc: 'Hydration (Markovnikov)' },
+            { from: 'alkyne', to: 'alkane', reagents: '2H₂ / Pt', type: 'Add', desc: 'Full Reduction' },
+
+            // ALKENES
             { from: 'alkene', to: 'alkane', reagents: 'H₂ / Pt', type: 'Add', desc: 'Hydrogenation' },
             { from: 'alkene', to: 'haloalkane', reagents: 'HX(g)', type: 'Add', desc: 'Markovnikov Addition' },
             { from: 'alkene', to: 'alcohol_1', reagents: 'H₂SO₄ then H₂O', type: 'Add', desc: 'Hydration' },
-            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄', type: 'Ox', desc: 'Oxidation' },
-            { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA', type: 'Ox', desc: 'Epoxidation (Adv)' },
-            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺', type: 'Hyd', desc: 'Hydrolysis' },
+            { from: 'alkene', to: 'diol', reagents: 'Cold dil. KMnO₄', type: 'Ox', desc: 'Oxidation (Syn-diol)' },
+            { from: 'alkene', to: 'epoxide', reagents: 'm-CPBA', type: 'Ox', desc: 'Epoxidation' },
             
-            // Bi-directional Logic maintained
-            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Sub', desc: 'Hydrolysis' },
-            { from: 'alcohol_1', to: 'haloalkane', reagents: 'SOCl₂', type: 'Sub', desc: 'Substitution' },
+            // OZONOLYSIS (NEW - The "Breaking" Reactions)
+            { from: 'alkene', to: 'aldehyde', reagents: '1. O₃  2. Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis (Reductive Workup)' },
+            { from: 'alkene', to: 'ketone', reagents: '1. O₃  2. Zn/H₂O', type: 'Cleave', desc: 'Ozonolysis (If substituted C)' },
 
+            // SULFUR SERIES (NEW)
+            { from: 'haloalkane', to: 'thiol', reagents: 'NaSH', type: 'Sub', desc: 'Nucleophilic Substitution (SH⁻)' },
+            { from: 'thiol', to: 'sulfide', reagents: '1. NaH  2. R-X', type: 'Sub', desc: 'Thioether Synthesis' },
+            { from: 'thiol', to: 'disulfide', reagents: 'I₂ (Oxidation)', type: 'Ox', desc: 'Disulfide Bridge Formation' },
+            { from: 'disulfide', to: 'thiol', reagents: 'Zn / H⁺', type: 'Red', desc: 'Disulfide Reduction' },
+
+            // HALOALKANES
+            { from: 'haloalkane', to: 'alcohol_1', reagents: 'NaOH(aq), heat', type: 'Sub', desc: 'Hydrolysis' },
             { from: 'haloalkane', to: 'alkene', reagents: 'NaOH(alc), heat', type: 'Elim', desc: 'Elimination' },
             { from: 'haloalkane', to: 'nitrile', reagents: 'KCN, reflux', type: 'Sub', desc: 'Step-up (+1 C)' },
             { from: 'haloalkane', to: 'amine', reagents: 'conc. NH₃', type: 'Sub', desc: 'Nucleophilic Substitution' },
-            
+
+            // ALCOHOLS
+            { from: 'alcohol_1', to: 'haloalkane', reagents: 'SOCl₂', type: 'Sub', desc: 'Substitution' },
             { from: 'alcohol_1', to: 'aldehyde', reagents: 'K₂Cr₂O₇/H⁺ Distil', type: 'Ox', desc: 'Partial Oxidation' },
             { from: 'alcohol_1', to: 'acid', reagents: 'KMnO₄/H⁺ Reflux', type: 'Ox', desc: 'Full Oxidation' },
             { from: 'alcohol_1', to: 'alkene', reagents: 'conc. H₂SO₄', type: 'Elim', desc: 'Dehydration' },
             { from: 'alcohol_1', to: 'ester', reagents: 'Acid / H₂SO₄', type: 'Cond', desc: 'Esterification' },
-            { from: 'alcohol_1', to: 'ether', reagents: 'Na then RX', type: 'Sub', desc: 'Williamson Synthesis (Adv)' },
-
+            { from: 'alcohol_1', to: 'ether', reagents: 'Na then RX', type: 'Sub', desc: 'Williamson Synthesis' },
             { from: 'alcohol_2', to: 'ketone', reagents: 'K₂Cr₂O₇/H⁺ Reflux', type: 'Ox', desc: 'Oxidation' },
 
+            // OTHER
+            { from: 'epoxide', to: 'diol', reagents: 'H₃O⁺', type: 'Hyd', desc: 'Hydrolysis' },
             { from: 'aldehyde', to: 'acid', reagents: 'K₂Cr₂O₇/H⁺', type: 'Ox', desc: 'Oxidation' },
             { from: 'aldehyde', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
             { from: 'ketone', to: 'alcohol_2', reagents: 'NaBH₄', type: 'Red', desc: 'Reduction' },
-
             { from: 'nitrile', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' },
             { from: 'nitrile', to: 'amine', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
-
             { from: 'acid', to: 'alcohol_1', reagents: 'LiAlH₄', type: 'Red', desc: 'Reduction' },
             { from: 'acid', to: 'amide', reagents: '1.SOCl₂ 2.NH₃', type: 'Sub', desc: 'Via Acid Chloride' },
-            
-            { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Deg', desc: 'Hofmann Degradation (Step-down)' },
+            { from: 'amide', to: 'amine', reagents: 'Br₂ / NaOH', type: 'Deg', desc: 'Hofmann Degradation' },
             { from: 'amide', to: 'acid', reagents: 'H⁺(aq)', type: 'Hyd', desc: 'Hydrolysis' }
         ];
 
         const App = () => {
             const [selectedNode, setSelectedNode] = useState(null);
             const [selectedEdge, setSelectedEdge] = useState(null);
-            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.7 }); // Default zoom out a bit more for wider map
+            const [transform, setTransform] = useState({ x: 0, y: 0, scale: 0.65 });
             const [isDragging, setIsDragging] = useState(false);
             const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
             useEffect(() => {
-                // Center map initially
-                const cx = window.innerWidth / 2 - 900 * 0.7; // Adjusted for wider layout
-                const cy = window.innerHeight / 2 - 300 * 0.7;
-                setTransform({ x: cx, y: cy, scale: 0.7 });
+                const cx = window.innerWidth / 2 - 900 * 0.65;
+                const cy = window.innerHeight / 2 - 500 * 0.65;
+                setTransform({ x: cx, y: cy, scale: 0.65 });
             }, []);
 
-            // Offset logic for bi-directional arrows
             const getOffsetCoords = (s, e, offsetAmount = 14) => {
                 const dx = e.x - s.x;
                 const dy = e.y - s.y;
@@ -144,8 +158,8 @@
                 const perpX = -dy / len;
                 const perpY = dx / len;
                 return {
-                    x1: s.x + 90 + (perpX * offsetAmount), // Width adjusted
-                    y1: s.y + 40 + (perpY * offsetAmount), // Height adjusted
+                    x1: s.x + 90 + (perpX * offsetAmount), 
+                    y1: s.y + 40 + (perpY * offsetAmount),
                     x2: e.x + 90 + (perpX * offsetAmount),
                     y2: e.y + 40 + (perpY * offsetAmount)
                 };
@@ -161,23 +175,27 @@
                     onMouseUp={() => setIsDragging(false)}
                     onWheel={(e) => setTransform(p => ({ ...p, scale: Math.min(Math.max(0.3, p.scale - e.deltaY * 0.001), 2) }))}
                 >
-                    {/* Header Overlay */}
+                    {/* Header */}
                     <div className="absolute top-6 left-6 z-10 pointer-events-none">
-                        <div className="bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl pointer-events-auto">
-                            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                                 <Icon name="atom" className="text-cyan-400" /> Reaction Explorer
+                        <div className="bg-slate-900/80 backdrop-blur p-5 rounded-2xl border border-slate-700 shadow-2xl pointer-events-auto">
+                            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+                                 <Icon name="flask-round" className="text-cyan-400" /> Reaction Map v6.0
                             </h1>
-                            <p className="text-xs text-slate-400 mt-1 font-mono">Universal Edition • Dark Mode</p>
-                            <div className="mt-3 flex gap-2">
-                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-600">Scroll to Zoom</span>
-                                <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-600">Drag to Pan</span>
+                            <p className="text-xs text-slate-400 mt-2 font-mono uppercase tracking-widest">Universal • Advanced Edition</p>
+                            <div className="mt-4 flex gap-2">
+                                <div className="text-[10px] flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600">
+                                    <Icon name="mouse-pointer-2" className="w-3 h-3"/> Drag
+                                </div>
+                                <div className="text-[10px] flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-600">
+                                    <Icon name="zoom-in" className="w-3 h-3"/> Scroll
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Canvas */}
                     <div className="absolute origin-top-left will-change-transform" style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>
-                        <svg width="2500" height="1200" className="overflow-visible">
+                        <svg width="2500" height="1500" className="overflow-visible">
                             <defs>
                                 <marker id="arrow" markerWidth="6" markerHeight="4" refX="16" refY="2" orient="auto">
                                     <path d="M0,0 L6,2 L0,4" fill="#475569" />
@@ -185,39 +203,29 @@
                                 <marker id="arrow-active" markerWidth="6" markerHeight="4" refX="16" refY="2" orient="auto">
                                     <path d="M0,0 L6,2 L0,4" fill="#a78bfa" />
                                 </marker>
-                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                                    <feMerge>
-                                        <feMergeNode in="coloredBlur"/>
-                                        <feMergeNode in="SourceGraphic"/>
-                                    </feMerge>
-                                </filter>
                             </defs>
 
-                            {/* Render Edges */}
+                            {/* Edges */}
                             {Edges.map((edge, i) => {
                                 const s = getNode(edge.from);
                                 const e = getNode(edge.to);
-                                const { x1, y1, x2, y2 } = getOffsetCoords(s, e, 12); 
+                                const { x1, y1, x2, y2 } = getOffsetCoords(s, e, 15); 
                                 const active = selectedEdge === edge || (selectedNode && (edge.from === selectedNode || edge.to === selectedNode));
                                 
                                 return (
                                     <g key={i} onClick={(e) => { e.stopPropagation(); setSelectedEdge(edge); setSelectedNode(null); }}>
-                                        {/* Hit Box */}
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" />
-                                        {/* Visible Line */}
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} 
                                             className={`edge ${active ? 'edge-active' : ''}`}
                                             stroke={active ? "#a78bfa" : "#475569"} 
                                             strokeWidth="2"
                                             markerEnd={active ? "url(#arrow-active)" : "url(#arrow)"}
                                         />
-                                        {/* Label on line */}
-                                        {transform.scale > 0.6 && (
-                                            <foreignObject x={(x1+x2)/2 - 50} y={(y1+y2)/2 - 12} width="100" height="24" style={{pointerEvents:'none'}}>
-                                                <div className={`text-[10px] text-center rounded font-mono transition-all duration-300
-                                                    ${active ? 'bg-purple-900/80 text-purple-200 border border-purple-500/50 shadow-lg' : 'opacity-0'}`}>
-                                                    {edge.reagents.split(' ')[0]}...
+                                        {transform.scale > 0.5 && (
+                                            <foreignObject x={(x1+x2)/2 - 60} y={(y1+y2)/2 - 12} width="120" height="24" style={{pointerEvents:'none'}}>
+                                                <div className={`text-[10px] text-center rounded font-mono transition-opacity duration-300
+                                                    ${active ? 'bg-purple-900/90 text-purple-200 border border-purple-500/50 shadow-lg' : 'opacity-0'}`}>
+                                                    {edge.reagents.split(' ')[0]}
                                                 </div>
                                             </foreignObject>
                                         )}
@@ -225,7 +233,7 @@
                                 );
                             })}
 
-                            {/* Render Nodes */}
+                            {/* Nodes */}
                             {Nodes.map(node => {
                                 const isActive = selectedNode === node.id;
                                 const isRelated = selectedEdge?.from === node.id || selectedEdge?.to === node.id;
@@ -238,14 +246,14 @@
                                                 w-full h-full rounded-xl border flex flex-col items-center justify-center node-container
                                                 backdrop-blur-sm
                                                 ${isActive 
-                                                    ? 'bg-slate-800 border-purple-500 ring-2 ring-purple-500/30 text-white shadow-[0_0_15px_rgba(168,85,247,0.4)]' 
-                                                    : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500'
+                                                    ? 'bg-slate-800 border-purple-500 ring-2 ring-purple-500/30 text-white' 
+                                                    : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500'
                                                 }
                                                 ${isRelated && !isActive ? 'border-cyan-500/50 bg-slate-800/80 text-cyan-100' : ''}
                                             `}
                                         >
                                             <div className="text-base font-bold text-center tracking-tight">{node.label}</div>
-                                            <div className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80" style={{color: node.color}}>
+                                            <div className="badge mt-1 opacity-80" style={{color: node.color, backgroundColor: `${node.color}15`}}>
                                                 {node.cat}
                                             </div>
                                         </div>
@@ -255,33 +263,33 @@
                         </svg>
                     </div>
 
-                    {/* Bottom Info Panel */}
+                    {/* Info Panel */}
                     <div className={`absolute bottom-0 left-0 w-full p-6 transition-transform duration-500 z-20 flex justify-center ${selectedNode || selectedEdge ? 'translate-y-0' : 'translate-y-[120%]'}`}>
-                        <div className="bg-slate-800/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-slate-700 w-full max-w-4xl p-6 relative text-slate-200">
-                            <button onClick={() => {setSelectedNode(null); setSelectedEdge(null);}} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-700 text-slate-400 transition-colors">
+                        <div className="bg-slate-800/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-slate-700 w-full max-w-4xl p-8 relative text-slate-200">
+                            <button onClick={() => {setSelectedNode(null); setSelectedEdge(null);}} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-700 text-slate-400">
                                 <Icon name="x" className="w-5 h-5" />
                             </button>
                             
                             {selectedEdge && (
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                                    <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                                    <div className="md:col-span-4 flex flex-col items-center justify-center p-6 bg-slate-900/50 rounded-xl border border-slate-700/50">
                                         <div className="text-lg font-bold text-cyan-400">{getNode(selectedEdge.from).label}</div>
-                                        <Icon name="arrow-down" className="my-2 text-slate-500" />
+                                        <Icon name="arrow-down" className="my-3 text-slate-500 w-6 h-6" />
                                         <div className="text-lg font-bold text-purple-400">{getNode(selectedEdge.to).label}</div>
                                     </div>
                                     <div className="md:col-span-8 space-y-4">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Reagents & Conditions</label>
-                                            <div className="text-xl font-mono font-bold text-white bg-slate-900 p-3 rounded-lg border border-slate-600 mt-2 shadow-inner">
+                                            <div className="text-xl font-mono font-bold text-white bg-slate-900 p-4 rounded-lg border border-slate-600 mt-2 shadow-inner">
                                                 {selectedEdge.reagents}
                                             </div>
                                         </div>
-                                        <div className="flex gap-3">
+                                        <div className="flex flex-wrap gap-3">
                                             <div className="bg-cyan-900/30 text-cyan-300 border border-cyan-800 px-3 py-1 rounded text-xs font-bold uppercase">
                                                 {selectedEdge.type}
                                             </div>
                                             <div className="text-slate-400 text-sm flex items-center">
-                                                <Icon name="info" className="w-3 h-3 mr-1" />
+                                                <Icon name="info" className="w-4 h-4 mr-2" />
                                                 {selectedEdge.desc}
                                             </div>
                                         </div>
@@ -291,12 +299,12 @@
 
                             {selectedNode && (
                                 <div className="text-center py-2">
-                                    <h2 className="text-3xl font-bold text-white mb-2">{getNode(selectedNode).label}</h2>
-                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-xs font-mono text-slate-400 mb-4">
-                                        Category: <span style={{color: getNode(selectedNode).color}}>{getNode(selectedNode).cat}</span>
+                                    <h2 className="text-4xl font-bold text-white mb-3">{getNode(selectedNode).label}</h2>
+                                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-sm font-mono text-slate-400 mb-6">
+                                        Family: <span style={{color: getNode(selectedNode).color}}>{getNode(selectedNode).cat}</span>
                                     </div>
-                                    <p className="text-slate-400 text-sm max-w-lg mx-auto">
-                                        Select any connecting arrow to reveal the reaction conditions, reagents, and specific notes for this pathway.
+                                    <p className="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">
+                                        Explore the chemical pathways connected to this compound by clicking the arrows on the map.
                                     </p>
                                 </div>
                             )}
