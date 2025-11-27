@@ -34,9 +34,24 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        const Icon = ({ name, className = "" }) => {
-            useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
-            return <i data-lucide={name} className={className}></i>;
+        // --- SAFE ICON COMPONENT ---
+        // Converts kebab-case (e.g. "chevron-right") to PascalCase (e.g. "ChevronRight")
+        // and renders using React to avoid DOM conflicts.
+        const Icon = ({ name, className = "", size = 24 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData) {
+                        setSvgHtml(iconData.toSVG({ class: className, width: size, height: size }));
+                    }
+                }
+            }, [name, className, size]);
+
+            if (!svgHtml) return <span className={className}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
         // --- PERIOD 3 DATASET ---
@@ -74,7 +89,7 @@
                 label: 'Electronegativity (Pauling)',
                 unit: '',
                 desc: 'Increases across the period. Cl is the most electronegative element in Period 3.',
-                values: [0.9, 1.3, 1.6, 1.9, 2.2, 2.6, 3.2, 0] // Ar is effectively 0
+                values: [0.9, 1.3, 1.6, 1.9, 2.2, 2.6, 3.2, 0] 
             },
             ionization: {
                 label: '1st Ionization Energy (kJ/mol)',
@@ -84,7 +99,6 @@
             }
         };
 
-        // Color coding based on structure
         const getColor = (struct) => {
             if (struct.includes('Metallic')) return '#34d399'; // Emerald
             if (struct.includes('Covalent')) return '#f87171'; // Red
@@ -94,7 +108,12 @@
 
         const Graph = ({ activeProp }) => {
             const data = DATA_SETS[activeProp];
+            if (!data) return <div className="text-red-400">Data not found</div>;
+
             const maxVal = Math.max(...data.values) * 1.1;
+            // Prevent division by zero if maxVal is 0 (unlikely but safe)
+            const safeMax = maxVal === 0 ? 1 : maxVal;
+            
             const height = 300;
             const width = 600;
             const padding = 40;
@@ -102,17 +121,16 @@
             const graphW = width - padding * 2;
             const stepX = graphW / (ELEMENTS.length - 1);
 
-            // Generate Path D string
             const points = data.values.map((val, i) => {
                 const x = padding + i * stepX;
-                const y = height - padding - (val / maxVal) * graphH;
+                const y = height - padding - (val / safeMax) * graphH;
                 return { x, y, val, el: ELEMENTS[i] };
             });
 
             const pathD = `M ${points.map(p => `${p.x},${p.y}`).join(' L ')}`;
 
             return (
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full animate-in">
                     <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
                         {/* Grid Lines */}
                         <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#475569" strokeWidth="2" />
@@ -128,18 +146,13 @@
                         {/* Data Points */}
                         {points.map((p, i) => (
                             <g key={i} className="group cursor-pointer">
-                                {/* Invisible hit area */}
                                 <circle cx={p.x} cy={p.y} r="20" fill="transparent" />
-                                
-                                {/* Visible Dot */}
                                 <circle 
                                     cx={p.x} cy={p.y} r="6" 
                                     fill={getColor(p.el.struct)} 
                                     stroke="#0f172a" strokeWidth="2"
                                     className="chart-point z-10 relative"
                                 />
-
-                                {/* Label X (Symbol) */}
                                 <text x={p.x} y={height - padding + 20} fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.symbol}</text>
 
                                 {/* Tooltip */}
@@ -147,8 +160,6 @@
                                     <rect x="-60" y="-55" width="120" height="50" rx="6" fill="#1e293b" stroke="#475569" />
                                     <text x="0" y="-35" fill="white" fontSize="12" fontWeight="bold" textAnchor="middle">{p.el.name}</text>
                                     <text x="0" y="-18" fill="#38bdf8" fontSize="12" fontWeight="bold" textAnchor="middle">{p.val} {data.unit}</text>
-                                    
-                                    {/* Triangle pointer */}
                                     <path d="M -5 -5 L 0 0 L 5 -5" fill="#1e293b" stroke="#475569" strokeWidth="1" transform="translate(0, -2)" />
                                 </g>
                             </g>
@@ -164,11 +175,12 @@
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
                     
-                    {/* Sidebar Controls */}
+                    {/* Sidebar */}
                     <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl">
                         <div className="p-6 border-b border-slate-800">
                             <h1 className="text-xl font-bold flex items-center gap-2">
-                                <Icon name="activity" className="text-emerald-400" /> Trend Grapher
+                                <Icon name="activity" className="text-emerald-400" size={24} /> 
+                                Trend Grapher
                             </h1>
                             <p className="text-xs text-slate-400 mt-1">Period 3 Elements</p>
                         </div>
@@ -179,7 +191,7 @@
                                 <button 
                                     key={key}
                                     onClick={() => setActiveProp(key)}
-                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between group
                                         ${activeProp === key 
                                             ? 'bg-slate-800 border-emerald-500 ring-1 ring-emerald-500/50' 
                                             : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'}
@@ -188,7 +200,7 @@
                                     <span className={`text-sm font-bold ${activeProp === key ? 'text-white' : 'text-slate-300'}`}>
                                         {data.label.split('(')[0]}
                                     </span>
-                                    {activeProp === key && <Icon name="chevron-right" className="w-4 h-4 text-emerald-400" />}
+                                    {activeProp === key && <Icon name="chevron-right" className="text-emerald-400" size={16} />}
                                 </button>
                             ))}
                         </div>
@@ -216,15 +228,14 @@
                     {/* Main Stage */}
                     <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
                         
-                        {/* Graph Area */}
+                        {/* Graph Area - Key prop forces re-render for cleaner animation */}
                         <div className="flex-1 bg-slate-900/50 p-4 md:p-12 flex items-center justify-center relative">
-                            {/* Background Grid Pattern */}
                             <div className="absolute inset-0 opacity-10 pointer-events-none" 
                                 style={{backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
                             </div>
 
                             <div className="w-full max-w-4xl h-[400px] relative z-10">
-                                <Graph activeProp={activeProp} />
+                                <Graph key={activeProp} activeProp={activeProp} />
                             </div>
                         </div>
 
@@ -233,7 +244,7 @@
                             <div className="max-w-4xl mx-auto">
                                 <div className="flex items-start gap-4">
                                     <div className="p-3 bg-slate-700 rounded-xl hidden md:block">
-                                        <Icon name="info" className="w-6 h-6 text-blue-400" />
+                                        <Icon name="info" className="text-blue-400" size={24} />
                                     </div>
                                     <div>
                                         <h2 className="text-lg font-bold text-white mb-2">Trend Analysis: <span className="text-emerald-400">{DATA_SETS[activeProp].label}</span></h2>
