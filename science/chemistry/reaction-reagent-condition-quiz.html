@@ -15,7 +15,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .animate-slide-up { animation: slideUp 0.5s ease-out; }
+        .animate-slide-up { animation: slideUp 0.4s ease-out; }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
@@ -31,7 +31,6 @@
         };
 
         const questionBank = [
-            // ALIPHATIC
             { from: "Alkene", to: "Alkane", correct: "H₂ / Pt", distractors: ["H₂SO₄", "LiAlH₄", "NaBH₄"], note: "Catalytic Hydrogenation adds H₂." },
             { from: "Alkene", to: "Haloalkane", correct: "HX (g)", distractors: ["X₂ / UV light", "KOH (alc)", "PCl₅"], note: "Electrophilic Addition (Markovnikov)." },
             { from: "Alkene", to: "Diol", correct: "Cold dil. KMnO₄ / H⁺", distractors: ["Conc. H₂SO₄", "K₂Cr₂O₇ / H⁺", "O₃"], note: "Mild oxidation." },
@@ -43,8 +42,6 @@
             { from: "Carboxylic Acid", to: "1° Alcohol", correct: "LiAlH₄ in dry ether", distractors: ["NaBH₄", "H₂ / Pt", "Sn / HCl"], note: "Only LiAlH₄ is strong enough." },
             { from: "Carboxylic Acid", to: "Acyl Chloride", correct: "SOCl₂", distractors: ["Cl₂", "HCl", "NaCl"], note: "Thionyl chloride replaces -OH with -Cl." },
             { from: "Acyl Chloride", to: "Amide", correct: "NH₃ (conc)", distractors: ["HNO₃", "NH₄Cl", "NaNO₂"], note: "Nucleophilic substitution." },
-            
-            // AROMATIC
             { from: "Benzene", to: "Nitrobenzene", correct: "Conc. HNO₃ / Conc. H₂SO₄", distractors: ["Dil. HNO₃", "HNO₃ / Reflux", "NaNO₂ / HCl"], note: "Nitration mixture generates NO₂⁺." },
             { from: "Benzene", to: "Bromobenzene", correct: "Br₂ / FeBr₃", distractors: ["Br₂ (aq)", "Br₂ / UV light", "HBr"], note: "Need Lewis Acid catalyst (FeBr₃)." },
             { from: "Methylbenzene", to: "Benzoic Acid", correct: "KMnO₄ / OH⁻, Reflux", distractors: ["K₂Cr₂O₇ / H⁺", "O₃", "Conc. HNO₃"], note: "Side-chain oxidation." },
@@ -57,44 +54,55 @@
         const shuffleArray = (array) => [...array].sort(() => Math.random() - 0.5);
 
         const App = () => {
-            const [shuffledQuestions, setShuffledQuestions] = useState([]);
-            const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-            const [currentOptions, setCurrentOptions] = useState([]);
+            // Explicit Game Status: 'loading' | 'playing' | 'finished'
+            const [status, setStatus] = useState('loading');
             
+            // Data State
+            const [deck, setDeck] = useState([]);
+            const [index, setIndex] = useState(0);
+            
+            // Score State
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
+            
+            // Interaction State
             const [feedback, setFeedback] = useState(null); 
-            const [selectedOption, setSelectedOption] = useState(null);
-            const [isGameOver, setIsGameOver] = useState(false);
+            const [selected, setSelected] = useState(null);
 
-            // Initialize Game on Mount
+            // 1. Initialize Game on Mount
             useEffect(() => {
-                initGame();
+                startNewGame();
             }, []);
 
-            const initGame = () => {
-                const q = shuffleArray(questionBank).slice(0, 10);
-                setShuffledQuestions(q);
-                setCurrentQuestionIndex(0);
-                setScore(0);
-                setStreak(0);
-                setFeedback(null);
-                setSelectedOption(null);
-                setIsGameOver(false);
+            const startNewGame = () => {
+                setStatus('loading');
                 
-                // Set first question options safely
-                if (q.length > 0) {
-                    const firstQ = q[0];
-                    setCurrentOptions(shuffleArray([firstQ.correct, ...firstQ.distractors]));
-                }
+                // Simulate tiny delay to ensure state clears (safety)
+                setTimeout(() => {
+                    const rawQuestions = shuffleArray(questionBank).slice(0, 10);
+                    
+                    // Prepare deck with pre-shuffled options
+                    const newDeck = rawQuestions.map(q => ({
+                        ...q,
+                        options: shuffleArray([q.correct, ...q.distractors])
+                    }));
+
+                    setDeck(newDeck);
+                    setIndex(0);
+                    setScore(0);
+                    setStreak(0);
+                    setFeedback(null);
+                    setSelected(null);
+                    setStatus('playing'); // Only switch to playing when deck is ready
+                }, 50);
             };
 
             const handleAnswer = (option) => {
-                if (feedback) return;
+                if (feedback) return; // Prevent double clicks
                 
-                const currentQ = shuffledQuestions[currentQuestionIndex];
+                const currentQ = deck[index];
                 const isCorrect = option === currentQ.correct;
-                setSelectedOption(option);
+                setSelected(option);
 
                 if (isCorrect) {
                     setScore(s => s + 10 + (streak * 2));
@@ -106,70 +114,78 @@
                 }
             };
 
-            const nextQuestion = () => {
-                if (currentQuestionIndex < shuffledQuestions.length - 1) {
-                    const nextIdx = currentQuestionIndex + 1;
-                    const nextQ = shuffledQuestions[nextIdx];
-                    
-                    setCurrentQuestionIndex(nextIdx);
-                    setFeedback(null);
-                    setSelectedOption(null);
-                    setCurrentOptions(shuffleArray([nextQ.correct, ...nextQ.distractors]));
+            const handleNext = () => {
+                // CRITICAL FIX: Check bounds before updating state
+                if (index < deck.length - 1) {
+                    setIndex(prev => prev + 1); // Move to next question
+                    setFeedback(null);          // Clear old feedback
+                    setSelected(null);          // Clear old selection
                 } else {
-                    setIsGameOver(true);
+                    setStatus('finished');      // End game
                 }
             };
 
-            // --- LOADING STATE (Crash Prevention) ---
-            if (shuffledQuestions.length === 0) {
+            // --- VIEW 1: LOADING (Crash Prevention) ---
+            if (status === 'loading') {
                 return (
                     <div className="min-h-screen bg-[#0F172A] flex items-center justify-center">
-                        <div className="text-emerald-400 font-mono animate-pulse">Initializing Reactor...</div>
+                        <div className="flex flex-col items-center gap-4">
+                            <Icon name="loader-2" className="w-10 h-10 text-emerald-500 animate-spin" />
+                            <span className="text-emerald-400 font-mono text-sm tracking-widest">PREPARING REAGENTS...</span>
+                        </div>
                     </div>
                 );
             }
 
-            // --- RESULT SCREEN ---
-            if (isGameOver) {
+            // --- VIEW 2: RESULTS ---
+            if (status === 'finished') {
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-[#0F172A] text-center">
                         <div className="bg-slate-800/80 backdrop-blur p-8 rounded-3xl border border-slate-700 shadow-2xl max-w-md w-full animate-slide-up">
                             <div className="mb-6">
-                                <div className="text-6xl mb-4">{score > 80 ? '🏆' : (score > 50 ? '🧪' : '💥')}</div>
+                                <div className="text-6xl mb-4 animate-bounce">{score > 80 ? '🏆' : (score > 50 ? '🧪' : '💥')}</div>
                                 <h2 className="text-3xl font-bold text-white mb-2">Quiz Complete!</h2>
-                                <p className="text-slate-400">你的最終得分</p>
+                                <p className="text-slate-400">Final Score</p>
                             </div>
                             <div className="text-6xl font-black text-emerald-400 mb-8">{score}</div>
                             <div className="grid grid-cols-2 gap-4 mb-8">
                                 <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-slate-500 text-xs uppercase font-bold">準確率</div>
+                                    <div className="text-slate-500 text-xs uppercase font-bold">Accuracy</div>
                                     <div className="text-xl font-bold text-white">{(score / (10*15) * 100).toFixed(0)}%</div>
                                 </div>
                                 <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-slate-500 text-xs uppercase font-bold">Streak Bonus</div>
+                                    <div className="text-slate-500 text-xs uppercase font-bold">Max Streak</div>
                                     <div className="text-xl font-bold text-yellow-400">x{streak}</div>
                                 </div>
                             </div>
-                            <button onClick={initGame} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-                                <Icon name="rotate-ccw" className="w-4 h-4"/> 再玩一次
+                            <button onClick={startNewGame} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
+                                <Icon name="rotate-ccw" className="w-5 h-5"/> Play Again
                             </button>
                         </div>
                     </div>
                 );
             }
 
-            // --- QUIZ INTERFACE ---
-            const currentQ = shuffledQuestions[currentQuestionIndex];
+            // --- VIEW 3: PLAYING ---
+            
+            // ★ THE ULTIMATE GUARD CLAUSE ★
+            // If for ANY reason the deck is empty or index is wrong, show Loading instead of Crashing.
+            const currentQ = deck[index];
+            if (!currentQ) {
+                // Auto-recover if something goes wrong
+                setTimeout(() => setStatus('finished'), 1000); 
+                return <div className="min-h-screen bg-[#0F172A]"></div>;
+            }
 
             return (
                 <div className="min-h-screen bg-[#0F172A] flex flex-col items-center p-4 md:p-8">
-                    {/* Top Bar */}
+                    {/* Header */}
                     <div className="w-full max-w-2xl flex justify-between items-center mb-8 bg-slate-800/50 p-4 rounded-2xl backdrop-blur border border-slate-700">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-white border border-slate-600">
-                                {currentQuestionIndex + 1}
+                                {index + 1}
                             </div>
-                            <div className="text-sm text-slate-400">Question {currentQuestionIndex + 1}/10</div>
+                            <div className="text-sm text-slate-400">Question {index + 1} / {deck.length}</div>
                         </div>
                         <div className="flex items-center gap-4">
                              {streak > 1 && (
@@ -183,11 +199,11 @@
                         </div>
                     </div>
 
-                    {/* Question Card */}
+                    {/* Question Area */}
                     <div className="w-full max-w-2xl bg-slate-800 rounded-3xl shadow-2xl border border-slate-700 overflow-hidden mb-6 relative">
                         {/* Progress Bar */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-slate-700">
-                            <div className="h-full bg-emerald-500 transition-all duration-300" style={{width: `${((currentQuestionIndex) / 10) * 100}%`}}></div>
+                            <div className="h-full bg-emerald-500 transition-all duration-500" style={{width: `${((index) / 10) * 100}%`}}></div>
                         </div>
 
                         <div className="p-8 text-center space-y-6">
@@ -208,14 +224,15 @@
                         </div>
                     </div>
 
-                    {/* Options Grid */}
+                    {/* Options Area */}
                     <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {currentOptions.map((opt, i) => {
-                            let btnClass = "p-4 rounded-xl font-mono text-lg font-bold border-2 transition-all duration-200 flex items-center justify-center relative ";
+                        {currentQ.options.map((opt, i) => {
+                            let btnClass = "p-4 rounded-xl font-mono text-sm md:text-base font-bold border-2 transition-all duration-200 flex items-center justify-center relative min-h-[80px] ";
+                            
                             if (feedback) {
                                 if (opt === currentQ.correct) {
-                                    btnClass += "bg-emerald-600 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] opacity-100";
-                                } else if (opt === selectedOption) {
+                                    btnClass += "bg-emerald-600 border-emerald-500 text-white shadow-lg opacity-100";
+                                } else if (opt === selected) {
                                     btnClass += "bg-red-500/20 border-red-500 text-red-200 opacity-50";
                                 } else {
                                     btnClass += "bg-slate-800 border-slate-700 text-slate-500 opacity-30";
@@ -225,7 +242,12 @@
                             }
 
                             return (
-                                <button key={i} onClick={() => handleAnswer(opt)} disabled={!!feedback} className={btnClass}>
+                                <button 
+                                    key={i} 
+                                    onClick={() => handleAnswer(opt)} 
+                                    disabled={!!feedback} 
+                                    className={btnClass}
+                                >
                                     {opt}
                                     {feedback && opt === currentQ.correct && (
                                         <Icon name="check-circle" className="absolute right-4 w-5 h-5 text-white" />
@@ -235,25 +257,28 @@
                         })}
                     </div>
 
-                    {/* Feedback Area */}
+                    {/* Feedback & Next Button */}
                     {feedback && (
-                        <div className={`w-full max-w-2xl mt-6 p-4 rounded-2xl border flex items-start gap-4 animate-slide-up ${feedback.isCorrect ? 'bg-emerald-900/30 border-emerald-500/50' : 'bg-red-900/30 border-red-500/50'}`}>
-                            <div className={`p-2 rounded-full ${feedback.isCorrect ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                        <div className={`w-full max-w-2xl mt-6 p-4 rounded-2xl border flex items-center gap-4 animate-slide-up shadow-lg ${feedback.isCorrect ? 'bg-emerald-900/40 border-emerald-500/50' : 'bg-red-900/40 border-red-500/50'}`}>
+                            <div className={`p-3 rounded-full shrink-0 ${feedback.isCorrect ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                                 <Icon name={feedback.isCorrect ? "check" : "x"} className="w-6 h-6" />
                             </div>
                             <div className="flex-1">
-                                <h3 className={`font-bold text-lg mb-1 ${feedback.isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {feedback.isCorrect ? "Correct!" : "Oops, not quite."}
+                                <h3 className={`font-bold text-lg ${feedback.isCorrect ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {feedback.isCorrect ? "Correct!" : "Not quite..."}
                                 </h3>
                                 {!feedback.isCorrect && (
-                                    <p className="text-slate-300 text-sm mb-2">
-                                        Correct Answer: <span className="font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded">{feedback.correctVal}</span>
+                                    <p className="text-slate-300 text-sm mt-1">
+                                        Answer: <span className="font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-600">{feedback.correctVal}</span>
                                     </p>
                                 )}
-                                <p className="text-slate-400 text-sm leading-relaxed">{feedback.message}</p>
+                                <p className="text-slate-400 text-sm mt-1">{feedback.message}</p>
                             </div>
-                            <button onClick={nextQuestion} className="self-center px-6 py-2 bg-slate-100 text-slate-900 font-bold rounded-lg hover:bg-white transition-colors">
-                                Next
+                            <button 
+                                onClick={handleNext} 
+                                className="px-6 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-100 transition-colors shadow-md whitespace-nowrap"
+                            >
+                                Next <Icon name="arrow-right" className="w-4 h-4 inline ml-1"/>
                             </button>
                         </div>
                     )}
