@@ -83,11 +83,11 @@
                     { from: 'C3', to: 'C4' }, { from: 'C4', to: 'C5' }
                 ],
                 peaks: [
-                    { mz: 15, type: 'fragment', label: 'CH₃⁺', structure: 'CH₃⁺', atoms: ['C1'] },
-                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', structure: 'CH₃CH₂⁺', atoms: ['C1','C2'] },
-                    { mz: 43, type: 'base', label: 'C₃H₇⁺ (Base Peak)', structure: 'CH₃CH₂CH₂⁺', atoms: ['C1','C2','C3'] },
-                    { mz: 57, type: 'fragment', label: 'C₄H₉⁺', structure: 'CH₃CH₂CH₂CH₂⁺', atoms: ['C1','C2','C3','C4'] },
-                    { mz: 72, type: 'molecular', label: 'M⁺ (Molecular Ion)', structure: 'CH₃CH₂CH₂CH₂CH₃⁺•', atoms: ['C1','C2','C3','C4','C5'] }
+                    { mz: 15, type: 'fragment', label: 'CH₃⁺', atoms: ['C1'] },
+                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', atoms: ['C1','C2'] },
+                    { mz: 43, type: 'base', label: 'C₃H₇⁺ (Base Peak)', atoms: ['C1','C2','C3'] },
+                    { mz: 57, type: 'fragment', label: 'C₄H₉⁺', atoms: ['C1','C2','C3','C4'] },
+                    { mz: 72, type: 'molecular', label: 'M⁺ (Molecular Ion)', atoms: ['C1','C2','C3','C4','C5'] }
                 ]
             },
             {
@@ -104,9 +104,9 @@
                     { from: 'C1', to: 'C2' }, { from: 'C2', to: 'C3' }
                 ],
                 peaks: [
-                    { mz: 15, type: 'fragment', label: 'CH₃⁺', structure: 'CH₃⁺', atoms: ['C1'] },
-                    { mz: 43, type: 'base', label: 'CH₃CO⁺ (Acyl)', structure: 'CH₃-C=O⁺', atoms: ['C1','C2'] },
-                    { mz: 58, type: 'molecular', label: 'M⁺', structure: 'CH₃COCH₃⁺•', atoms: ['C1','C2','C3'] }
+                    { mz: 15, type: 'fragment', label: 'CH₃⁺', atoms: ['C1'] },
+                    { mz: 43, type: 'base', label: 'CH₃CO⁺ (Acyl)', atoms: ['C1','C2'] },
+                    { mz: 58, type: 'molecular', label: 'M⁺', atoms: ['C1','C2','C3'] }
                 ]
             },
             {
@@ -123,11 +123,11 @@
                     { from: 'C1', to: 'C2' }, { from: 'C2', to: 'O1' }
                 ],
                 peaks: [
-                    { mz: 15, type: 'fragment', label: 'CH₃⁺', structure: 'CH₃⁺', atoms: ['C1'] },
-                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', structure: 'CH₃CH₂⁺', atoms: ['C1','C2'] },
-                    { mz: 31, type: 'base', label: 'CH₂OH⁺ (Base)', structure: 'CH₂=OH⁺', atoms: ['C2','O1'] }, // alpha-cleavage
-                    { mz: 45, type: 'fragment', label: 'M-1', structure: 'CH₃CHOH⁺', atoms: ['C1','C2','O1'] }, // Loss of H
-                    { mz: 46, type: 'molecular', label: 'M⁺', structure: 'CH₃CH₂OH⁺•', atoms: ['C1','C2','O1'] }
+                    { mz: 15, type: 'fragment', label: 'CH₃⁺', atoms: ['C1'] },
+                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', atoms: ['C1','C2'] },
+                    { mz: 31, type: 'base', label: 'CH₂OH⁺ (Base)', atoms: ['C2','O1'] }, // alpha-cleavage
+                    { mz: 45, type: 'fragment', label: 'M-1', atoms: ['C1','C2','O1'] }, // Loss of H
+                    { mz: 46, type: 'molecular', label: 'M⁺', atoms: ['C1','C2','O1'] }
                 ]
             },
             {
@@ -145,11 +145,11 @@
                     { from: 'C1', to: 'C2' }, { from: 'C2', to: 'C3' }, { from: 'C3', to: 'C4' }
                 ],
                 peaks: [
-                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', structure: 'CH₃CH₂⁺', atoms: ['C1','C2'] },
-                    { mz: 43, type: 'fragment', label: 'C₃H₇⁺', structure: 'CH₃CH₂CH₂⁺', atoms: ['C1','C2','C3'] },
-                    { mz: 60, type: 'base', label: 'McLafferty Rearr.', structure: 'CH₂=C(OH)₂⁺•', atoms: ['C2','C3','C4'] }, 
-                    { mz: 71, type: 'fragment', label: 'M-OH', structure: 'CH₃CH₂CH₂C=O⁺', atoms: ['C1','C2','C3','C4'] }, 
-                    { mz: 88, type: 'molecular', label: 'M⁺', structure: 'CH₃CH₂CH₂COOH⁺•', atoms: ['C1','C2','C3','C4'] }
+                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', atoms: ['C1','C2'] },
+                    { mz: 43, type: 'fragment', label: 'C₃H₇⁺', atoms: ['C1','C2','C3'] },
+                    { mz: 60, type: 'base', label: 'McLafferty Rearr.', atoms: ['C2','C3','C4'] }, // Conceptual representation
+                    { mz: 71, type: 'fragment', label: 'M-OH', atoms: ['C1','C2','C3','C4'] }, // Not quite splitting atoms visually here but logic holds
+                    { mz: 88, type: 'molecular', label: 'M⁺', atoms: ['C1','C2','C3','C4'] }
                 ]
             }
         ];
@@ -171,8 +171,6 @@
                             const fromIn = activeAtomIds.includes(from.id);
                             const toIn = activeAtomIds.includes(to.id);
                             const isInternal = fromIn && toIn;
-                            // Logic for displaying cleavage
-                            // If a bond connects an atom IN the fragment and an atom OUT of the fragment, it's a cleavage point.
                             const isCleavage = (fromIn && !toIn) || (!fromIn && toIn);
 
                             return (
@@ -290,10 +288,7 @@
                                     <div className="text-right">
                                         <div className="text-xs text-slate-500 uppercase font-bold">Selected Fragment</div>
                                         <div className="text-xl font-bold text-blue-400">m/z = {activePeak.mz}</div>
-                                        <div className="text-sm text-slate-300 font-mono">
-                                            {/* Display structural formula if available, else fallback to label */}
-                                            {activePeak.structure ? activePeak.structure : activePeak.label}
-                                        </div>
+                                        <div className="text-sm text-slate-300">{activePeak.label}</div>
                                     </div>
                                 ) : (
                                     <div className="text-right text-slate-500 text-sm italic animate-pulse">
