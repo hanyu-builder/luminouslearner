@@ -61,25 +61,27 @@
             ink: {
                 name: 'Black Ink (黑色墨水)',
                 spots: [
-                    { color: 'bg-blue-600', polarity: 0.8, name: 'Blue Dye' },
-                    { color: 'bg-red-500', polarity: 0.5, name: 'Red Dye' },
-                    { color: 'bg-yellow-400', polarity: 0.2, name: 'Yellow Dye' }
+                    // Polarity: 0 (Non-polar) -> 1 (Polar)
+                    // Using chemical property names instead of colors
+                    { color: 'bg-blue-600', polarity: 0.9, name: 'High Polarity' }, 
+                    { color: 'bg-red-500', polarity: 0.5, name: 'Medium Polarity' },
+                    { color: 'bg-yellow-400', polarity: 0.2, name: 'Low Polarity' }
                 ]
             },
             plant: {
                 name: 'Plant Extract (植物色素)',
                 spots: [
-                    { color: 'bg-green-600', polarity: 0.9, name: 'Chlorophyll a' }, // Non-polar, moves fast in non-polar
-                    { color: 'bg-green-400', polarity: 0.7, name: 'Chlorophyll b' },
-                    { color: 'bg-yellow-500', polarity: 0.4, name: 'Xanthophyll' },
-                    { color: 'bg-orange-500', polarity: 0.1, name: 'Carotene' }
+                    { color: 'bg-green-600', polarity: 0.8, name: 'Polar Pigment' }, 
+                    { color: 'bg-green-400', polarity: 0.6, name: 'Semi-polar' },
+                    { color: 'bg-yellow-500', polarity: 0.3, name: 'Non-polar' },
+                    { color: 'bg-orange-500', polarity: 0.1, name: 'Very Non-polar' }
                 ]
             },
             amino: {
                 name: 'Amino Acids (胺基酸)',
                 spots: [
-                    { color: 'bg-purple-400', polarity: 0.6, name: 'Leucine' }, // Need Ninhydrin visual (simulated by purple)
-                    { color: 'bg-purple-600', polarity: 0.3, name: 'Alanine' }
+                    { color: 'bg-purple-400', polarity: 0.7, name: 'Hydrophilic AA' }, 
+                    { color: 'bg-purple-600', polarity: 0.2, name: 'Hydrophobic AA' }
                 ],
                 note: 'Requires Ninhydrin to visualize'
             }
@@ -252,7 +254,7 @@
                                         {/* Spot Visual */}
                                         <div className={`absolute w-4 h-4 rounded-full ${spot.color} blur-[3px] mix-blend-multiply`}></div>
                                         
-                                        {/* Real-time Label */}
+                                        {/* Real-time Label - UPDATED: Shows Polarity info */}
                                         <div 
                                             className={`absolute left-6 text-[10px] font-bold text-slate-500 bg-white/90 px-1.5 py-0.5 rounded whitespace-nowrap backdrop-blur-sm transition-opacity duration-500 shadow-sm ${progress > 15 ? 'opacity-100' : 'opacity-0'}`}
                                         >
