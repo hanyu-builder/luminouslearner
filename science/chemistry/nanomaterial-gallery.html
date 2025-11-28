@@ -62,7 +62,7 @@
                 name: 'Silver Nanoparticles (納米銀)',
                 formula: 'Ag',
                 type: 'Metallic',
-                color: 0xC0C0C0,
+                color: 0xE0E0E0, // Updated color: Lighter Silver
                 desc: 'Particles of silver between 1 nm and 100 nm in size. Known for potent antibacterial properties.',
                 app: 'Medical dressings, antibacterial sprays, socks.',
                 stats: { surfaceArea: 'Extremely High', strength: 'Medium', conductivity: 'High' }
@@ -141,8 +141,9 @@
                 if (type === 'silver') {
                     // Cluster of spheres (Ag NPs)
                     const geo = new THREE.SphereGeometry(0.8, 32, 32);
+                    // Updated Material: Lighter color, higher roughness for better visibility
                     const mat = new THREE.MeshStandardMaterial({ 
-                        color: 0xC0C0C0, metalness: 0.9, roughness: 0.2 
+                        color: 0xE0E0E0, metalness: 0.8, roughness: 0.4 
                     });
                     
                     // Create a rough sphere cluster
