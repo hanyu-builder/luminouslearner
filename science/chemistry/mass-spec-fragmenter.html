@@ -29,6 +29,11 @@
         .radical-dot { fill: #ef4444; animation: pulse 1s infinite; }
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Custom Scrollbar for Chart Container if needed */
+        .scroll-container::-webkit-scrollbar { width: 6px; }
+        .scroll-container::-webkit-scrollbar-track { background: #1e293b; }
+        .scroll-container::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -134,45 +139,17 @@
                     { id: 'C1', label: 'CH₃', x: 50, y: 100, mass: 15 },
                     { id: 'C2', label: 'CH₂', x: 100, y: 100, mass: 14 },
                     { id: 'C3', label: 'CH₂', x: 150, y: 100, mass: 14 },
-                    { id: 'C4', label: 'C=O', x: 200, y: 70, mass: 28 },
-                    { id: 'O1', label: 'OH', x: 200, y: 130, mass: 17 }
+                    { id: 'C4', label: 'COOH', x: 220, y: 100, mass: 45 }
                 ],
                 bonds: [
-                    { from: 'C1', to: 'C2' }, { from: 'C2', to: 'C3' }, 
-                    { from: 'C3', to: 'C4' }, { from: 'C3', to: 'O1' }, 
-                    // Technically C3 connects to C4(COOH), but for simple visual graph logic:
-                    // Let's simplify structure to linear groups for this visualizer
+                    { from: 'C1', to: 'C2' }, { from: 'C2', to: 'C3' }, { from: 'C3', to: 'C4' }
                 ],
-                // Re-structuring for visual simplicity
-                // CH3-CH2-CH2-C=O
-                //             |
-                //             OH
-                visualGraph: {
-                    nodes: [
-                        { id: 'n1', label: 'CH₃', x: 60, y: 100 },
-                        { id: 'n2', label: 'CH₂', x: 120, y: 100 },
-                        { id: 'n3', label: 'CH₂', x: 180, y: 100 }, // Gamma Carbon
-                        { id: 'n4', label: 'C=O', x: 240, y: 70 },
-                        { id: 'n5', label: 'OH', x: 240, y: 130 }
-                    ],
-                    links: [
-                        ['n1','n2'], ['n2','n3'], ['n3','n4'], ['n3','n5'] // Simplified connection
-                    ]
-                },
-                // Overriding atoms for standard logic
-                atoms: [
-                    { id: 'n1', label: 'CH₃', x: 60, y: 100 },
-                    { id: 'n2', label: 'CH₂', x: 120, y: 100 },
-                    { id: 'n3', label: 'CH₂', x: 180, y: 100 },
-                    { id: 'n4', label: 'COOH', x: 240, y: 100 }
-                ],
-                bonds: [{from:'n1',to:'n2'},{from:'n2',to:'n3'},{from:'n3',to:'n4'}],
                 peaks: [
-                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', atoms: ['n1','n2'] },
-                    { mz: 43, type: 'fragment', label: 'C₃H₇⁺', atoms: ['n1','n2','n3'] },
-                    { mz: 60, type: 'base', label: 'McLafferty Rearr.', atoms: ['n2','n3','n4'] }, // Special visual needed?
-                    { mz: 71, type: 'fragment', label: 'M-OH', atoms: ['n1','n2','n3'] }, // Approximate
-                    { mz: 88, type: 'molecular', label: 'M⁺', atoms: ['n1','n2','n3','n4'] }
+                    { mz: 29, type: 'fragment', label: 'C₂H₅⁺', atoms: ['C1','C2'] },
+                    { mz: 43, type: 'fragment', label: 'C₃H₇⁺', atoms: ['C1','C2','C3'] },
+                    { mz: 60, type: 'base', label: 'McLafferty Rearr.', atoms: ['C2','C3','C4'] }, // Conceptual representation
+                    { mz: 71, type: 'fragment', label: 'M-OH', atoms: ['C1','C2','C3','C4'] }, // Not quite splitting atoms visually here but logic holds
+                    { mz: 88, type: 'molecular', label: 'M⁺', atoms: ['C1','C2','C3','C4'] }
                 ]
             }
         ];
@@ -191,8 +168,6 @@
                             const to = molecule.atoms.find(a => a.id === bond.to);
                             
                             // Check if this bond is "broken" or "internal"
-                            // If both atoms are in the fragment, bond is solid.
-                            // If one is in and one out, it's the cleavage point.
                             const fromIn = activeAtomIds.includes(from.id);
                             const toIn = activeAtomIds.includes(to.id);
                             const isInternal = fromIn && toIn;
@@ -259,11 +234,9 @@
                 ...p
             })).sort((a,b) => a.mz - b.mz);
 
-            // Add noise peaks for realism
-            // (Simplified for clarity, keeping only significant ones)
-
             return (
-                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                // FIXED: Changed min-h-screen to h-screen to ensure overflow is handled correctly within the viewport
+                <div className="h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
                     
                     {/* Sidebar */}
                     <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
@@ -301,11 +274,11 @@
                         </div>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="flex-1 relative bg-[#020617] overflow-y-auto p-6 md:p-12 flex flex-col gap-6">
+                    {/* Main Content - Scrollable Area */}
+                    <div className="flex-1 relative bg-[#020617] overflow-y-auto p-6 md:p-12 flex flex-col gap-6 scroll-container">
                         
                         {/* Molecule Viewer */}
-                        <div className="flex-1 max-h-[300px]">
+                        <div className="flex-1 max-h-[300px] shrink-0">
                             <div className="flex justify-between items-end mb-4">
                                 <div>
                                     <h2 className="text-2xl font-black text-white">{currentMol.name}</h2>
@@ -327,14 +300,21 @@
                         </div>
 
                         {/* MS Chart */}
-                        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 shadow-xl flex-1 min-h-[400px]">
+                        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 shadow-xl shrink-0 h-[450px]">
                             <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
                                 <Icon name="bar-chart-2" size={16}/> Mass Spectrum
                             </h3>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                {/* FIXED: Increased bottom margin for X-Axis labels */}
+                                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                    <XAxis dataKey="mz" stroke="#94a3b8" label={{ value: 'm/z Ratio', position: 'insideBottom', offset: -5, fill: '#94a3b8' }} />
+                                    <XAxis 
+                                        dataKey="mz" 
+                                        stroke="#94a3b8" 
+                                        // FIXED: Positioned label 'bottom' with correct offset
+                                        label={{ value: 'm/z Ratio', position: 'bottom', offset: 0, fill: '#94a3b8' }} 
+                                        tick={{ fontSize: 12 }}
+                                    />
                                     <YAxis stroke="#94a3b8" label={{ value: 'Relative Abundance %', angle: -90, position: 'insideLeft', fill: '#94a3b8' }} />
                                     <Tooltip 
                                         cursor={{fill: 'rgba(255,255,255,0.05)'}}
@@ -366,6 +346,9 @@
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
+                        
+                        {/* Extra padding at bottom */}
+                        <div className="h-12"></div>
 
                     </div>
 
