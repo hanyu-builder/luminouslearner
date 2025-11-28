@@ -82,7 +82,7 @@
                 method: 'Fractional Distillation',
                 desc: 'Miscible liquids with different boiling points (78°C vs 100°C). Requires a fractionating column.',
                 components: [
-                    { name: 'Ethanol', density: 0.79, color: 'bg-slate-200/30', boilingPoint: 78 }, // UPDATED: Visible color
+                    { name: 'Ethanol', density: 0.79, color: 'bg-slate-200/30', boilingPoint: 78 }, // Visible color
                     { name: 'Water', density: 1.0, color: 'bg-blue-500/10', boilingPoint: 100 }
                 ],
                 steps: ['Heat mixture', 'Ethanol vaporizes first (lower BP)', 'Vapor passes through column', 'Condenses into receiver'],
@@ -96,7 +96,8 @@
                 method: 'Simple Distillation',
                 desc: 'To obtain pure water from salt solution. Salt stays behind as it has very high BP.',
                 components: [
-                    { name: 'Salt', density: 2.1, color: 'bg-white', boilingPoint: 1465 },
+                    // Added textColor: 'text-slate-900' for visibility on white background
+                    { name: 'Salt', density: 2.1, color: 'bg-white', boilingPoint: 1465, textColor: 'text-slate-900' },
                     { name: 'Water', density: 1.0, color: 'bg-blue-200/30', boilingPoint: 100 }
                 ],
                 steps: ['Heat solution', 'Water evaporates', 'Salt remains in flask', 'Water condenses'],
@@ -167,7 +168,6 @@
                          <div className={`absolute bottom-0 w-full ${bottomLayer.color} transition-all duration-100`}
                               style={{ height: `${Math.min(100, progress * 2)}%` }}>
                          </div>
-                         {/* UPDATED: Better text color for visibility */}
                          <span className="absolute bottom-2 w-full text-center text-xs font-bold text-white drop-shadow-md">Collected</span>
                     </div>
                 </div>
@@ -175,7 +175,7 @@
         };
 
         const DistillationSet = ({ mixture, progress }) => {
-            // FIX: Sort components by boiling point to correctly identify volatile vs residue
+            // Sort components by boiling point to correctly identify volatile vs residue
             // Volatile (Lower BP) comes out first. Residue (Higher BP) stays.
             const sortedComponents = [...mixture.components].sort((a, b) => a.boilingPoint - b.boilingPoint);
             
@@ -198,7 +198,8 @@
                         <div className={`w-full h-full ${residue.color} relative ${bubbles ? 'boil' : ''}`} style={{opacity: 0.8}}>
                             {bubbles && <div className="absolute bottom-2 left-4 w-2 h-2 bg-white/50 rounded-full animate-ping"></div>}
                         </div>
-                        <span className="absolute bottom-8 w-full text-center text-[10px] font-bold text-slate-300">{residue.name}</span>
+                        {/* FIXED: Use textColor if available (for Salt), otherwise default to light slate */}
+                        <span className={`absolute bottom-8 w-full text-center text-[10px] font-bold ${residue.textColor || 'text-slate-300'}`}>{residue.name}</span>
                     </div>
 
                     {/* Column (Fractionating or Simple) */}
