@@ -25,14 +25,9 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
-        /* Solvent Rise Animation */
-        .solvent-rise {
-            transition: height 10s linear;
-        }
-        
-        /* Spot Animation */
-        .spot-move {
-            transition: bottom 10s linear, opacity 0.5s;
+        /* Smooth Transition for movements driven by JS state */
+        .smooth-move {
+            transition: bottom 0.1s linear, opacity 0.5s ease-in-out;
         }
     </style>
 </head>
@@ -122,9 +117,9 @@
                                 setIsFinished(true);
                                 return 100;
                             }
-                            return p + 0.5; // Speed
+                            return p + 0.2; // Slowed down slightly for better observation
                         });
-                    }, 50);
+                    }, 20); // 50fps for smoother animation
                 }
                 return () => clearInterval(interval);
             }, [isRunning]);
@@ -229,25 +224,28 @@
                                 <div className="absolute bottom-[15%] w-full h-px bg-slate-400"></div>
                                 <div className="absolute bottom-[15%] -left-8 text-xs text-slate-500 font-mono">Start</div>
 
-                                {/* Solvent Front Line (Visible when done) */}
+                                {/* Solvent Front Line */}
                                 {progress > 0 && (
                                     <>
-                                        <div className="absolute w-full h-px border-t border-dashed border-blue-300" style={{ bottom: `${15 + progress * 0.75}%` }}></div>
-                                        <div className="absolute -right-12 text-xs text-blue-400 font-mono transition-all" style={{ bottom: `${15 + progress * 0.75}%` }}>Front</div>
+                                        <div className="absolute w-full h-px border-t border-dashed border-blue-300 transition-all duration-100 linear" style={{ bottom: `${15 + progress * 0.75}%` }}></div>
+                                        <div className="absolute -right-12 text-xs text-blue-400 font-mono transition-all duration-100 linear" style={{ bottom: `${15 + progress * 0.75}%` }}>Front</div>
                                     </>
                                 )}
 
-                                {/* Initial Spot (fades out as it moves) */}
-                                <div className={`absolute bottom-[14%] w-4 h-4 rounded-full bg-black blur-[2px] transition-opacity ${progress > 5 ? 'opacity-0' : 'opacity-100'}`}></div>
+                                {/* Initial Spot (Fade out logic) */}
+                                <div 
+                                    className="absolute bottom-[14%] w-4 h-4 rounded-full bg-black blur-[2px] transition-opacity duration-500"
+                                    style={{ opacity: Math.max(0, 1 - progress / 15) }} // Fades out over first 15%
+                                ></div>
 
-                                {/* Separated Spots */}
+                                {/* Separated Spots (Fade in logic) */}
                                 {currentMix.spots.map((spot, i) => (
                                     <div 
                                         key={i}
-                                        className={`absolute w-4 h-4 rounded-full ${spot.color} blur-[4px] mix-blend-multiply spot-move`}
+                                        className={`absolute w-4 h-4 rounded-full ${spot.color} blur-[4px] mix-blend-multiply smooth-move`}
                                         style={{ 
                                             bottom: `${15 + getSpotPos(spot) * 0.75}%`,
-                                            opacity: progress > 5 ? 0.8 : 0 
+                                            opacity: Math.min(0.8, progress / 10) // Fades in over first 10%
                                         }}
                                     >
                                         {/* Tooltip on hover */}
@@ -260,7 +258,7 @@
                                 ))}
 
                                 {/* Wet Paper Effect */}
-                                <div className="absolute bottom-0 w-full bg-black/5 transition-all duration-100" style={{ height: `${15 + progress * 0.75}%` }}></div>
+                                <div className="absolute bottom-0 w-full bg-black/5 transition-all duration-100 linear" style={{ height: `${15 + progress * 0.75}%` }}></div>
                             </div>
 
                             {/* Solvent Liquid at bottom */}
