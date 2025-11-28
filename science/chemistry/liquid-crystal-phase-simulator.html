@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liquid Crystal Phase Simulator - Robust</title>
+    <title>Liquid Crystal Phase Simulator - Basic</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -31,7 +31,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Safe Icon Component
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
             useEffect(() => {
@@ -39,13 +38,11 @@
                     const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
                     const iconData = window.lucide.icons[pascalName];
                     if (iconData && typeof window.lucide.createElement === 'function') {
-                        try {
-                            const svgElement = window.lucide.createElement(iconData);
-                            svgElement.setAttribute('class', className);
-                            svgElement.setAttribute('width', size);
-                            svgElement.setAttribute('height', size);
-                            setSvgHtml(svgElement.outerHTML);
-                        } catch (e) {}
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
                     }
                 }
             }, [name, className, size]);
@@ -68,69 +65,70 @@
             const mountRef = useRef(null);
             const phaseRef = useRef(phase);
 
-            // Sync ref
             useEffect(() => {
                 phaseRef.current = phase;
             }, [phase]);
 
             useEffect(() => {
-                const container = mountRef.current;
-                if (!container) return;
+                if (!mountRef.current) return;
 
-                // 1. Init Scene
-                const width = container.clientWidth || window.innerWidth;
-                const height = container.clientHeight || window.innerHeight;
+                // 1. Setup
+                const width = mountRef.current.clientWidth;
+                const height = mountRef.current.clientHeight;
                 
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x020617); // Dark Blue
+                scene.background = new THREE.Color(0x020617); // Deep dark blue
 
                 const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-                camera.position.set(15, 15, 20);
+                camera.position.set(15, 12, 20);
                 camera.lookAt(0, 0, 0);
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(width, height);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Performance
-                container.appendChild(renderer.domElement);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                mountRef.current.appendChild(renderer.domElement);
 
-                // Controls
                 const controls = new THREE.OrbitControls(camera, renderer.domElement);
                 controls.enableDamping = true;
                 controls.autoRotate = true;
-                controls.autoRotateSpeed = 1.0;
+                controls.autoRotateSpeed = 0.5;
 
-                // 2. Visual Helpers (To ensure scene is rendering)
+                // 2. Helpers & Lights
+                // Grid
                 const gridHelper = new THREE.GridHelper(30, 30, 0x334155, 0x1e293b);
-                gridHelper.position.y = -7;
+                gridHelper.position.y = -8;
                 scene.add(gridHelper);
 
-                const axesHelper = new THREE.AxesHelper(2); // X=Red, Y=Green, Z=Blue
-                axesHelper.position.set(-8, -7, 8);
+                // Axes
+                const axesHelper = new THREE.AxesHelper(3);
+                axesHelper.position.set(-8, -8, 8);
                 scene.add(axesHelper);
 
                 // Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                 scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
                 dirLight.position.set(10, 20, 10);
                 scene.add(dirLight);
 
                 // 3. Molecules
-                // Using Standard Material for better visibility
-                const geometry = new THREE.CylinderGeometry(0.25, 0.25, 1.5, 8);
-                const material = new THREE.MeshStandardMaterial({ 
-                    color: 0x22d3ee, // Bright Cyan
-                    roughness: 0.3,
-                    metalness: 0.2
+                // Use CylinderGeometry (Reliable)
+                const geometry = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
+                const material = new THREE.MeshPhysicalMaterial({ 
+                    color: 0x22d3ee, // Cyan
+                    metalness: 0.2, 
+                    roughness: 0.2,
+                    clearcoat: 1.0
                 });
 
                 const mesh = new THREE.InstancedMesh(geometry, material, MOLECULE_COUNT);
                 scene.add(mesh);
 
-                // Data
+                // Molecule Data
                 const dummy = new THREE.Object3D();
                 const molecules = [];
                 
+                // Initialize in grid for Solid
                 let idx = 0;
                 const dim = Math.ceil(Math.pow(MOLECULE_COUNT, 1/3));
                 const spacing = 2.2;
@@ -141,15 +139,19 @@
                         for (let z = 0; z < dim; z++) {
                             if (idx >= MOLECULE_COUNT) break;
                             molecules.push({
+                                // Base lattice position
                                 bx: x * spacing - offset,
                                 by: y * spacing - offset,
                                 bz: z * spacing - offset,
+                                // Current position
                                 x: x * spacing - offset,
                                 y: y * spacing - offset,
                                 z: z * spacing - offset,
+                                // Velocities
                                 vx: (Math.random()-0.5)*0.1,
                                 vy: (Math.random()-0.5)*0.1,
                                 vz: (Math.random()-0.5)*0.1,
+                                // Rotations
                                 rx: 0, ry: 0, rz: 0,
                                 vrx: (Math.random()-0.5)*0.05,
                                 vry: (Math.random()-0.5)*0.05,
@@ -160,44 +162,56 @@
                     }
                 }
 
-                // 4. Loop
+                // 4. Animation Loop
                 let frameId;
                 const animate = () => {
                     frameId = requestAnimationFrame(animate);
-                    const currentP = phaseRef.current;
+                    const currentP = phaseRef.current; // Read from ref
                     const bound = 8;
 
                     molecules.forEach((mol, i) => {
-                        // POS
+                        
+                        // POSITION LOGIC
                         if (currentP === 'solid') {
+                            // Snap to grid
                             mol.x += (mol.bx - mol.x) * 0.1;
                             mol.y += (mol.by - mol.y) * 0.1;
                             mol.z += (mol.bz - mol.z) * 0.1;
                         } else if (currentP === 'smectic') {
+                            // Layers (Y fixed to grid steps, X/Z free)
                             const layerY = Math.round(mol.y / spacing) * spacing;
                             mol.y += (layerY - mol.y) * 0.1;
                             mol.x += mol.vx;
                             mol.z += mol.vz;
                         } else {
+                            // Nematic / Liquid (Free move)
                             mol.x += mol.vx;
                             mol.y += mol.vy;
                             mol.z += mol.vz;
                         }
 
-                        // Wrap
+                        // Boundary wrap
                         if(mol.x > bound) mol.x -= 2*bound; if(mol.x < -bound) mol.x += 2*bound;
                         if(mol.y > bound) mol.y -= 2*bound; if(mol.y < -bound) mol.y += 2*bound;
                         if(mol.z > bound) mol.z -= 2*bound; if(mol.z < -bound) mol.z += 2*bound;
 
-                        // ROT
+                        // ROTATION LOGIC
                         dummy.position.set(mol.x, mol.y, mol.z);
+
                         if (currentP === 'liquid') {
+                            // Random rotation
                             mol.rx += mol.vrx;
                             mol.ry += mol.vry;
                             mol.rz += mol.vrz;
                             dummy.rotation.set(mol.rx, mol.ry, mol.rz);
                         } else {
-                            dummy.rotation.set(Math.sin(Date.now()*0.001 + i)*0.1, 0, Math.cos(Date.now()*0.002 + i)*0.1);
+                            // Ordered (Solid, Smectic, Nematic) -> Align Vertical
+                            // Add tiny wobble for realism
+                            dummy.rotation.set(
+                                Math.sin(Date.now()*0.001 + i)*0.1, 
+                                0, 
+                                Math.cos(Date.now()*0.002 + i)*0.1
+                            );
                         }
 
                         dummy.updateMatrix();
@@ -211,25 +225,22 @@
                 
                 animate();
 
-                // Resize Listener
+                // Resize Handler
                 const handleResize = () => {
-                    if (!container) return;
-                    const w = container.clientWidth;
-                    const h = container.clientHeight;
-                    if (w && h) {
-                        camera.aspect = w / h;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(w, h);
-                    }
+                    if (!mountRef.current) return;
+                    const w = mountRef.current.clientWidth;
+                    const h = mountRef.current.clientHeight;
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
                 };
                 window.addEventListener('resize', handleResize);
 
-                // Cleanup
                 return () => {
                     cancelAnimationFrame(frameId);
                     window.removeEventListener('resize', handleResize);
-                    if (container && renderer.domElement) {
-                        container.removeChild(renderer.domElement);
+                    if (mountRef.current && renderer.domElement) {
+                        mountRef.current.removeChild(renderer.domElement);
                     }
                     geometry.dispose();
                     material.dispose();
@@ -249,17 +260,17 @@
                     
                     {/* Sidebar */}
                     <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
-                        <div className="p-6 border-b border-slate-800 shrink-0">
+                        <div className="p-6 border-b border-slate-800">
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 <Icon name="layers" className="text-emerald-400" /> Phase Simulator
                             </h1>
                             <p className="text-xs text-slate-400 mt-1">Liquid Crystal Basics</p>
                         </div>
 
-                        <div className="p-6 flex-1 overflow-y-auto">
+                        <div className="p-6 space-y-6">
                             
                             {/* Info Card */}
-                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg mb-6">
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
                                 <div className="text-xs font-bold text-slate-500 uppercase mb-2">Current Phase</div>
                                 <div className={`text-2xl font-black mb-2 ${currentInfo.color}`}>
                                     {currentInfo.name}
@@ -272,42 +283,67 @@
                             {/* Buttons */}
                             <div className="space-y-3">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Select Phase</label>
-                                {Object.entries(PHASES).map(([key, p]) => (
-                                    <button 
-                                        key={key}
-                                        onClick={() => setPhase(key)}
-                                        className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-3
-                                            ${phase === key 
-                                                ? 'bg-slate-800 border-white/30 ring-1 ring-white/20 shadow-lg' 
-                                                : 'bg-slate-900 border-slate-800 hover:bg-slate-800 hover:border-slate-700'}
-                                        `}
-                                    >
-                                        <div className={`w-3 h-3 rounded-full ${p.color.replace('text-', 'bg-')}`}></div>
-                                        <span className="font-bold text-sm">{p.name}</span>
-                                    </button>
-                                ))}
+                                
+                                <button 
+                                    onClick={() => setPhase('solid')}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-3
+                                        ${phase === 'solid' ? 'bg-blue-900/30 border-blue-500 ring-1 ring-blue-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <div className="w-3 h-3 rounded-full bg-blue-400"></div>
+                                    <span className="font-bold text-sm">1. Solid Crystal</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setPhase('smectic')}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-3
+                                        ${phase === 'smectic' ? 'bg-emerald-900/30 border-emerald-500 ring-1 ring-emerald-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
+                                    <span className="font-bold text-sm">2. Smectic LC</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setPhase('nematic')}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-3
+                                        ${phase === 'nematic' ? 'bg-yellow-900/30 border-yellow-500 ring-1 ring-yellow-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                    <span className="font-bold text-sm">3. Nematic LC</span>
+                                </button>
+
+                                <button 
+                                    onClick={() => setPhase('liquid')}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-3
+                                        ${phase === 'liquid' ? 'bg-red-900/30 border-red-500 ring-1 ring-red-500/50' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                                    <span className="font-bold text-sm">4. Isotropic Liquid</span>
+                                </button>
                             </div>
+
                         </div>
                     </div>
 
                     {/* Main Stage */}
-                    <div className="flex-1 relative bg-[#020617] overflow-hidden flex flex-col">
+                    <div className="flex-1 relative bg-[#020617] overflow-hidden">
                         
-                        <div className="flex-1 relative">
-                            <Scene3D phase={phase} />
-                            
-                            <div className="absolute bottom-6 right-6 text-slate-500 text-xs pointer-events-none select-none bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-white/10">
-                                Left Click: Rotate • Right Click: Pan • Scroll: Zoom
-                            </div>
-
-                            <div className="absolute top-6 left-6 pointer-events-none">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-ping"></div>
-                                    <span className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-widest">Live View</span>
-                                </div>
-                            </div>
+                        {/* Use key to force re-render on hard refresh if needed, but here we use ref inside */}
+                        <Scene3D phase={phase} />
+                        
+                        <div className="absolute bottom-6 right-6 text-slate-500 text-xs pointer-events-none select-none bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-white/10">
+                            Left Click: Rotate • Right Click: Pan • Scroll: Zoom
                         </div>
 
+                        <div className="absolute top-6 left-6 pointer-events-none">
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-cyan-400 rounded-full animate-ping"></div>
+                                <span className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-widest">Live View</span>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
