@@ -294,10 +294,7 @@
             };
 
             const handleIdentifyTest = (reagent) => {
-                if (isAnimating || feedback) return; // Don't allow testing if round over, unless we allow multiple tests?
-                // For "Identify", user should be able to test multiple times.
-                // BUT feedback (Win/Loss) only comes when they GUESS the compound.
-                // So here we just update the visual state.
+                if (isAnimating || feedback) return;
                 
                 setIsAnimating(reagent);
                 const res = getReactionResult(currentIdentifyQ.answer, reagent.id);
@@ -322,11 +319,16 @@
             };
 
             const nextQ = () => {
+                // Only advance if we are not animating.
+                if (isAnimating) return;
+
                 if (mode === 'versus') {
                     setVersusIdx(prev => (prev + 1) % VERSUS_CHALLENGES.length);
                 } else {
                     setIdentifyIdx(prev => (prev + 1) % IDENTITY_CHALLENGES.length);
                 }
+                // Reset feedback immediately to close the modal and allow state reset in useEffect to take effect cleanly
+                setFeedback(null);
             };
 
             const resetFlask = () => {
@@ -399,7 +401,7 @@
 
                             {/* Feedback Overlay */}
                             {feedback && (
-                                <div className={`absolute bottom-0 left-0 right-0 p-6 border-t backdrop-blur-xl animate-in slide-in-from-bottom-4
+                                <div className={`absolute bottom-0 left-0 right-0 p-6 border-t backdrop-blur-xl animate-in slide-in-from-bottom-4 z-20
                                     ${feedback.type === 'success' ? 'bg-emerald-900/90 border-emerald-500/50' : 'bg-red-900/90 border-red-500/50'}
                                 `}>
                                     <div className="flex items-center justify-between">
@@ -409,8 +411,8 @@
                                             </div>
                                             <div className="text-sm text-slate-300 mt-1">{feedback.msg}</div>
                                         </div>
-                                        <button onClick={nextQ} className="px-6 py-2 bg-white text-slate-900 rounded-lg font-bold hover:bg-slate-200 transition-colors shadow-lg">
-                                            Next <Icon name="arrow-right" size={16} className="inline ml-1"/>
+                                        <button onClick={nextQ} className="px-6 py-2 bg-white text-slate-900 rounded-lg font-bold hover:bg-slate-200 transition-colors shadow-lg flex items-center gap-2">
+                                            Next <Icon name="arrow-right" size={16}/>
                                         </button>
                                     </div>
                                 </div>
