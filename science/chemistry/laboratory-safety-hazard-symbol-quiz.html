@@ -181,6 +181,7 @@
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
             const [feedback, setFeedback] = useState(null); // null, correct, wrong
+            const [selectedOption, setSelectedOption] = useState(null); // Add selected option state
 
             const startQuiz = () => {
                 setScore(0);
@@ -191,6 +192,7 @@
 
             const nextQuestion = () => {
                 setFeedback(null);
+                setSelectedOption(null); // Reset selected option
                 
                 // Pick random hazard
                 const target = HAZARDS[Math.floor(Math.random() * HAZARDS.length)];
@@ -207,6 +209,7 @@
 
             const handleAnswer = (selected) => {
                 if (feedback) return;
+                setSelectedOption(selected.id); // Set selected option
 
                 if (selected.id === currentQ.id) {
                     setScore(s => s + 10 + (streak * 2));
@@ -331,9 +334,8 @@
                             if (feedback) {
                                 if (opt.id === currentQ.id) {
                                     btnClass += "bg-emerald-600 border-emerald-500 text-white shadow-lg";
-                                } else if (feedback.status === 'wrong' && opt.id === selectedOption) { // Corrected: We need to know selected option if we want to show wrong state, but simplifying:
-                                    // Actually, 'selectedOption' state is missing in this scope. Let's just dim all non-correct.
-                                    btnClass += "bg-slate-800 border-slate-700 text-slate-500 opacity-50";
+                                } else if (feedback.status === 'wrong' && opt.id === selectedOption) {
+                                    btnClass += "bg-red-900/20 border-red-500 text-red-400 opacity-100"; // Highlight wrong choice
                                 } else {
                                     btnClass += "bg-slate-800 border-slate-700 text-slate-500 opacity-50";
                                 }
@@ -350,6 +352,7 @@
                                 >
                                     <span>{opt.name}</span>
                                     {feedback && opt.id === currentQ.id && <Icon name="check-circle" className="text-white" />}
+                                    {feedback && feedback.status === 'wrong' && opt.id === selectedOption && <Icon name="x-circle" className="text-red-400" />}
                                 </button>
                             );
                         })}
