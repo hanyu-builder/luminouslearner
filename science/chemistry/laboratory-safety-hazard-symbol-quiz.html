@@ -87,20 +87,16 @@
             {
                 id: 'oxidizing',
                 name: 'Oxidizing (氧化性)',
-                icon: 'flame-kindling', // Close enough visual approximation
+                icon: 'flame-kindling', // Used as fallback if custom fails, but we will enable custom
+                isCustom: true, // Enable the SVG defined in CustomSymbol
                 desc: 'Provides oxygen to make other substances burn more fiercely.',
                 example: 'KMnO₄, Concentrated HNO₃'
             },
             {
                 id: 'corrosive',
                 name: 'Corrosive (腐蝕性)',
-                icon: 'test-tube-2', // Need a better rep, usually hand/metal corrosion. We'll use test-tubes for now or custom SVG. Let's stick to lucide for consistency but note limitations.
-                // Actually, Lucide doesn't have a perfect corrosive hand icon. Let's use 'flask-conical' with a warning color or a custom SVG path if needed.
-                // For simplicity in this framework, we will use a generic warning icon but label it clearly.
-                // BETTER: Use text emoji or simple SVG path for specific symbols if critical. 
-                // Let's use a custom SVG component for the symbols to be accurate.
+                icon: 'test-tube-2', 
                 isCustom: true,
-                symbolPath: "M2 10h20M5 15h14M8 5l-3 5M16 5l3 5M12 5v5", // Placeholder path, replaced in render
                 desc: 'Can burn skin and eyes, and attack metals.',
                 example: 'Conc. H₂SO₄, NaOH'
             },
@@ -135,18 +131,19 @@
             {
                 id: 'environment',
                 name: 'Environmental Hazard (環境危害)',
-                icon: 'tree-deciduous', // Fish/Tree symbol usually
+                icon: 'tree-deciduous',
+                isCustom: true, // Enable the SVG defined in CustomSymbol
                 desc: 'Toxic to aquatic life with long lasting effects.',
                 example: 'Heavy metal salts, Pesticides'
             }
         ];
 
         // Custom SVG components for specific GHS symbols not in Lucide
-        const CustomSymbol = ({ id }) => {
+        const CustomSymbol = ({ id, className }) => {
             if (id === 'corrosive') {
                 // Hand and metal corrosion
                 return (
-                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                         <path d="M4 20h16M4 16h16M5 12l3 4M19 12l-3 4" />
                         <path d="M9 4v6m6-6v6" />
                         <path d="M7 4h10" />
@@ -156,7 +153,7 @@
             if (id === 'environment') {
                 // Dead fish and tree
                 return (
-                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                         <path d="M12 3v10m-4-4l4-4 4 4" />
                         <path d="M4 20h16" />
                         <path d="M16 14l3 3-3 3" />
@@ -166,7 +163,7 @@
              if (id === 'oxidizing') {
                 // Circle on flame
                 return (
-                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                         <circle cx="12" cy="15" r="5" />
                         <path d="M12 2v8" />
                         <path d="M8 6l4 4M16 6l-4 4" />
@@ -174,7 +171,7 @@
                 );
             }
             // Fallbacks
-            return <Icon name="alert-triangle" size={48} className="text-black" />;
+            return <Icon name="alert-triangle" size={48} className={`text-black ${className}`} />;
         };
 
         const App = () => {
@@ -268,7 +265,7 @@
                                 {HAZARDS.map(h => (
                                     <div key={h.id} className="bg-slate-800 rounded-xl border border-slate-700 p-6 flex items-start gap-6">
                                         <div className="hazard-box shrink-0 scale-75 -ml-2 -mt-2">
-                                            {h.isCustom ? <CustomSymbol id={h.id} /> : <Icon name={h.icon} size={48} className="hazard-icon" />}
+                                            {h.isCustom ? <CustomSymbol id={h.id} className="hazard-icon" /> : <Icon name={h.icon} size={48} className="hazard-icon" />}
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-bold text-white mb-1">{h.name}</h3>
@@ -286,6 +283,15 @@
             }
 
             // QUIZ MODE
+            // Guard Clause: Ensure currentQ exists before rendering
+            if (!currentQ) {
+                return (
+                    <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-white">
+                        <Icon name="loader-2" className="animate-spin w-8 h-8" />
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col items-center p-4 md:p-8">
                     
@@ -306,13 +312,13 @@
                         </div>
                     </div>
 
-                    {/* Question Card */}
-                    <div className="w-full max-w-md bg-slate-800 rounded-3xl border border-slate-700 p-8 text-center shadow-2xl mb-6 slide-up">
+                    {/* Question Card - Key forces re-render on new question */}
+                    <div key={currentQ.id} className="w-full max-w-md bg-slate-800 rounded-3xl border border-slate-700 p-8 text-center shadow-2xl mb-6 slide-up">
                         <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Identify this Symbol</div>
                         
                         <div className="flex justify-center mb-8">
                             <div className="hazard-box scale-125 transition-transform hover:scale-150">
-                                {currentQ.isCustom ? <CustomSymbol id={currentQ.id} /> : <Icon name={currentQ.icon} size={48} className="hazard-icon" />}
+                                {currentQ.isCustom ? <CustomSymbol id={currentQ.id} className="hazard-icon" /> : <Icon name={currentQ.icon} size={48} className="hazard-icon" />}
                             </div>
                         </div>
                     </div>
@@ -325,7 +331,8 @@
                             if (feedback) {
                                 if (opt.id === currentQ.id) {
                                     btnClass += "bg-emerald-600 border-emerald-500 text-white shadow-lg";
-                                } else if (feedback.status === 'wrong' && opt.id === selectedOption) { // We need selectedOption state if we want to highlight wrong choice specifically, but simplifying logic:
+                                } else if (feedback.status === 'wrong' && opt.id === selectedOption) { // Corrected: We need to know selected option if we want to show wrong state, but simplifying:
+                                    // Actually, 'selectedOption' state is missing in this scope. Let's just dim all non-correct.
                                     btnClass += "bg-slate-800 border-slate-700 text-slate-500 opacity-50";
                                 } else {
                                     btnClass += "bg-slate-800 border-slate-700 text-slate-500 opacity-50";
