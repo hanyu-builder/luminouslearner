@@ -8,7 +8,8 @@
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.c    om/@babel/standalone/babel.min.js"></script>
+    <!-- FIXED: Removed spaces in URL -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -84,17 +85,13 @@
             
             let blueIntensity = 0;
             let pinkIntensity = 0;
-            let bluePos = 'middle'; // where blue appears
-            let pinkPos = 'ends';   // where pink appears
             
             // Fe -> Fe2+ + 2e- (Blue)
             // O2 + 2H2O + 4e- -> 4OH- (Pink)
             
             switch (condition) {
                 case 'none':
-                    // Standard rusting: Head/Tip (stressed areas) are usually Anodes (Blue), Body is Cathode (Pink)? 
-                    // Actually for a simple nail, usually Head/Tip are Anodic (Blue), middle is Cathodic (Pink).
-                    // Let's simplify: Blue at head/tip, Pink in middle.
+                    // Standard rusting: Head/Tip are Anodic (Blue), middle is Cathodic (Pink).
                     blueIntensity = progress * 0.8;
                     pinkIntensity = progress * 0.8;
                     break;
@@ -102,8 +99,6 @@
                 case 'mg':
                 case 'zn':
                     // Fe is protected (Cathode) -> Pink everywhere on Fe
-                    // Mg/Zn oxidizes -> No blue (Mg2+/Zn2+ don't react with indicator to form blue)
-                    // So: Strong Pink on Iron, No Blue.
                     blueIntensity = 0;
                     pinkIntensity = progress * 1.0; // Strong pink
                     break;
@@ -124,7 +119,7 @@
                 case 'anode':
                     // Fe is Anode -> Severe Rusting -> Massive Blue
                     blueIntensity = progress * 1.5;
-                    pinkIntensity = 0; // Reduction happens at the other electrode (not shown or auxiliary)
+                    pinkIntensity = 0; 
                     break;
                     
                 default: break;
@@ -141,7 +136,7 @@
 
                     {/* --- CHEMICAL CLOUDS --- */}
                     
-                    {/* Blue Clouds (Rust / Fe2+) - Usually at head and tip for single nail, or whole nail if accelerated */}
+                    {/* Blue Clouds (Rust / Fe2+) */}
                     {(condition === 'none' || condition === 'cu' || condition === 'anode') && (
                         <>
                             {/* Head */}
@@ -158,7 +153,7 @@
                         </>
                     )}
 
-                    {/* Pink Clouds (OH-) - Usually at protected areas */}
+                    {/* Pink Clouds (OH-) */}
                     {(condition === 'none' || condition === 'mg' || condition === 'zn' || condition === 'cathode' || condition === 'cu') && (
                         <>
                             {/* Middle of nail (for none) or Whole nail (for protected) */}
