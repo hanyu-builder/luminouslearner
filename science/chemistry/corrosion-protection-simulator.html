@@ -12,9 +12,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Framer Motion -->
-    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
-
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <style>
@@ -47,7 +44,6 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
-        const { motion, AnimatePresence } = window.Motion;
 
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
@@ -124,10 +120,11 @@
 
             const blueSize = 30 + blueIntensity * 80;
             const pinkSize = 30 + pinkIntensity * 80;
+            const currentStatus = CONDITIONS[condition].status;
 
             return (
                 <div className="relative w-80 h-80 bg-[#E0F2FE] rounded-full petri-dish flex items-center justify-center overflow-hidden border-4 border-slate-300/50">
-                    {/* Agar Gel Background Label - Improved Visibility */}
+                    {/* Agar Gel Background Label */}
                     <div className="absolute top-6 bg-white/60 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold text-[10px] uppercase tracking-widest pointer-events-none shadow-sm border border-white/40">
                         Agar Gel + Ferroxyl Indicator
                     </div>
@@ -189,21 +186,6 @@
                         )}
                     </div>
 
-                    {/* Result Badge BELOW the Nail */}
-                    {progress > 10 && (
-                        <div className="absolute bottom-16 flex justify-center w-full pointer-events-none">
-                            <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-lg border flex items-center gap-2 backdrop-blur-sm animate-in
-                                ${CONDITIONS[condition].status === 'Protected' 
-                                    ? 'bg-emerald-500/90 border-emerald-400 text-white' 
-                                    : 'bg-red-500/90 border-red-400 text-white'
-                                }`}
-                            >
-                                <Icon name={CONDITIONS[condition].status === 'Protected' ? 'shield-check' : 'alert-triangle'} size={14} className="text-white" />
-                                {CONDITIONS[condition].status.toUpperCase()}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Electrons Flow Animation */}
                     {progress > 0 && (condition !== 'none') && (
                         <div className="absolute top-20 text-xs font-bold text-slate-500 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-full backdrop-blur shadow-sm">
@@ -211,6 +193,21 @@
                             {condition === 'mg' || condition === 'zn' ? ' Metal → Iron' : 
                              condition === 'cu' ? ' Iron → Copper' :
                              condition === 'cathode' ? ' Battery → Iron' : ' Iron → Battery'}
+                        </div>
+                    )}
+
+                    {/* Result Badge (Moved from Sidebar to Here) */}
+                    {progress > 10 && (
+                        <div className="absolute bottom-6 flex justify-center w-full pointer-events-none">
+                            <div className={`px-4 py-1.5 rounded-full text-xs font-black shadow-lg border-2 flex items-center gap-2 backdrop-blur-md animate-[fadeIn_0.5s_ease-out_forwards]
+                                ${currentStatus === 'Protected' 
+                                    ? 'bg-emerald-500/90 border-emerald-400 text-white' 
+                                    : 'bg-red-500/90 border-red-400 text-white'
+                                }`}
+                            >
+                                <Icon name={currentStatus === 'Protected' ? 'shield-check' : 'alert-triangle'} size={16} className="text-white" />
+                                {currentStatus.toUpperCase()}
+                            </div>
                         </div>
                     )}
 
@@ -278,7 +275,7 @@
                                 <div className="space-y-2">
                                     {['none', 'mg', 'zn', 'cu'].map(key => {
                                         const data = CONDITIONS[key];
-                                        // Removed status badge from sidebar
+                                        // Removed status badge from here
                                         return (
                                             <button 
                                                 key={key}
@@ -305,7 +302,7 @@
                                 <div className="space-y-2">
                                     {['cathode', 'anode'].map(key => {
                                         const data = CONDITIONS[key];
-                                        // Removed status badge from sidebar
+                                        // Removed status badge from here
                                         return (
                                             <button 
                                                 key={key}
@@ -391,7 +388,6 @@
                                 <p className="text-sm text-slate-300 leading-relaxed">
                                     {currentData.desc}
                                 </p>
-                                {/* Removed status badge from here as it's now in the PetriDish */}
                             </div>
 
                         </div>
