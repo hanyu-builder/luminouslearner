@@ -12,7 +12,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Framer Motion for Drag & Drop -->
+    <!-- Framer Motion -->
     <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -113,7 +113,6 @@
         ];
 
         // Reaction Logic
-        // Metal A displaces Metal B if A > B in reactivity
         const getReaction = (metal, solution) => {
             const metalReactivity = METALS.find(m => m.id === metal.id).reactivity;
             const solutionMetalReactivity = METALS.find(m => m.id === solution.metalId).reactivity;
@@ -125,49 +124,49 @@
                     type: 'displacement',
                     msg: 'Reaction occurs!',
                     equation: `${metal.id}(s) + ${solution.ion}(aq) → ${metal.id}${metal.id === 'Ag' ? '⁺' : '²⁺'}(aq) + ${solution.metalId}(s)`,
-                    productSolid: METALS.find(m => m.id === solution.metalId).color, // Solid deposit color is the displaced metal
-                    productSolution: 'bg-blue-50/10' // Usually becomes colorless (Mg, Zn, Al salts) or changes color. Simplified to fade for now.
-                    // To be more accurate: if Cu replaces Ag, solution turns Blue. If Mg replaces Cu, Blue fades to colorless.
+                    productSolid: METALS.find(m => m.id === solution.metalId).color, 
+                    productSolution: 'bg-blue-50/10' 
                 };
             }
             return { type: 'none', msg: 'No reaction (Metal is less reactive)' };
         };
 
-        // Accurate Solution Color Change Logic
         const getFinalColor = (metalId, solutionId) => {
-            // If Mg/Zn/Fe reacts with CuSO4 -> Blue fades to Colorless (Mg/Zn) or Green (Fe)
             if (solutionId === 'CuSO4') {
-                if (metalId === 'Fe') return 'bg-green-200/40'; // Fe2+
-                return 'bg-blue-50/20'; // Colorless
+                if (metalId === 'Fe') return 'bg-green-200/40'; 
+                return 'bg-blue-50/20'; 
             }
-            // If Cu reacts with AgNO3 -> Colorless turns Blue (Cu2+)
             if (solutionId === 'AgNO3' && metalId === 'Cu') return 'bg-blue-500/40';
-            
-            // Default: Become colorless (Mg/Zn/Al salts) or stay same if no reaction
             return 'bg-blue-50/20';
         };
 
         const App = () => {
             const [selectedSolution, setSelectedSolution] = useState(SOLUTIONS[3]); // Default CuSO4
-            const [draggedMetal, setDraggedMetal] = useState(null);
             const [droppedMetal, setDroppedMetal] = useState(null);
             const [result, setResult] = useState(null);
             const [isResetting, setIsResetting] = useState(false);
 
-            const handleDrop = () => {
-                if (draggedMetal) {
-                    setDroppedMetal(draggedMetal);
-                    const res = getReaction(draggedMetal, selectedSolution);
-                    
-                    // Calculate specific color outcome
-                    let finalBg = selectedSolution.colorClass;
-                    if (res.type === 'displacement') {
-                        finalBg = getFinalColor(draggedMetal.id, selectedSolution.id);
-                    }
-                    
-                    setResult({ ...res, finalColor: finalBg });
-                    setDraggedMetal(null);
+            const handleMetalClick = (metal) => {
+                // Reset first if something is already there
+                if (droppedMetal) {
+                    setDroppedMetal(null);
+                    setResult(null);
+                    setTimeout(() => performDrop(metal), 300);
+                } else {
+                    performDrop(metal);
                 }
+            };
+
+            const performDrop = (metal) => {
+                setDroppedMetal(metal);
+                const res = getReaction(metal, selectedSolution);
+                
+                let finalBg = selectedSolution.colorClass;
+                if (res.type === 'displacement') {
+                    finalBg = getFinalColor(metal.id, selectedSolution.id);
+                }
+                
+                setResult({ ...res, finalColor: finalBg });
             };
 
             const reset = () => {
@@ -179,7 +178,6 @@
                 }, 300);
             };
 
-            // Change solution resets everything
             const changeSolution = (sol) => {
                 setSelectedSolution(sol);
                 setDroppedMetal(null);
@@ -195,31 +193,22 @@
                             <h1 className="text-lg font-bold flex items-center gap-2">
                                 <Icon name="flask-conical" className="text-emerald-400" /> Metal Lab
                             </h1>
-                            <p className="text-xs text-slate-400 mt-1">Drag metal to beaker</p>
+                            <p className="text-xs text-slate-400 mt-1">Click metal to add</p>
                         </div>
 
                         <div className="p-6 space-y-4 overflow-y-auto">
                             {METALS.map((m) => (
                                 <div key={m.id} className="relative">
                                     <div className="text-xs font-bold text-slate-500 mb-1 uppercase">{m.name}</div>
-                                    <motion.div
-                                        drag
-                                        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-                                        dragElastic={0.2}
-                                        dragSnapToOrigin={true}
-                                        onDragStart={() => setDraggedMetal(m)}
-                                        onDragEnd={(e, info) => {
-                                            // Simple drop detection based on screen width
-                                            if (info.point.x > 300) handleDrop();
-                                            else setDraggedMetal(null);
-                                        }}
-                                        className={`h-12 rounded-lg border-2 border-slate-600 flex items-center justify-center cursor-grab active:cursor-grabbing shadow-lg relative z-50 ${m.color} ${droppedMetal?.id === m.id ? 'opacity-50' : 'opacity-100'}`}
-                                        whileHover={{ scale: 1.05 }}
+                                    <motion.button
+                                        onClick={() => handleMetalClick(m)}
+                                        className={`w-full h-12 rounded-lg border-2 border-slate-600 flex items-center justify-center cursor-pointer shadow-lg relative z-50 ${m.color} ${droppedMetal?.id === m.id ? 'opacity-50 ring-2 ring-emerald-500' : 'opacity-100 hover:border-white'}`}
+                                        whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.95 }}
                                     >
                                         <span className="font-black text-slate-800 text-xl">{m.id}</span>
-                                        <span className="absolute right-2 bottom-1 text-[10px] text-slate-700 font-bold">Solid</span>
-                                    </motion.div>
+                                        <span className="absolute right-3 bottom-1 text-[10px] text-slate-700 font-bold">Solid</span>
+                                    </motion.button>
                                 </div>
                             ))}
                         </div>
@@ -256,23 +245,22 @@
                             {/* Beaker Glass */}
                             <div className="absolute bottom-0 w-full h-full border-x-4 border-b-4 border-slate-500/30 rounded-b-3xl bg-white/5 backdrop-blur-sm overflow-hidden">
                                 
-                                /* Liquid */
+                                {/* Liquid */}
                                 <div 
                                     className={`absolute bottom-0 w-full h-3/4 liquid transition-colors duration-1000 ${result ? result.finalColor : selectedSolution.colorClass}`}
                                 >
-                                    {/* Bubbles if reaction implies gas? (Actually most displacement don't produce gas unless acid, but visuals are nice) 
-                                        Let's keep it simple: metal deposits are more important. 
-                                    */}
                                 </div>
 
-                                /* Metal Piece inside */
+                                {/* Metal Piece inside */}
                                 <AnimatePresence>
                                     {droppedMetal && !isResetting && (
                                         <motion.div 
-                                            initial={{ y: -200, opacity: 0 }}
-                                            animate={{ y: 120, opacity: 1 }}
+                                            initial={{ y: -300, opacity: 0, rotate: 10 }}
+                                            animate={{ y: 90, opacity: 1, rotate: 0 }}
                                             exit={{ y: 200, opacity: 0 }}
-                                            transition={{ type: "spring", bounce: 0.2 }}
+                                            transition={{ type: "spring", stiffness: 120, damping: 15 }}
+                                            // Correct centering: left-1/2 and -translate-x-1/2 centers horizontally.
+                                            // Vertical position controlled by animate y.
                                             className={`absolute left-1/2 -translate-x-1/2 w-16 h-32 rounded-lg border-2 border-black/20 flex items-center justify-center ${droppedMetal.color}`}
                                         >
                                             {/* Metal Deposit Overlay */}
@@ -284,7 +272,7 @@
                                     )}
                                 </AnimatePresence>
 
-                                /* Labels */
+                                {/* Labels */}
                                 <div className="absolute bottom-4 w-full text-center">
                                     <span className="text-sm font-bold text-white/50 drop-shadow-md">{selectedSolution.name}</span>
                                 </div>
@@ -315,7 +303,7 @@
                                 </div>
                             ) : (
                                 <div className="text-center text-slate-500 text-sm animate-pulse">
-                                    Drag a metal from the left into the beaker...
+                                    Click a metal from the left to add it to the beaker...
                                 </div>
                             )}
                         </div>
