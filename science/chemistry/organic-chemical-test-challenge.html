@@ -74,11 +74,13 @@
         // --- GAME DATA ---
         const REAGENTS = [
             { id: 'kmno4', name: 'Acidified KMnO₄', color: 'bg-purple-600', type: 'Oxidation' },
-            { id: 'br2', name: 'Bromine Water', color: 'bg-orange-500', type: 'Addition/Sub' },
+            { id: 'br2', name: 'Bromine in CCl₄', color: 'bg-orange-500', type: 'Addition' }, // Changed from Br2 water to organic solvent for alkane/alkene distinction
             { id: 'tollens', name: 'Tollens\' Reagent', color: 'bg-slate-200', type: 'Oxidation' },
             { id: '24dnp', name: '2,4-DNP', color: 'bg-orange-600', type: 'Condensation' },
             { id: 'iodoform', name: 'I₂ / NaOH', color: 'bg-yellow-700', type: 'Iodoform Test' },
-            { id: 'nahco3', name: 'NaHCO₃ (aq)', color: 'bg-white', type: 'Acid-Base' }
+            { id: 'nahco3', name: 'NaHCO₃ (aq)', color: 'bg-white', type: 'Acid-Base' },
+            { id: 'agno3', name: 'AgNO₃ / Ethanol', color: 'bg-slate-100', type: 'Hydrolysis' }, // New for Haloalkanes
+            { id: 'naoh_heat', name: 'NaOH (aq), Heat', color: 'bg-white', type: 'Hydrolysis' } // New for Amides
         ];
 
         // Mode 1: Distinguish (Versus)
@@ -107,10 +109,21 @@
                 id: 5,
                 pair: ['Propan-2-ol', 'Propan-1-ol'],
                 targetA: 'Propan-2-ol', targetB: 'Propan-1-ol',
+            },
+            // New Versus Challenges
+            {
+                id: 6,
+                pair: ['1-Chlorobutane', 'Butan-1-ol'],
+                targetA: '1-Chlorobutane', targetB: 'Butan-1-ol',
+            },
+            {
+                id: 7,
+                pair: ['Ethanamide', 'Ethyl Ethanoate'],
+                targetA: 'Ethanamide', targetB: 'Ethyl Ethanoate',
             }
         ];
 
-        // Mode 2: Identify (Unknown) - NEW
+        // Mode 2: Identify (Unknown) - EXPANDED
         const IDENTITY_CHALLENGES = [
             {
                 id: 101,
@@ -136,6 +149,17 @@
                 id: 105,
                 answer: 'Ethyl Ethanoate',
                 candidates: ['Ethanoic Acid', 'Ethanol', 'Ethyl Ethanoate', 'Ethanal']
+            },
+            // New Identify Challenges
+            {
+                id: 106,
+                answer: '1-Chlorobutane',
+                candidates: ['Butan-1-ol', '1-Chlorobutane', 'Butanoic Acid', 'Butanone']
+            },
+            {
+                id: 107,
+                answer: 'Ethanamide',
+                candidates: ['Ethanoic Acid', 'Ethylamine', 'Ethanamide', 'Ethyl Ethanoate']
             }
         ];
 
@@ -147,25 +171,26 @@
                        reagentId === 'br2' ? 'bg-orange-400/60' : 
                        reagentId === '24dnp' ? 'bg-orange-600/80' : 
                        reagentId === 'iodoform' ? 'bg-yellow-700/60' :
-                       reagentId === 'tollens' ? 'bg-slate-200/40' : 'bg-white/10',
+                       reagentId === 'tollens' ? 'bg-slate-200/40' : 
+                       reagentId === 'agno3' ? 'bg-slate-100/40' : 'bg-white/10',
                 obs: 'No observable change',
                 reacted: false
             };
 
             // 1. Acidified KMnO4 (Oxidation)
             if (reagentId === 'kmno4') {
-                if (['Propan-1-ol', 'Ethanol', 'Propanal', 'Cyclohexene', 'Propan-2-ol', 'Ethanal'].includes(compound)) {
+                if (['Propan-1-ol', 'Ethanol', 'Propanal', 'Cyclohexene', 'Propan-2-ol', 'Ethanal', 'Butan-1-ol'].includes(compound)) {
                     return { color: 'bg-white/10', obs: 'Purple colour decolourises', reacted: true };
                 }
             }
 
-            // 2. Bromine Water (Addition)
+            // 2. Bromine in CCl4 (Addition)
             if (reagentId === 'br2') {
                 if (['Cyclohexene'].includes(compound)) {
                     return { color: 'bg-white/10', obs: 'Orange colour decolourises rapidly', reacted: true };
                 }
-                if (['Phenol'].includes(compound)) { 
-                     return { color: 'bg-white/50', obs: 'Decolourises & White ppt', reacted: true };
+                if (['Phenol', 'Phenylamine'].includes(compound)) { 
+                     return { color: 'bg-white/50', obs: 'Decolourises & White ppt', reacted: true, type: 'ppt' };
                 }
             }
 
@@ -178,22 +203,38 @@
 
             // 4. 2,4-DNP (Carbonyls)
             if (reagentId === '24dnp') {
-                if (['Propanal', 'Propanone', 'Ethanal'].includes(compound)) {
+                if (['Propanal', 'Propanone', 'Ethanal', 'Butanone'].includes(compound)) {
                     return { color: 'bg-orange-500', obs: 'Yellow/Orange precipitate', reacted: true, type: 'ppt' };
                 }
             }
 
             // 5. Iodoform (Methyl ketone or Methyl secondary alcohol)
             if (reagentId === 'iodoform') {
-                if (['Propanone', 'Ethanol', 'Propan-2-ol', 'Ethanal'].includes(compound)) {
+                if (['Propanone', 'Ethanol', 'Propan-2-ol', 'Ethanal', 'Butanone'].includes(compound)) {
                     return { color: 'bg-yellow-300', obs: 'Yellow precipitate (CHI₃)', reacted: true, type: 'ppt' };
                 }
             }
 
             // 6. NaHCO3 (Acids)
             if (reagentId === 'nahco3') {
-                if (['Ethanoic Acid', 'Propanoic Acid'].includes(compound)) {
+                if (['Ethanoic Acid', 'Propanoic Acid', 'Butanoic Acid'].includes(compound)) {
                     return { color: 'bg-white/10', obs: 'Colourless gas bubbles (CO₂)', reacted: true, type: 'gas' };
+                }
+            }
+
+            // 7. AgNO3 / Ethanol (Haloalkanes) - NEW
+            if (reagentId === 'agno3') {
+                if (['1-Chlorobutane'].includes(compound)) {
+                    // Cl- gives white ppt (AgCl), slowly
+                    return { color: 'bg-white/80', obs: 'White precipitate (Slow)', reacted: true, type: 'ppt' };
+                }
+                // Could add Bromo/Iodo if needed (Cream/Yellow)
+            }
+
+            // 8. NaOH, Heat (Amides/Ammonium salts) - NEW
+            if (reagentId === 'naoh_heat') {
+                if (['Ethanamide'].includes(compound)) {
+                    return { color: 'bg-white/10', obs: 'Pungent gas (NH₃) evolved', reacted: true, type: 'gas' };
                 }
             }
 
@@ -425,7 +466,7 @@
                             {/* Reagent Selection */}
                             <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-4">
                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 mb-3">Select Reagent</div>
-                                <div className="grid grid-cols-1 gap-2">
+                                <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
                                     {REAGENTS.map(r => (
                                         <button 
                                             key={r.id}
