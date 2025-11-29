@@ -71,24 +71,29 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- DATA ---
+        // --- EXTENDED DATA ---
         const CATIONS = [
-            { id: 'Na', name: 'Sodium (Na⁺)', group: 1, soluble: true },
-            { id: 'K', name: 'Potassium (K⁺)', group: 1, soluble: true },
-            { id: 'NH4', name: 'Ammonium (NH₄⁺)', group: 1, soluble: true }, // Treated like Gp 1
-            { id: 'Mg', name: 'Magnesium (Mg²⁺)', group: 2, soluble: false },
-            { id: 'Zn', name: 'Zinc (Zn²⁺)', group: 'Transition', soluble: false },
-            { id: 'Cu', name: 'Copper(II) (Cu²⁺)', group: 'Transition', soluble: false },
-            { id: 'Ca', name: 'Calcium (Ca²⁺)', group: 2, soluble: false }, // Special case often treated as excess
-            { id: 'Ag', name: 'Silver (Ag⁺)', group: 'Transition', soluble: false },
-            { id: 'Pb', name: 'Lead(II) (Pb²⁺)', group: 4, soluble: false },
-            { id: 'Ba', name: 'Barium (Ba²⁺)', group: 2, soluble: false }
+            { id: 'Na', name: 'Sodium (Na⁺)', group: 1 },
+            { id: 'K', name: 'Potassium (K⁺)', group: 1 },
+            { id: 'NH4', name: 'Ammonium (NH₄⁺)', group: 1 },
+            { id: 'Mg', name: 'Magnesium (Mg²⁺)', group: 2 },
+            { id: 'Ca', name: 'Calcium (Ca²⁺)', group: 2 },
+            { id: 'Ba', name: 'Barium (Ba²⁺)', group: 2 },
+            { id: 'Al', name: 'Aluminium (Al³⁺)', group: 3 }, // NEW
+            { id: 'Zn', name: 'Zinc (Zn²⁺)', group: 'Transition' },
+            { id: 'Fe2', name: 'Iron(II) (Fe²⁺)', group: 'Transition' }, // NEW
+            { id: 'Fe3', name: 'Iron(III) (Fe³⁺)', group: 'Transition' }, // NEW
+            { id: 'Cu', name: 'Copper(II) (Cu²⁺)', group: 'Transition' },
+            { id: 'Ag', name: 'Silver (Ag⁺)', group: 'Transition' },
+            { id: 'Pb', name: 'Lead(II) (Pb²⁺)', group: 4 }
         ];
 
         const ANIONS = [
+            { id: 'Cl', name: 'Chloride (Cl⁻)', exceptions: ['Ag', 'Pb'] }, 
+            { id: 'Br', name: 'Bromide (Br⁻)', exceptions: ['Ag', 'Pb'] }, // NEW
+            { id: 'I', name: 'Iodide (I⁻)', exceptions: ['Ag', 'Pb', 'Cu'] }, // NEW (CuI is complex, but for DSE general rule Ag/Pb insoluble)
             { id: 'NO3', name: 'Nitrate (NO₃⁻)', allSoluble: true },
-            { id: 'Cl', name: 'Chloride (Cl⁻)', exceptions: ['Ag', 'Pb'] }, // PbCl2 soluble in hot water, but generally treated as insoluble for prep
-            { id: 'SO4', name: 'Sulfate (SO₄²⁻)', exceptions: ['Ba', 'Pb', 'Ca'] },
+            { id: 'SO4', name: 'Sulfate (SO₄²⁻)', exceptions: ['Ba', 'Pb', 'Ca'] }, 
             { id: 'CO3', name: 'Carbonate (CO₃²⁻)', solubleOnlyWith: ['Na', 'K', 'NH4'] }
         ];
 
@@ -109,7 +114,7 @@
             excess: {
                 id: 'excess',
                 title: 'Insoluble Excess (過量試劑法)',
-                desc: 'Used for soluble salts of metals like Mg, Zn, Cu.',
+                desc: 'Used for soluble salts of metals like Mg, Zn, Cu, Fe.',
                 steps: [
                     '1. Warm the acid.',
                     '2. Add excess insoluble solid (Metal/Oxide/Carbonate) until no more dissolves.',
