@@ -12,6 +12,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <style>
@@ -44,6 +47,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
 
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
@@ -158,9 +162,9 @@
                     )}
 
                     {/* --- THE IRON NAIL --- */}
-                    <div className="relative z-10 w-48 h-4 bg-gradient-to-b from-slate-400 to-slate-600 rounded-r-full shadow-lg flex items-center">
+                    <div className="relative z-10 w-48 h-4 bg-gradient-to-b from-slate-400 to-slate-600 rounded-r-full shadow-lg flex items-center justify-center">
                         {/* Nail Head */}
-                        <div className="absolute -left-2 w-4 h-8 bg-gradient-to-b from-slate-500 to-slate-700 rounded-sm"></div>
+                        <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-8 bg-gradient-to-b from-slate-500 to-slate-700 rounded-sm"></div>
                         
                         {/* Wrapped Metal Strip - Fixed Symbol */}
                         {(condition === 'mg' || condition === 'zn' || condition === 'cu') && (
@@ -184,6 +188,21 @@
                             </svg>
                         )}
                     </div>
+
+                    {/* Result Badge BELOW the Nail */}
+                    {progress > 10 && (
+                        <div className="absolute bottom-16 flex justify-center w-full pointer-events-none">
+                            <div className={`px-3 py-1 rounded-full text-xs font-bold shadow-lg border flex items-center gap-2 backdrop-blur-sm animate-in
+                                ${CONDITIONS[condition].status === 'Protected' 
+                                    ? 'bg-emerald-500/90 border-emerald-400 text-white' 
+                                    : 'bg-red-500/90 border-red-400 text-white'
+                                }`}
+                            >
+                                <Icon name={CONDITIONS[condition].status === 'Protected' ? 'shield-check' : 'alert-triangle'} size={14} className="text-white" />
+                                {CONDITIONS[condition].status.toUpperCase()}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Electrons Flow Animation */}
                     {progress > 0 && (condition !== 'none') && (
@@ -259,7 +278,7 @@
                                 <div className="space-y-2">
                                     {['none', 'mg', 'zn', 'cu'].map(key => {
                                         const data = CONDITIONS[key];
-                                        const isProtected = data.status === 'Protected';
+                                        // Removed status badge from sidebar
                                         return (
                                             <button 
                                                 key={key}
@@ -274,14 +293,6 @@
                                                     <div className={`w-3 h-3 rounded-full ${key === 'none' ? 'bg-slate-500' : key === 'mg' ? 'bg-slate-200' : key === 'zn' ? 'bg-slate-400' : 'bg-orange-400'}`}></div>
                                                     <span className="text-sm font-bold">{data.name}</span>
                                                 </div>
-                                                {/* Status Badge */}
-                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                                                    isProtected 
-                                                    ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' 
-                                                    : 'text-red-400 border-red-400/30 bg-red-400/10'
-                                                }`}>
-                                                    {data.status}
-                                                </span>
                                             </button>
                                         );
                                     })}
@@ -294,7 +305,7 @@
                                 <div className="space-y-2">
                                     {['cathode', 'anode'].map(key => {
                                         const data = CONDITIONS[key];
-                                        const isProtected = data.status === 'Protected';
+                                        // Removed status badge from sidebar
                                         return (
                                             <button 
                                                 key={key}
@@ -309,13 +320,6 @@
                                                     <Icon name={key === 'cathode' ? 'battery-charging' : 'battery-warning'} size={16} className={key === 'cathode' ? 'text-green-400' : 'text-red-400'}/>
                                                     <span className="text-sm font-bold">{data.name}</span>
                                                 </div>
-                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                                                    isProtected 
-                                                    ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' 
-                                                    : 'text-red-400 border-red-400/30 bg-red-400/10'
-                                                }`}>
-                                                    {data.status}
-                                                </span>
                                             </button>
                                         );
                                     })}
@@ -387,17 +391,7 @@
                                 <p className="text-sm text-slate-300 leading-relaxed">
                                     {currentData.desc}
                                 </p>
-                                <div className="mt-3 flex gap-2">
-                                    <span className={`text-xs px-2 py-1 rounded border uppercase font-bold ${
-                                        currentData.type === 'sacrificial' || condition === 'cathode' 
-                                        ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800' 
-                                        : currentData.type === 'control' 
-                                            ? 'bg-slate-700 text-slate-300 border-slate-600'
-                                            : 'bg-red-900/30 text-red-300 border-red-800'
-                                    }`}>
-                                        {currentData.status.toUpperCase()}
-                                    </span>
-                                </div>
+                                {/* Removed status badge from here as it's now in the PetriDish */}
                             </div>
 
                         </div>
