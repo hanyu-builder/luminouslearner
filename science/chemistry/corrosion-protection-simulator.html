@@ -8,7 +8,6 @@
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- FIXED: Removed spaces in URL -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
@@ -67,57 +66,51 @@
 
         // --- DATA ---
         const CONDITIONS = {
-            none: { name: 'Iron Nail Only', type: 'control', desc: 'Control experiment. Iron rusts freely.' },
-            mg: { name: 'Wrapped with Magnesium', type: 'sacrificial', desc: 'Mg is more reactive than Fe. Mg corrodes, Fe is protected.' },
-            zn: { name: 'Wrapped with Zinc', type: 'sacrificial', desc: 'Zn is more reactive than Fe. Zn corrodes, Fe is protected.' },
-            cu: { name: 'Wrapped with Copper', type: 'sacrificial', desc: 'Cu is less reactive than Fe. Fe corrodes faster (Sacrificial Anode reversed).' },
-            cathode: { name: 'Connected to Negative (-)', type: 'impressed', desc: 'Iron becomes the cathode. Supplied electrons prevent oxidation.' },
-            anode: { name: 'Connected to Positive (+)', type: 'impressed', desc: 'Iron becomes the anode. Electrons are sucked away, rusting accelerates dramatically.' }
+            none: { name: 'Iron Nail Only', type: 'control', desc: 'Control experiment. Iron rusts freely.', status: 'Rusted' },
+            mg: { name: 'Wrapped with Magnesium', type: 'sacrificial', desc: 'Mg is more reactive than Fe. Mg corrodes, Fe is protected.', status: 'Protected' },
+            zn: { name: 'Wrapped with Zinc', type: 'sacrificial', desc: 'Zn is more reactive than Fe. Zn corrodes, Fe is protected.', status: 'Protected' },
+            cu: { name: 'Wrapped with Copper', type: 'sacrificial', desc: 'Cu is less reactive than Fe. Fe corrodes faster (Sacrificial Anode reversed).', status: 'Rusted' },
+            cathode: { name: 'Connected to Negative (-)', type: 'impressed', desc: 'Iron becomes the cathode. Supplied electrons prevent oxidation.', status: 'Protected' },
+            anode: { name: 'Connected to Positive (+)', type: 'impressed', desc: 'Iron becomes the anode. Electrons are sucked away, rusting accelerates dramatically.', status: 'Rusted' }
+        };
+
+        // Symbol map for the visualizer
+        const SYMBOLS = {
+            mg: 'Mg',
+            zn: 'Zn',
+            cu: 'Cu'
         };
 
         // --- VISUALIZER COMPONENT ---
         const PetriDish = ({ condition, progress }) => {
             // progress: 0 to 100%
             
-            // -- Logic for Colors --
-            // Blue = Rust (Fe2+) -> appears at Anode (oxidation)
-            // Pink = OH- (Reduction) -> appears at Cathode (reduction)
-            
             let blueIntensity = 0;
             let pinkIntensity = 0;
             
-            // Fe -> Fe2+ + 2e- (Blue)
-            // O2 + 2H2O + 4e- -> 4OH- (Pink)
-            
             switch (condition) {
                 case 'none':
-                    // Standard rusting: Head/Tip are Anodic (Blue), middle is Cathodic (Pink).
                     blueIntensity = progress * 0.8;
                     pinkIntensity = progress * 0.8;
                     break;
                     
                 case 'mg':
                 case 'zn':
-                    // Fe is protected (Cathode) -> Pink everywhere on Fe
                     blueIntensity = 0;
-                    pinkIntensity = progress * 1.0; // Strong pink
+                    pinkIntensity = progress * 1.0;
                     break;
                     
                 case 'cu':
-                    // Fe is Anode (Accelerated Rusting) -> Strong Blue
-                    // Cu is Cathode -> Pink on Copper strip
-                    blueIntensity = progress * 1.2; // Very strong blue
-                    pinkIntensity = progress * 0.8; // Pink on Cu
+                    blueIntensity = progress * 1.2;
+                    pinkIntensity = progress * 0.8;
                     break;
                     
                 case 'cathode':
-                    // Fe is Cathode -> Strong Pink
                     blueIntensity = 0;
                     pinkIntensity = progress * 1.2;
                     break;
                     
                 case 'anode':
-                    // Fe is Anode -> Severe Rusting -> Massive Blue
                     blueIntensity = progress * 1.5;
                     pinkIntensity = 0; 
                     break;
@@ -125,27 +118,25 @@
                 default: break;
             }
 
-            // Sizes for clouds based on intensity
             const blueSize = 30 + blueIntensity * 80;
             const pinkSize = 30 + pinkIntensity * 80;
 
             return (
                 <div className="relative w-80 h-80 bg-[#E0F2FE] rounded-full petri-dish flex items-center justify-center overflow-hidden border-4 border-slate-300/50">
-                    {/* Agar Gel Background Label */}
-                    <div className="absolute top-4 text-slate-400/30 font-bold text-xs uppercase tracking-widest pointer-events-none">Agar Gel + Ferroxyl Indicator</div>
+                    {/* Agar Gel Background Label - Improved Visibility */}
+                    <div className="absolute top-6 bg-white/60 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold text-[10px] uppercase tracking-widest pointer-events-none shadow-sm border border-white/40">
+                        Agar Gel + Ferroxyl Indicator
+                    </div>
 
                     {/* --- CHEMICAL CLOUDS --- */}
                     
                     {/* Blue Clouds (Rust / Fe2+) */}
                     {(condition === 'none' || condition === 'cu' || condition === 'anode') && (
                         <>
-                            {/* Head */}
                             <div className="absolute bg-blue-600 rounded-full cloud mix-blend-multiply" 
                                  style={{ width: blueSize, height: blueSize, left: '15%', top: '40%', opacity: Math.min(0.8, blueIntensity/100) }}></div>
-                            {/* Tip */}
                             <div className="absolute bg-blue-600 rounded-full cloud mix-blend-multiply" 
                                  style={{ width: blueSize, height: blueSize, right: '15%', top: '40%', opacity: Math.min(0.8, blueIntensity/100) }}></div>
-                             {/* If Anode connected, whole nail turns blue */}
                              {condition === 'anode' && (
                                  <div className="absolute bg-blue-600 rounded-full cloud mix-blend-multiply" 
                                  style={{ width: blueSize*1.5, height: blueSize, left: '30%', top: '40%', opacity: Math.min(0.8, blueIntensity/100) }}></div>
@@ -156,10 +147,9 @@
                     {/* Pink Clouds (OH-) */}
                     {(condition === 'none' || condition === 'mg' || condition === 'zn' || condition === 'cathode' || condition === 'cu') && (
                         <>
-                            {/* Middle of nail (for none) or Whole nail (for protected) */}
                             <div className="absolute bg-pink-500 rounded-full cloud mix-blend-multiply" 
                                  style={{ 
-                                     width: condition === 'cu' ? pinkSize * 0.6 : pinkSize * 1.2, // Smaller pink on Cu strip
+                                     width: condition === 'cu' ? pinkSize * 0.6 : pinkSize * 1.2, 
                                      height: condition === 'cu' ? pinkSize * 0.6 : pinkSize, 
                                      left: '40%', top: '35%', 
                                      opacity: Math.min(0.8, pinkIntensity/100) 
@@ -172,12 +162,12 @@
                         {/* Nail Head */}
                         <div className="absolute -left-2 w-4 h-8 bg-gradient-to-b from-slate-500 to-slate-700 rounded-sm"></div>
                         
-                        {/* Wrapped Metal Strip */}
+                        {/* Wrapped Metal Strip - Fixed Symbol */}
                         {(condition === 'mg' || condition === 'zn' || condition === 'cu') && (
-                            <div className={`absolute left-1/2 -translate-x-1/2 w-8 h-6 rounded border border-black/20 shadow-sm 
+                            <div className={`absolute left-1/2 -translate-x-1/2 w-8 h-6 rounded border border-black/20 shadow-sm flex items-center justify-center
                                 ${condition === 'mg' ? 'bg-slate-200' : condition === 'zn' ? 'bg-slate-400' : 'bg-orange-400'}`}>
-                                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-500 uppercase">
-                                    {condition}
+                                <span className="text-[10px] font-bold text-slate-800">
+                                    {SYMBOLS[condition]}
                                 </span>
                             </div>
                         )}
@@ -185,12 +175,8 @@
                         {/* Impressed Current Wires */}
                         {(condition === 'cathode' || condition === 'anode') && (
                             <svg className="absolute left-1/2 top-0 overflow-visible" width="100" height="100" style={{transform: 'translate(-50%, -50%)'}}>
-                                {/* Wire */}
                                 <path d="M 50 20 L 50 -50" stroke="#333" strokeWidth="2" fill="none" />
-                                {/* Clip */}
                                 <rect x="46" y="16" width="8" height="10" fill="#475569" />
-                                
-                                {/* Battery Symbol Visual (Abstract) */}
                                 <circle cx="50" cy="-60" r="15" fill={condition === 'cathode' ? '#22c55e' : '#ef4444'} />
                                 <text x="50" y="-60" textAnchor="middle" dominantBaseline="middle" fill="white" fontWeight="bold" fontSize="16">
                                     {condition === 'cathode' ? '-' : '+'}
@@ -199,9 +185,9 @@
                         )}
                     </div>
 
-                    {/* Electrons Flow Animation (Optional hint) */}
+                    {/* Electrons Flow Animation */}
                     {progress > 0 && (condition !== 'none') && (
-                        <div className="absolute top-20 text-xs font-bold text-slate-500 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-full backdrop-blur">
+                        <div className="absolute top-20 text-xs font-bold text-slate-500 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-full backdrop-blur shadow-sm">
                             <span className="text-yellow-500">e⁻</span> Flow: 
                             {condition === 'mg' || condition === 'zn' ? ' Metal → Iron' : 
                              condition === 'cu' ? ' Iron → Copper' :
@@ -271,18 +257,34 @@
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 mb-2 block">Sacrificial Protection</label>
                                 <div className="space-y-2">
-                                    {['none', 'mg', 'zn', 'cu'].map(key => (
-                                        <button 
-                                            key={key}
-                                            onClick={() => handleSelect(key)}
-                                            className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3
-                                                ${condition === key ? 'bg-slate-800 border-emerald-500 text-white' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
-                                            `}
-                                        >
-                                            <div className={`w-3 h-3 rounded-full ${key === 'none' ? 'bg-slate-500' : key === 'mg' ? 'bg-slate-200' : key === 'zn' ? 'bg-slate-400' : 'bg-orange-400'}`}></div>
-                                            <span className="text-sm font-bold">{CONDITIONS[key].name}</span>
-                                        </button>
-                                    ))}
+                                    {['none', 'mg', 'zn', 'cu'].map(key => {
+                                        const data = CONDITIONS[key];
+                                        const isProtected = data.status === 'Protected';
+                                        return (
+                                            <button 
+                                                key={key}
+                                                onClick={() => handleSelect(key)}
+                                                className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between
+                                                    ${condition === key 
+                                                        ? 'bg-slate-800 border-emerald-500 text-white' 
+                                                        : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                                `}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${key === 'none' ? 'bg-slate-500' : key === 'mg' ? 'bg-slate-200' : key === 'zn' ? 'bg-slate-400' : 'bg-orange-400'}`}></div>
+                                                    <span className="text-sm font-bold">{data.name}</span>
+                                                </div>
+                                                {/* Status Badge */}
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                                    isProtected 
+                                                    ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' 
+                                                    : 'text-red-400 border-red-400/30 bg-red-400/10'
+                                                }`}>
+                                                    {data.status}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -290,18 +292,33 @@
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 mb-2 block">Impressed Current</label>
                                 <div className="space-y-2">
-                                    {['cathode', 'anode'].map(key => (
-                                        <button 
-                                            key={key}
-                                            onClick={() => handleSelect(key)}
-                                            className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3
-                                                ${condition === key ? 'bg-slate-800 border-blue-500 text-white' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
-                                            `}
-                                        >
-                                            <Icon name={key === 'cathode' ? 'battery-charging' : 'battery-warning'} size={16} className={key === 'cathode' ? 'text-green-400' : 'text-red-400'}/>
-                                            <span className="text-sm font-bold">{CONDITIONS[key].name}</span>
-                                        </button>
-                                    ))}
+                                    {['cathode', 'anode'].map(key => {
+                                        const data = CONDITIONS[key];
+                                        const isProtected = data.status === 'Protected';
+                                        return (
+                                            <button 
+                                                key={key}
+                                                onClick={() => handleSelect(key)}
+                                                className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between
+                                                    ${condition === key 
+                                                        ? 'bg-slate-800 border-blue-500 text-white' 
+                                                        : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                                `}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <Icon name={key === 'cathode' ? 'battery-charging' : 'battery-warning'} size={16} className={key === 'cathode' ? 'text-green-400' : 'text-red-400'}/>
+                                                    <span className="text-sm font-bold">{data.name}</span>
+                                                </div>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                                    isProtected 
+                                                    ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' 
+                                                    : 'text-red-400 border-red-400/30 bg-red-400/10'
+                                                }`}>
+                                                    {data.status}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -378,8 +395,7 @@
                                             ? 'bg-slate-700 text-slate-300 border-slate-600'
                                             : 'bg-red-900/30 text-red-300 border-red-800'
                                     }`}>
-                                        {condition === 'none' ? 'Reference' : 
-                                         condition === 'cu' || condition === 'anode' ? 'Accelerated Corrosion' : 'Protected'}
+                                        {currentData.status.toUpperCase()}
                                     </span>
                                 </div>
                             </div>
