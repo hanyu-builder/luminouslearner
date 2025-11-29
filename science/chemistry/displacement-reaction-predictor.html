@@ -26,26 +26,23 @@
             transition: background-color 1s ease-in-out, opacity 0.5s;
         }
         
-        /* Bubbles */
-        .bubble {
-            position: absolute;
-            background: rgba(255,255,255,0.4);
-            border-radius: 50%;
-            animation: rise 2s infinite ease-in;
-        }
-        @keyframes rise {
-            0% { bottom: 0; transform: scale(0.5); opacity: 0; }
-            50% { opacity: 1; }
-            100% { bottom: 100%; transform: scale(1.2); opacity: 0; }
-        }
-
         /* Metal Coating Animation */
         .coating-enter {
             animation: coat 2s forwards;
         }
+        
+        .deposit-appear {
+            animation: depositFadeIn 2s ease-out forwards;
+        }
+        
         @keyframes coat {
             0% { opacity: 0; }
             100% { opacity: 1; }
+        }
+        
+        @keyframes depositFadeIn {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
@@ -77,54 +74,77 @@
 
         // --- DATA ---
         const METALS = [
-            { id: 'Mg', name: 'Magnesium', color: 'bg-slate-300', reactivity: 10, appearance: 'Silvery ribbon' },
-            { id: 'Zn', name: 'Zinc', color: 'bg-slate-400', reactivity: 6, appearance: 'Grey granules' },
-            { id: 'Fe', name: 'Iron', color: 'bg-zinc-600', reactivity: 5, appearance: 'Dark grey nail' },
-            { id: 'Cu', name: 'Copper', color: 'bg-orange-400', reactivity: 3, appearance: 'Red-brown foil' },
-            { id: 'Ag', name: 'Silver', color: 'bg-slate-200', reactivity: 1, appearance: 'Shiny white coin' }
+            { id: 'Mg', name: 'Magnesium', color: 'bg-slate-300', reactivity: 10, depositColor: 'bg-slate-400' },
+            { id: 'Zn', name: 'Zinc', color: 'bg-slate-400', reactivity: 6, depositColor: 'bg-gray-500' },
+            { id: 'Fe', name: 'Iron', color: 'bg-zinc-600', reactivity: 5, depositColor: 'bg-gray-700' },
+            { id: 'Cu', name: 'Copper', color: 'bg-orange-400', reactivity: 3, depositColor: 'bg-orange-600' },
+            { id: 'Ag', name: 'Silver', color: 'bg-slate-200', reactivity: 1, depositColor: 'bg-gray-300' }
         ];
 
         const SOLUTIONS = [
             { 
+                id: 'NaCl', name: 'Sodium Chloride', metalId: 'Na', // Added NaCl
+                ion: 'Na⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', reactivity: 12, // Very high reactivity
+                desc: 'Colourless solution'
+            },
+            { 
                 id: 'MgSO4', name: 'Magnesium Sulfate', metalId: 'Mg', 
-                ion: 'Mg²⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', 
+                ion: 'Mg²⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', reactivity: 10,
                 desc: 'Colourless solution'
             },
             { 
                 id: 'ZnSO4', name: 'Zinc Sulfate', metalId: 'Zn', 
-                ion: 'Zn²⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', 
+                ion: 'Zn²⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', reactivity: 6,
                 desc: 'Colourless solution'
             },
             { 
                 id: 'FeSO4', name: 'Iron(II) Sulfate', metalId: 'Fe', 
-                ion: 'Fe²⁺', colorClass: 'bg-green-200/40', hex: '#bbf7d0', 
+                ion: 'Fe²⁺', colorClass: 'bg-green-200/40', hex: '#bbf7d0', reactivity: 5,
                 desc: 'Pale green solution'
             },
             { 
                 id: 'CuSO4', name: 'Copper(II) Sulfate', metalId: 'Cu', 
-                ion: 'Cu²⁺', colorClass: 'bg-blue-500/40', hex: '#3b82f6', 
+                ion: 'Cu²⁺', colorClass: 'bg-blue-500/40', hex: '#3b82f6', reactivity: 3,
                 desc: 'Blue solution'
             },
             { 
                 id: 'AgNO3', name: 'Silver Nitrate', metalId: 'Ag', 
-                ion: 'Ag⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', 
+                ion: 'Ag⁺', colorClass: 'bg-blue-50/20', hex: '#f8fafc', reactivity: 1,
                 desc: 'Colourless solution'
             }
         ];
 
         // Reaction Logic
         const getReaction = (metal, solution) => {
+            // Metal reactivity from object
             const metalReactivity = METALS.find(m => m.id === metal.id).reactivity;
-            const solutionMetalReactivity = METALS.find(m => m.id === solution.metalId).reactivity;
+            
+            // Solution metal reactivity: Find in METALS or use the value in SOLUTIONS (for Na)
+            // Since Na is not in METALS list (it's not a drag option), we use the property directly in SOLUTIONS or fallback
+            let solutionMetalReactivity = solution.reactivity;
+            if (solutionMetalReactivity === undefined) {
+                 // Fallback if not explicitly defined in SOLUTIONS object (for existing ones like Cu, Fe)
+                 const m = METALS.find(m => m.id === solution.metalId);
+                 solutionMetalReactivity = m ? m.reactivity : 0;
+            }
 
             if (metal.id === solution.metalId) return { type: 'none', msg: 'No reaction (Same metal)' };
             
             if (metalReactivity > solutionMetalReactivity) {
+                // Find deposit color
+                let depositColor = 'bg-gray-500'; // Default
+                const displacedMetal = METALS.find(m => m.id === solution.metalId);
+                if (displacedMetal) depositColor = displacedMetal.depositColor;
+                // Special case for silver (Ag) deposit - often looks grey/black in powder form, but let's keep it silvery/grey
+                if (solution.metalId === 'Ag') depositColor = 'bg-slate-300';
+
                 return {
                     type: 'displacement',
                     msg: 'Reaction occurs!',
                     equation: `${metal.id}(s) + ${solution.ion}(aq) → ${metal.id}${metal.id === 'Ag' ? '⁺' : '²⁺'}(aq) + ${solution.metalId}(s)`,
-                    productSolid: METALS.find(m => m.id === solution.metalId).color, 
+                    productSolid: displacedMetal ? displacedMetal.color : 'bg-gray-400', // Coating on the strip
+                    productDeposit: depositColor, // The pile at bottom
+                    displacedMetalName: solution.metalId, // For label
                     productSolution: 'bg-blue-50/10' 
                 };
             }
@@ -141,13 +161,12 @@
         };
 
         const App = () => {
-            const [selectedSolution, setSelectedSolution] = useState(SOLUTIONS[3]); // Default CuSO4
+            const [selectedSolution, setSelectedSolution] = useState(SOLUTIONS[4]); // Default CuSO4 (Index 4 now)
             const [droppedMetal, setDroppedMetal] = useState(null);
             const [result, setResult] = useState(null);
             const [isResetting, setIsResetting] = useState(false);
 
             const handleMetalClick = (metal) => {
-                // Reset first if something is already there
                 if (droppedMetal) {
                     setDroppedMetal(null);
                     setResult(null);
@@ -224,12 +243,12 @@
                     <div className="flex-1 bg-slate-950 relative flex flex-col items-center justify-center p-8 overflow-hidden">
                         
                         {/* Solution Selector (Top) */}
-                        <div className="absolute top-8 z-10 flex gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 shadow-xl">
+                        <div className="absolute top-8 z-10 flex gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 shadow-xl overflow-x-auto max-w-full">
                             {SOLUTIONS.map(sol => (
                                 <button
                                     key={sol.id}
                                     onClick={() => changeSolution(sol)}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap
                                         ${selectedSolution.id === sol.id 
                                             ? 'bg-blue-600 text-white shadow-md' 
                                             : 'text-slate-400 hover:bg-slate-800 hover:text-white'}
@@ -259,11 +278,9 @@
                                             animate={{ y: 90, opacity: 1, rotate: 0 }}
                                             exit={{ y: 200, opacity: 0 }}
                                             transition={{ type: "spring", stiffness: 120, damping: 15 }}
-                                            // Correct centering: left-1/2 and -translate-x-1/2 centers horizontally.
-                                            // Vertical position controlled by animate y.
                                             className={`absolute left-1/2 -translate-x-1/2 w-16 h-32 rounded-lg border-2 border-black/20 flex items-center justify-center ${droppedMetal.color}`}
                                         >
-                                            {/* Metal Deposit Overlay */}
+                                            {/* Metal Deposit Overlay (On the strip) */}
                                             {result && result.type === 'displacement' && (
                                                 <div className={`absolute inset-0 rounded-lg opacity-80 coating-enter ${result.productSolid}`}></div>
                                             )}
@@ -271,10 +288,21 @@
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
+                                
+                                {/* Deposit at bottom (NEW FEATURE) */}
+                                {result && result.type === 'displacement' && (
+                                    <div className="absolute bottom-4 left-4 flex flex-col items-center z-20 deposit-appear">
+                                        <div className={`w-8 h-6 rounded-full ${result.productDeposit} shadow-sm border border-black/20`}></div>
+                                        <div className={`w-6 h-4 rounded-full ${result.productDeposit} -mt-3 ml-4 shadow-sm border border-black/20`}></div>
+                                        <span className="text-[10px] font-bold text-white bg-black/50 px-1.5 rounded mt-1 backdrop-blur-sm">
+                                            {result.displacedMetalName} Deposit
+                                        </span>
+                                    </div>
+                                )}
 
                                 {/* Labels */}
-                                <div className="absolute bottom-4 w-full text-center">
-                                    <span className="text-sm font-bold text-white/50 drop-shadow-md">{selectedSolution.name}</span>
+                                <div className="absolute bottom-4 right-4 text-right">
+                                    <span className="text-sm font-bold text-white/50 drop-shadow-md block">{selectedSolution.name}</span>
                                 </div>
                             </div>
                         </div>
