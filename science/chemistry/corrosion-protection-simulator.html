@@ -12,6 +12,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <style>
@@ -44,6 +47,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
 
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
@@ -124,7 +128,7 @@
 
             return (
                 <div className="relative w-80 h-80 bg-[#E0F2FE] rounded-full petri-dish flex items-center justify-center overflow-hidden border-4 border-slate-300/50">
-                    {/* Agar Gel Background Label */}
+                    {/* Agar Gel Background Label - Improved Visibility */}
                     <div className="absolute top-6 bg-white/60 backdrop-blur-sm px-3 py-1 rounded-full text-slate-600 font-bold text-[10px] uppercase tracking-widest pointer-events-none shadow-sm border border-white/40">
                         Agar Gel + Ferroxyl Indicator
                     </div>
@@ -186,16 +190,6 @@
                         )}
                     </div>
 
-                    {/* Electrons Flow Animation */}
-                    {progress > 0 && (condition !== 'none') && (
-                        <div className="absolute top-20 text-xs font-bold text-slate-500 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-full backdrop-blur shadow-sm">
-                            <span className="text-yellow-500">e⁻</span> Flow: 
-                            {condition === 'mg' || condition === 'zn' ? ' Metal → Iron' : 
-                             condition === 'cu' ? ' Iron → Copper' :
-                             condition === 'cathode' ? ' Battery → Iron' : ' Iron → Battery'}
-                        </div>
-                    )}
-
                     {/* Result Badge (Moved from Sidebar to Here) */}
                     {progress > 10 && (
                         <div className="absolute bottom-6 flex justify-center w-full pointer-events-none">
@@ -208,6 +202,16 @@
                                 <Icon name={currentStatus === 'Protected' ? 'shield-check' : 'alert-triangle'} size={16} className="text-white" />
                                 {currentStatus.toUpperCase()}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Electrons Flow Animation */}
+                    {progress > 0 && (condition !== 'none') && (
+                        <div className="absolute top-20 text-xs font-bold text-slate-500 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-full backdrop-blur shadow-sm">
+                            <span className="text-yellow-500">e⁻</span> Flow: 
+                            {condition === 'mg' || condition === 'zn' ? ' Metal → Iron' : 
+                             condition === 'cu' ? ' Iron → Copper' :
+                             condition === 'cathode' ? ' Battery → Iron' : ' Iron → Battery'}
                         </div>
                     )}
 
