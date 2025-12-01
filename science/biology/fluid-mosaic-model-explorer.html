@@ -33,7 +33,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
 
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
@@ -89,24 +89,24 @@
         };
 
         // --- 3D SCENE ---
-        const MembraneScene = ({ onSelect }) => {
+        const MembraneScene = ({ selectedPart, onSelect }) => {
             const mountRef = useRef(null);
-            const sceneRef = useRef(null);
-            const objectsRef = useRef([]);
+            const materialsRef = useRef({});
+            const phospholipidsRef = useRef([]); // For animation
             
+            // Initialize Scene
             useEffect(() => {
                 if (!mountRef.current) return;
 
-                // 1. Setup
                 const width = mountRef.current.clientWidth;
                 const height = mountRef.current.clientHeight;
                 const scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x020617); // Dark Blue
-                scene.fog = new THREE.FogExp2(0x020617, 0.02);
-                sceneRef.current = scene;
+                // Reduced fog density to avoid hiding objects
+                scene.fog = new THREE.FogExp2(0x020617, 0.015);
 
                 const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-                camera.position.set(0, 10, 20);
+                camera.position.set(0, 12, 22);
 
                 const renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(width, height);
@@ -117,76 +117,73 @@
                 controls.enableDamping = true;
                 controls.autoRotate = true;
                 controls.autoRotateSpeed = 0.5;
-                controls.maxPolarAngle = Math.PI / 2 - 0.1; // Prevent going below
+                controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
                 // Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
                 scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
                 dirLight.position.set(10, 20, 10);
                 scene.add(dirLight);
-                const pointLight = new THREE.PointLight(0x38bdf8, 0.5);
+                const pointLight = new THREE.PointLight(0x38bdf8, 0.8);
                 pointLight.position.set(0, 5, 0);
                 scene.add(pointLight);
 
+                // --- MATERIALS ---
+                const mats = {
+                    phospholipid: {
+                        head: new THREE.MeshStandardMaterial({ color: 0xfca5a5, roughness: 0.3 }),
+                        tail: new THREE.MeshStandardMaterial({ color: 0xfecaca })
+                    },
+                    channel: new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.2, transparent: true, opacity: 0.9 }),
+                    carrier: new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.2 }),
+                    glycoprotein: {
+                        base: new THREE.MeshStandardMaterial({ color: 0xa78bfa }),
+                        sugar: new THREE.MeshStandardMaterial({ color: 0xffffff }) // Changed to Standard for lighting response
+                    },
+                    cholesterol: new THREE.MeshStandardMaterial({ color: 0xfacc15 })
+                };
+                materialsRef.current = mats;
+
                 // --- BUILD MEMBRANE ---
                 const group = new THREE.Group();
-                const phospholipids = [];
-                const proteins = [];
+                const objects = []; // For raycasting
 
-                // Materials
-                const headMat = new THREE.MeshStandardMaterial({ color: 0xfca5a5, roughness: 0.3 });
-                const tailMat = new THREE.MeshStandardMaterial({ color: 0xfecaca });
-                const channelMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.2, transparent: true, opacity: 0.9 });
-                const carrierMat = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.2 });
-                const glycoMat = new THREE.MeshStandardMaterial({ color: 0xa78bfa });
-                const cholMat = new THREE.MeshStandardMaterial({ color: 0xfacc15 });
-
-                // Geometries (Reused)
+                // Geometries
                 const headGeo = new THREE.SphereGeometry(0.4, 16, 16);
                 const tailGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8);
-                
-                // FIX: Use CylinderGeometry instead of CapsuleGeometry (r137+) to prevent crash on r128
                 const cholGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8);
 
                 // Helper: Create Phospholipid
                 const createPhospholipid = (x, z, isTop) => {
                     const pGroup = new THREE.Group();
                     
-                    // Head
-                    const head = new THREE.Mesh(headGeo, headMat);
+                    const head = new THREE.Mesh(headGeo, mats.phospholipid.head);
                     head.position.y = isTop ? 1.5 : -1.5;
+                    head.userData = { type: 'phospholipid' };
                     pGroup.add(head);
+                    objects.push(head);
 
-                    // Tails
-                    const tail1 = new THREE.Mesh(tailGeo, tailMat);
+                    const tail1 = new THREE.Mesh(tailGeo, mats.phospholipid.tail);
                     tail1.position.set(-0.15, isTop ? 0.6 : -0.6, 0);
-                    // Add wiggle
                     tail1.rotation.x = (Math.random() - 0.5) * 0.2;
                     tail1.userData.wiggleSpeed = Math.random() * 2 + 1;
                     pGroup.add(tail1);
 
-                    const tail2 = new THREE.Mesh(tailGeo, tailMat);
+                    const tail2 = new THREE.Mesh(tailGeo, mats.phospholipid.tail);
                     tail2.position.set(0.15, isTop ? 0.6 : -0.6, 0);
                     tail2.rotation.x = (Math.random() - 0.5) * 0.2;
                     tail2.userData.wiggleSpeed = Math.random() * 2 + 1;
                     pGroup.add(tail2);
 
                     pGroup.position.set(x, 0, z);
-                    
-                    // Interaction Data
-                    head.userData = { type: 'phospholipid', parent: pGroup };
-                    objectsRef.current.push(head);
-                    phospholipids.push({ group: pGroup, tails: [tail1, tail2] });
-                    
+                    phospholipidsRef.current.push({ group: pGroup, tails: [tail1, tail2] });
                     group.add(pGroup);
                 };
 
-                // Grid Generation
+                // Grid
                 const size = 14;
                 const spacing = 1.2;
-                
-                // Special component locations
                 const specialLocs = [
                     { x: 2, z: 2, type: 'channel' },
                     { x: -3, z: -2, type: 'carrier' },
@@ -198,65 +195,66 @@
                         const posX = x * spacing;
                         const posZ = z * spacing;
                         
-                        // Check if this spot is reserved for protein
+                        // Check special locations
                         const special = specialLocs.find(loc => Math.abs(loc.x - x) < 1 && Math.abs(loc.z - z) < 1);
-                        
-                        if (special) continue; // Skip phospholipid here
+                        if (special) continue; 
 
-                        createPhospholipid(posX, posZ, true); // Top Layer
-                        createPhospholipid(posX, posZ, false); // Bottom Layer
+                        createPhospholipid(posX, posZ, true); 
+                        createPhospholipid(posX, posZ, false); 
 
-                        // Randomly add Cholesterol
+                        // Cholesterol (Random)
                         if (Math.random() < 0.1) {
-                            const chol = new THREE.Mesh(cholGeo, cholMat);
+                            const chol = new THREE.Mesh(cholGeo, mats.cholesterol);
                             chol.position.set(posX + (Math.random()-0.5)*0.5, 0, posZ + (Math.random()-0.5)*0.5);
                             chol.rotation.z = Math.PI / 6;
                             chol.userData = { type: 'cholesterol' };
-                            objectsRef.current.push(chol);
+                            objects.push(chol);
                             group.add(chol);
                         }
                     }
                 }
 
-                // Add Proteins
                 // 1. Channel Protein
                 const channelGeo = new THREE.CylinderGeometry(1.2, 1.2, 4, 32, 1, true);
-                const channel = new THREE.Mesh(channelGeo, channelMat);
+                const channel = new THREE.Mesh(channelGeo, mats.channel);
                 channel.position.set(specialLocs[0].x * spacing, 0, specialLocs[0].z * spacing);
                 channel.userData = { type: 'channel' };
-                objectsRef.current.push(channel);
+                objects.push(channel);
                 group.add(channel);
 
                 // 2. Carrier Protein
                 const carrierGeo = new THREE.BoxGeometry(2, 3.5, 2);
-                const carrier = new THREE.Mesh(carrierGeo, carrierMat);
+                const carrier = new THREE.Mesh(carrierGeo, mats.carrier);
                 carrier.position.set(specialLocs[1].x * spacing, 0, specialLocs[1].z * spacing);
                 carrier.userData = { type: 'carrier' };
-                objectsRef.current.push(carrier);
+                objects.push(carrier);
                 group.add(carrier);
 
                 // 3. Glycoprotein
-                // Protein part
-                const gpBase = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), glycoMat);
-                gpBase.position.set(specialLocs[2].x * spacing, 0, specialLocs[2].z * spacing);
+                const gpGroup = new THREE.Group();
+                const gpBase = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), mats.glycoprotein.base);
                 gpBase.scale.y = 1.5;
                 gpBase.userData = { type: 'glycoprotein' };
-                objectsRef.current.push(gpBase);
-                group.add(gpBase);
-                // Sugar chain (Antenna)
+                gpGroup.add(gpBase);
+                objects.push(gpBase); // Raycast target
+
                 const chainGroup = new THREE.Group();
-                chainGroup.position.copy(gpBase.position);
                 chainGroup.position.y += 2;
                 for(let i=0; i<5; i++) {
-                    const sugar = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3), new THREE.MeshBasicMaterial({color:0xffffff}));
+                    const sugar = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3), mats.glycoprotein.sugar);
                     sugar.position.set(Math.sin(i)*0.5, i*0.6, Math.cos(i)*0.5);
+                    // Make sure sugar is not raycasted or if it is, it returns glycoprotein type
+                    sugar.userData = { type: 'glycoprotein' }; 
                     chainGroup.add(sugar);
+                    objects.push(sugar);
                 }
-                group.add(chainGroup);
+                gpGroup.add(chainGroup);
+                gpGroup.position.set(specialLocs[2].x * spacing, 0, specialLocs[2].z * spacing);
+                group.add(gpGroup);
 
                 scene.add(group);
 
-                // Interaction Raycaster
+                // Raycaster
                 const raycaster = new THREE.Raycaster();
                 const mouse = new THREE.Vector2();
 
@@ -266,7 +264,7 @@
                     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
                     raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects(objectsRef.current);
+                    const intersects = raycaster.intersectObjects(objects);
 
                     if (intersects.length > 0) {
                         const type = intersects[0].object.userData.type;
@@ -276,17 +274,15 @@
 
                 renderer.domElement.addEventListener('click', onMouseClick);
 
-                // Animation
+                // Animation Loop
                 let frameId;
                 const animate = () => {
                     frameId = requestAnimationFrame(animate);
                     const time = Date.now() * 0.002;
 
-                    // Animate Phospholipids (Fluidity)
-                    phospholipids.forEach((p, i) => {
-                        // Bobbing
+                    // Wiggle
+                    phospholipidsRef.current.forEach((p, i) => {
                         p.group.position.y += Math.sin(time + i) * 0.002;
-                        // Tail wiggle
                         p.tails.forEach(tail => {
                             tail.rotation.z = Math.sin(time * tail.userData.wiggleSpeed) * 0.1;
                         });
@@ -297,7 +293,7 @@
                 };
                 animate();
 
-                // Cleanup
+                // Resize
                 const handleResize = () => {
                     if (!mountRef.current) return;
                     const w = mountRef.current.clientWidth;
@@ -315,10 +311,62 @@
                     if (mountRef.current && renderer.domElement) {
                         mountRef.current.removeChild(renderer.domElement);
                     }
-                    // Dispose logic...
-                    geometry.dispose(); // Clean up default geometry just in case
+                    renderer.dispose();
                 };
             }, []); // Run once
+
+            // --- EFFECT: Handle Selection Highlighting ---
+            useEffect(() => {
+                const mats = materialsRef.current;
+                if (!mats) return;
+
+                // Helper to set material state
+                const setMatState = (mat, isSelected, isActiveMode) => {
+                    if (!isActiveMode) {
+                        // Reset to default
+                        mat.transparent = false; 
+                        mat.opacity = 1;
+                        mat.emissive.setHex(0x000000);
+                        return;
+                    }
+                    
+                    if (isSelected) {
+                        // Highlight
+                        mat.transparent = false;
+                        mat.opacity = 1;
+                        mat.emissive.setHex(0x333333); // Slight glow
+                    } else {
+                        // Dim
+                        mat.transparent = true;
+                        mat.opacity = 0.15;
+                        mat.emissive.setHex(0x000000);
+                    }
+                };
+
+                // Apply to all materials
+                const active = !!selectedPart;
+
+                // Phospholipid
+                const isPL = selectedPart === 'phospholipid';
+                setMatState(mats.phospholipid.head, isPL, active);
+                setMatState(mats.phospholipid.tail, isPL, active);
+
+                // Proteins
+                setMatState(mats.channel, selectedPart === 'channel', active);
+                // Channel is transparent by default, handle carefully
+                if (!active) { mats.channel.transparent = true; mats.channel.opacity = 0.9; }
+
+                setMatState(mats.carrier, selectedPart === 'carrier', active);
+                
+                // Glycoprotein
+                const isGP = selectedPart === 'glycoprotein';
+                setMatState(mats.glycoprotein.base, isGP, active);
+                setMatState(mats.glycoprotein.sugar, isGP, active);
+                
+                // Cholesterol
+                setMatState(mats.cholesterol, selectedPart === 'cholesterol', active);
+
+            }, [selectedPart]);
 
             return <div ref={mountRef} className="w-full h-full cursor-pointer" title="Click on components to identify" />;
         };
@@ -346,14 +394,14 @@
                             {Object.entries(COMPONENTS).map(([key, comp]) => (
                                 <button 
                                     key={key}
-                                    onClick={() => setSelectedKey(key)}
+                                    onClick={() => setSelectedKey(selectedKey === key ? null : key)} // Toggle
                                     className={`w-full text-left p-3 rounded-xl border transition-all flex items-center gap-3
                                         ${selectedKey === key 
-                                            ? 'bg-slate-800 border-cyan-500 ring-1 ring-cyan-500/50' 
+                                            ? 'bg-slate-800 border-cyan-500 ring-1 ring-cyan-500/50 shadow-lg' 
                                             : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'}
                                     `}
                                 >
-                                    <div className="w-3 h-3 rounded-full" style={{background: comp.color}}></div>
+                                    <div className="w-3 h-3 rounded-full border border-white/10" style={{background: comp.color}}></div>
                                     <span className="text-sm font-bold">{comp.name.split(' (')[0]}</span>
                                 </button>
                             ))}
@@ -363,7 +411,7 @@
                                     <Icon name="mouse-pointer-2" size={14} /> Interactive
                                 </div>
                                 <p className="text-xs text-slate-300 leading-relaxed">
-                                    Click on any structure in the 3D model to identify it and learn its function. 
+                                    Click on any structure in the 3D model or the list to highlight it. 
                                     Use mouse to rotate and zoom.
                                 </p>
                             </div>
@@ -374,12 +422,12 @@
                     <div className="flex-1 relative bg-[#020617] overflow-hidden flex flex-col">
                         
                         <div className="flex-1 relative">
-                            <MembraneScene onSelect={setSelectedKey} />
+                            <MembraneScene selectedPart={selectedKey} onSelect={setSelectedKey} />
                             
                             <div className="absolute top-6 left-6 pointer-events-none">
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 bg-cyan-400 rounded-full animate-ping"></div>
-                                    <span className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-widest">Live Simulation</span>
+                                    <span className="text-cyan-400 font-mono text-sm font-bold uppercase tracking-widest">LIVE SIMULATION</span>
                                 </div>
                             </div>
                         </div>
@@ -406,7 +454,7 @@
                             </div>
                         ) : (
                             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-500 text-sm bg-black/30 px-4 py-2 rounded-full backdrop-blur border border-white/10 pointer-events-none">
-                                Click components to explore
+                                Select a component to highlight
                             </div>
                         )}
 
