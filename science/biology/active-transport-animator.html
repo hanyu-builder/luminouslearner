@@ -194,11 +194,12 @@
                     if (isRunning && state.atp > 0) {
                         if (state.pumpState === 'idle') {
                             // Look for particles near the top opening
-                            // Must be 'out' particle
+                            // Must be 'out' particle and reasonably close
+                            // INCREASED CAPTURE RANGE to ensure it works visually
                             const candidate = state.particles.find(p => 
                                 p.location === 'out' && 
-                                Math.abs(p.x - pumpX) < 30 && 
-                                Math.abs(p.y - (MEMBRANE_Y - 40)) < 20
+                                Math.abs(p.x - pumpX) < 60 && 
+                                Math.abs(p.y - (MEMBRANE_Y - 40)) < 40
                             );
                             
                             if (candidate) {
@@ -212,11 +213,12 @@
                                 const tp = state.targetParticle;
                                 const dx = pumpX - tp.x;
                                 const dy = MEMBRANE_Y - tp.y; // Target center
-                                tp.x += dx * 0.1;
-                                tp.y += dy * 0.1;
+                                // STRONG pull
+                                tp.x += dx * 0.2;
+                                tp.y += dy * 0.2;
                                 tp.vx = 0; tp.vy = 0;
 
-                                if (Math.abs(dy) < 2) {
+                                if (Math.abs(dy) < 5) {
                                     // Bound! Consume ATP
                                     state.pumpState = 'pumping';
                                     state.atp = Math.max(0, state.atp - 5);
@@ -239,8 +241,8 @@
                             // Push particle out to the bottom (Inside)
                             if (state.targetParticle) {
                                 state.targetParticle.location = 'in';
-                                state.targetParticle.vy = 2; // Shoot down
-                                state.targetParticle.y += 2; // Ensure it clears the center
+                                state.targetParticle.vy = 4; // Shoot down faster
+                                state.targetParticle.y += 5; // Ensure it clears the center
                             }
                             state.targetParticle = null;
                             state.pumpState = 'resetting';
