@@ -90,6 +90,19 @@
                 // Animation target
                 let currentFactor = 1.0;
 
+                // Helper for rounded rectangle (polyfilled for older browsers)
+                const drawRoundRect = (ctx, x, y, w, h, r) => {
+                    if (ctx.roundRect) {
+                        ctx.roundRect(x, y, w, h, r);
+                    } else {
+                        ctx.moveTo(x + r, y);
+                        ctx.arcTo(x + w, y, x + w, y + h, r);
+                        ctx.arcTo(x + w, y + h, x, y + h, r);
+                        ctx.arcTo(x, y + h, x, y, r);
+                        ctx.arcTo(x, y, x + w, y, r);
+                    }
+                };
+
                 const render = () => {
                     const width = canvas.width;
                     const height = canvas.height;
@@ -129,18 +142,10 @@
                     ctx.strokeStyle = "#166534"; // Dark Green
                     ctx.fillStyle = "transparent";
                     ctx.beginPath();
-                    ctx.roundRect(centerX - wallW/2, centerY - wallH/2, wallW, wallH, 20);
+                    drawRoundRect(ctx, centerX - wallW/2, centerY - wallH/2, wallW, wallH, 20);
                     ctx.stroke();
 
                     // Draw Protoplast (Membrane + Cytoplasm)
-                    // Changes size based on currentFactor
-                    // If Turgid (>1.0): Pushes against wall. We simulate this by just filling the wall fully and maybe slightly bulging corners visual? 
-                    // Actually, wall is rigid. So visually, Turgid looks same as Flaccid regarding outline, BUT membrane presses hard.
-                    // For visualization: 
-                    // - Turgid: Fills wall completely, bright green.
-                    // - Flaccid: Fills wall but 'relaxed'.
-                    // - Plasmolysed: Membrane shrinks away from wall.
-
                     ctx.save();
                     ctx.translate(centerX, centerY);
 
@@ -158,12 +163,11 @@
                         ctx.lineWidth = 2;
                         
                         ctx.beginPath();
-                        // Make it look organic/rounded when shrinking
                         ctx.ellipse(0, 0, membraneW/2, membraneH/2, 0, 0, Math.PI*2);
                         ctx.fill();
                         ctx.stroke();
                         
-                        // Connectivity strands (Hechtian strands) - visual detail
+                        // Connectivity strands (Hechtian strands)
                         if (currentFactor < 0.9) {
                             ctx.strokeStyle = "#15803d";
                             ctx.lineWidth = 1;
@@ -176,24 +180,19 @@
                             ctx.stroke();
                             ctx.globalAlpha = 1.0;
                         }
-                        
-                        // Fill space between wall and membrane with external solution color
-                        // (Complex to clip properly in simple canvas, simplified: Background is already drawn)
 
                     } else {
                         // Turgid / Flaccid
-                        // Fills the space
-                        ctx.fillStyle = `rgba(134, 239, 172, ${Math.min(1, currentFactor)})`; // Brighter when turgid
+                        ctx.fillStyle = `rgba(134, 239, 172, ${Math.min(1, currentFactor)})`; 
                         ctx.beginPath();
-                        ctx.roundRect(-membraneW/2, -membraneH/2, membraneW, membraneH, 15);
+                        drawRoundRect(ctx, -membraneW/2, -membraneH/2, membraneW, membraneH, 15);
                         ctx.fill();
                         
                         // Pressure Arrows (Turgor Pressure)
                         if (currentFactor > 1.05) {
-                            const p = (currentFactor - 1) * 3; // Intensity
-                            ctx.strokeStyle = "#ef4444"; // Red arrows for pressure
+                            const p = (currentFactor - 1) * 3; 
+                            ctx.strokeStyle = "#ef4444";
                             ctx.lineWidth = 2;
-                            // Outward arrows
                             drawArrow(ctx, 0, 0, 0, -membraneH/2 - 10*p);
                             drawArrow(ctx, 0, 0, 0, membraneH/2 + 10*p);
                             drawArrow(ctx, 0, 0, -membraneW/2 - 10*p, 0);
@@ -201,9 +200,8 @@
                         }
                     }
 
-                    // Draw Vacuole (Inside Protoplast)
-                    const vacScale = currentFactor * 0.7;
-                    ctx.fillStyle = "#ecfccb"; // Pale vacuole
+                    // Draw Vacuole
+                    ctx.fillStyle = "#ecfccb"; 
                     ctx.beginPath();
                     ctx.ellipse(0, 0, (membraneW/2)*0.7, (membraneH/2)*0.7, 0, 0, Math.PI*2);
                     ctx.fill();
@@ -218,14 +216,14 @@
                     ctx.restore();
                     
                     if (Math.abs(concentration - 1.0) > 0.2) {
-                        const is In = concentration < 1.0;
+                        const isIn = concentration < 1.0; // FIXED: Removed space
                         const arrowColor = "#3b82f6";
                         ctx.strokeStyle = arrowColor;
                         ctx.fillStyle = arrowColor;
                         ctx.lineWidth = 3;
                         
                         // Draw big arrows outside cell
-                        if (is In) {
+                        if (isIn) {
                             // Water IN
                             drawBigArrow(ctx, centerX - 200, centerY, centerX - 160, centerY);
                             drawBigArrow(ctx, centerX + 200, centerY, centerX + 160, centerY);
@@ -234,16 +232,18 @@
                             drawBigArrow(ctx, centerX - 160, centerY, centerX - 200, centerY);
                             drawBigArrow(ctx, centerX + 160, centerY, centerX + 200, centerY);
                         }
-                        ctx.fillText(is In ? "Water Enter" : "Water Leave", centerX - 200, centerY - 20);
+                        // FIXED: Updated text usage
+                        ctx.textAlign = "center";
+                        ctx.font = "14px monospace";
+                        ctx.fillText(isIn ? "Water Enters" : "Water Leaves", centerX, centerY - 150);
                     }
                     
                     animationId = requestAnimationFrame(render);
                 };
                 
                 const drawArrow = (ctx, x1, y1, x2, y2) => {
-                    // Simple line for pressure
                     ctx.beginPath();
-                    ctx.moveTo(x2, y2); // Just tip position for visualization
+                    ctx.moveTo(x2, y2); 
                     ctx.arc(x2, y2, 2, 0, Math.PI*2);
                     ctx.stroke();
                 };
