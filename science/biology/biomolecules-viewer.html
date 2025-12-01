@@ -84,7 +84,7 @@
                     { el: 'O', x: 1, y: 1.5, z: -1.7 }, { el: 'O', x: -1, y: -1.5, z: -1.7 },
                     { el: 'O', x: -4, y: 1.5, z: 0 }
                 ],
-                bonds: [[0,1], [1,2], [2,3], [3,4], [4,5], [5,0], [4,6], [0,7], [1,8], [2,9], [3,10], [6,11]] // Indices need to match carefully, this is approx visual
+                bonds: [[0,1], [1,2], [2,3], [3,4], [4,5], [5,0], [4,6], [0,7], [1,8], [2,9], [3,10], [6,11]] 
             },
             triglyceride: {
                 name: 'Triglyceride',
@@ -253,7 +253,7 @@
                     }
                 } else if (data.atoms) {
                     // Static Definition
-                    const meshes = data.atoms.map(a => createAtom(a.el, a.x, a.y, a.z));
+                    data.atoms.forEach(a => createAtom(a.el, a.x, a.y, a.z));
                     
                     if (data.bonds) {
                         data.bonds.forEach(pair => {
@@ -304,7 +304,19 @@
                     if (container && renderer.domElement) {
                         container.removeChild(renderer.domElement);
                     }
-                    geometry.dispose(); // Implicit clean
+                    // Correctly iterate through scene children to dispose of geometries and materials
+                    scene.traverse((object) => {
+                        if (object.isMesh) {
+                            if (object.geometry) object.geometry.dispose();
+                            if (object.material) {
+                                if (Array.isArray(object.material)) {
+                                    object.material.forEach(mat => mat.dispose());
+                                } else {
+                                    object.material.dispose();
+                                }
+                            }
+                        }
+                    });
                 };
             }, [moleculeId]);
 
