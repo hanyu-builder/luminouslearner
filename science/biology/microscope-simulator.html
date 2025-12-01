@@ -34,6 +34,12 @@
         .knob {
             transition: transform 0.1s linear;
         }
+        
+        /* Scrollbar styling for sidebar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body>
@@ -62,7 +68,6 @@
         };
 
         // --- DATA: Samples ---
-        // We use CSS patterns or simplified SVGs to represent samples at different zooms
         const SAMPLES = [
             { 
                 id: 'onion', name: 'Onion Epidermis (洋蔥表皮)', 
@@ -122,24 +127,16 @@
             const totalMag = currentObj.mag * 10; // Eyepiece is 10x
             
             // Focus Logic:
-            // Blur amount depends on distance from optimal Z (which is 0).
-            // Higher magnification has shallower depth of field (blur increases faster).
-            // Formula: blur = |Z| * MagFactor
             const blurFactor = (currentObj.mag / 4); // 4x -> 1, 100x -> 25
             const blurAmount = Math.abs(stageZ) * 0.2 * blurFactor;
             const isFocused = blurAmount < 2;
 
             // Brightness Logic:
-            // Higher mag = Darker image (light spread over larger area).
-            // Iris open = Brighter. Light source = Brighter.
-            // Base brightness drops with mag.
             const magDimming = 1 - (objectiveIdx * 0.2); // 1.0, 0.8, 0.6, 0.4
             const effectiveBrightness = (lightIntensity / 100) * (iris / 100) * magDimming * 2; // Factor to boost
             const brightnessFilter = `brightness(${effectiveBrightness})`;
 
             // Viewport Transform
-            // Scale content based on magnification
-            // Start scale 1 at 4x. 
             const visualScale = currentObj.mag / 4; 
 
             // Handlers
@@ -161,15 +158,15 @@
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
                     
                     {/* Sidebar Controls */}
-                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
-                        <div className="p-6 border-b border-slate-800">
+                    <div className="w-full md:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800 shrink-0">
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 <Icon name="microscope" className="text-cyan-400" /> Microscope Sim
                             </h1>
                             <p className="text-xs text-slate-400 mt-1">Magnification & Resolution</p>
                         </div>
 
-                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar pb-20">
                             
                             {/* 1. Select Sample */}
                             <div className="space-y-2">
@@ -199,10 +196,10 @@
                                             key={obj.mag}
                                             onClick={() => setObjectiveIdx(i)}
                                             className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all
-                                                ${objectiveIdx === i ? `${obj.ring} bg-slate-800 text-white scale-110 shadow-lg` : 'border-slate-700 text-slate-500 hover:border-slate-500'}
+                                                ${objectiveIdx === i ? `${obj.ring} bg-slate-800 text-white scale-105 shadow-lg` : 'border-slate-700 text-slate-500 hover:border-slate-500'}
                                             `}
                                         >
-                                            <div className={`w-8 h-8 rounded-full ${obj.color} mb-1 opacity-80`}></div>
+                                            <div className={`w-6 h-6 rounded-full ${obj.color} mb-1 opacity-80`}></div>
                                             <span className="text-[10px] font-bold">{obj.mag}x</span>
                                         </button>
                                     ))}
@@ -227,6 +224,47 @@
                                         <span className="font-mono">{iris}%</span>
                                     </div>
                                     <input type="range" min="0" max="100" value={iris} onChange={(e) => setIris(parseInt(e.target.value))} className="w-full accent-slate-400" />
+                                </div>
+                            </div>
+
+                            {/* 4. Focus Controls (MOVED HERE) */}
+                            <div className="space-y-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block text-center">Focus Adjustment</label>
+                                
+                                <div className="flex justify-center gap-6 items-start">
+                                    {/* Coarse */}
+                                    <div className="flex flex-col items-center gap-1">
+                                        <button onClick={() => handleCoarse(-1)} className="p-3 bg-slate-700 rounded-t-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-b border-slate-800 w-full flex justify-center"><Icon name="chevron-up" size={20}/></button>
+                                        <div className="w-20 h-12 bg-gradient-to-b from-slate-700 to-slate-800 border-x-4 border-slate-600 flex items-center justify-center shadow-inner">
+                                            <span className="text-[10px] font-bold text-slate-300">COARSE</span>
+                                        </div>
+                                        <button onClick={() => handleCoarse(1)} className="p-3 bg-slate-700 rounded-b-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-t border-slate-800 w-full flex justify-center"><Icon name="chevron-down" size={20}/></button>
+                                    </div>
+
+                                    {/* Fine */}
+                                    <div className="flex flex-col items-center gap-1 mt-2">
+                                        <button onClick={() => handleFine(-1)} className="p-2 bg-slate-700 rounded-t-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-b border-slate-800 w-full flex justify-center"><Icon name="chevron-up" size={14}/></button>
+                                        <div className="w-14 h-8 bg-gradient-to-b from-slate-700 to-slate-800 border-x-2 border-slate-600 flex items-center justify-center shadow-inner">
+                                            <span className="text-[8px] font-bold text-slate-300">FINE</span>
+                                        </div>
+                                        <button onClick={() => handleFine(1)} className="p-2 bg-slate-700 rounded-b-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-t border-slate-800 w-full flex justify-center"><Icon name="chevron-down" size={14}/></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 5. Stage XY Controls (MOVED HERE) */}
+                            <div className="space-y-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-col items-center">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Stage Position</label>
+                                <div className="grid grid-cols-3 gap-1">
+                                    <div></div>
+                                    <button onClick={() => handleMove(0, -5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600 active:bg-slate-500"><Icon name="arrow-up" size={16}/></button>
+                                    <div></div>
+                                    <button onClick={() => handleMove(-5, 0)} className="p-2 bg-slate-700 rounded hover:bg-slate-600 active:bg-slate-500"><Icon name="arrow-left" size={16}/></button>
+                                    <div className="w-8 h-8 bg-slate-900 rounded flex items-center justify-center border border-slate-700"><Icon name="move" size={14} className="text-slate-500"/></div>
+                                    <button onClick={() => handleMove(5, 0)} className="p-2 bg-slate-700 rounded hover:bg-slate-600 active:bg-slate-500"><Icon name="arrow-right" size={16}/></button>
+                                    <div></div>
+                                    <button onClick={() => handleMove(0, 5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600 active:bg-slate-500"><Icon name="arrow-down" size={16}/></button>
+                                    <div></div>
                                 </div>
                             </div>
 
@@ -283,55 +321,12 @@
 
                         </div>
 
-                        {/* Stage Controls (Knobs) */}
-                        <div className="absolute bottom-8 right-8 flex flex-col gap-6 items-center">
-                            
-                            {/* Focus Knobs */}
-                            <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center gap-2">
-                                <div className="text-xs font-bold text-slate-500 uppercase">Focus</div>
-                                
-                                <div className="flex gap-4 items-center">
-                                    {/* Coarse */}
-                                    <div className="flex flex-col items-center gap-1">
-                                        <button onClick={() => handleCoarse(-1)} className="p-3 bg-slate-700 rounded-t-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-b border-slate-800"><Icon name="chevron-up"/></button>
-                                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 border-4 border-slate-500 flex items-center justify-center shadow-inner">
-                                            <span className="text-[10px] font-bold text-slate-300">COARSE</span>
-                                        </div>
-                                        <button onClick={() => handleCoarse(1)} className="p-3 bg-slate-700 rounded-b-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-t border-slate-800"><Icon name="chevron-down"/></button>
-                                    </div>
-
-                                    {/* Fine */}
-                                    <div className="flex flex-col items-center gap-1">
-                                        <button onClick={() => handleFine(-1)} className="p-2 bg-slate-700 rounded-t-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-b border-slate-800"><Icon name="chevron-up" size={16}/></button>
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 border-2 border-slate-500 flex items-center justify-center shadow-inner">
-                                            <span className="text-[8px] font-bold text-slate-300">FINE</span>
-                                        </div>
-                                        <button onClick={() => handleFine(1)} className="p-2 bg-slate-700 rounded-b-lg hover:bg-slate-600 active:bg-slate-500 transition-colors border-t border-slate-800"><Icon name="chevron-down" size={16}/></button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Stage XY Controls */}
-                            <div className="bg-slate-800 p-3 rounded-full border border-slate-700 shadow-xl grid grid-cols-3 gap-1">
-                                <div></div>
-                                <button onClick={() => handleMove(0, -5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600"><Icon name="arrow-up" size={16}/></button>
-                                <div></div>
-                                <button onClick={() => handleMove(-5, 0)} className="p-2 bg-slate-700 rounded hover:bg-slate-600"><Icon name="arrow-left" size={16}/></button>
-                                <div className="w-8 h-8 bg-slate-900 rounded flex items-center justify-center"><Icon name="move" size={14} className="text-slate-500"/></div>
-                                <button onClick={() => handleMove(5, 0)} className="p-2 bg-slate-700 rounded hover:bg-slate-600"><Icon name="arrow-right" size={16}/></button>
-                                <div></div>
-                                <button onClick={() => handleMove(0, 5)} className="p-2 bg-slate-700 rounded hover:bg-slate-600"><Icon name="arrow-down" size={16}/></button>
-                                <div></div>
-                            </div>
-
-                        </div>
-
-                        {/* Status Overlay */}
-                        <div className="absolute top-6 left-6 bg-black/50 backdrop-blur px-4 py-2 rounded-xl border border-white/10 text-xs font-mono text-white">
-                            <div>Magnification: <span className="text-cyan-400">{totalMag}x</span></div>
-                            <div className="mt-1 flex items-center gap-2">
+                        {/* Status Overlay (Moved to be centered or cleaner) */}
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur px-6 py-2 rounded-full border border-white/10 text-xs font-mono text-white flex gap-6 shadow-lg">
+                            <div>Magnification: <span className="text-cyan-400 font-bold">{totalMag}x</span></div>
+                            <div className="flex items-center gap-2">
                                 Focus: 
-                                <div className="w-20 h-2 bg-slate-700 rounded-full overflow-hidden">
+                                <div className="w-20 h-1.5 bg-slate-700 rounded-full overflow-hidden">
                                     <div 
                                         className={`h-full transition-colors duration-300 ${isFocused ? 'bg-emerald-500' : 'bg-red-500'}`} 
                                         style={{ width: `${Math.max(0, 100 - blurAmount*10)}%` }}
