@@ -62,19 +62,19 @@
         const CANVAS_WIDTH = 600;
         const CANVAS_HEIGHT = 400;
         const MEMBRANE_Y = 200;
+        const PUMP_X = CANVAS_WIDTH / 2;
         
         const App = () => {
             const canvasRef = useRef(null);
             
-            // UI State (React State for rendering UI)
+            // UI State
             const [uiAtp, setUiAtp] = useState(100);
             const [concOut, setConcOut] = useState(10); 
             const [concIn, setConcIn] = useState(40);
             const [isRunning, setIsRunning] = useState(false);
             const [history, setHistory] = useState([]);
 
-            // Simulation State (Refs for performance & stability)
-            // This ensures variables persist across renders without resetting
+            // Simulation State (Refs)
             const simRef = useRef({
                 atp: 100,
                 pumpState: 'idle', // idle, binding, pumping, releasing, resetting
@@ -84,22 +84,22 @@
                 atpEffects: []
             });
 
-            // Initialize Particles
+            // Initialize
             const initParticles = () => {
                 const p = [];
                 let idCounter = 0;
-                // Outside (Top) - Low Conc
+                // Outside (Top)
                 for(let i=0; i<concOut; i++) {
                     p.push({
                         id: idCounter++,
                         x: Math.random() * CANVAS_WIDTH,
-                        y: Math.random() * (MEMBRANE_Y - 60), // Keep clear of pump initially
+                        y: Math.random() * (MEMBRANE_Y - 60),
                         vx: (Math.random() - 0.5),
                         vy: (Math.random() - 0.5),
                         location: 'out'
                     });
                 }
-                // Inside (Bottom) - High Conc
+                // Inside (Bottom)
                 for(let i=0; i<concIn; i++) {
                     p.push({
                         id: idCounter++,
@@ -114,11 +114,11 @@
                 simRef.current.atp = 100;
                 simRef.current.pumpState = 'idle';
                 simRef.current.targetParticle = null;
+                simRef.current.atpEffects = [];
                 setUiAtp(100);
                 setHistory([]);
             };
 
-            // Initial Setup
             useEffect(() => {
                 initParticles();
             }, []);
@@ -137,69 +137,60 @@
                 let frame = 0;
                 
                 const render = () => {
-                    // Access mutable state directly
                     const state = simRef.current;
 
                     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
                     // 1. Draw Membrane
-                    ctx.fillStyle = "#cbd5e1"; // Membrane Core
+                    ctx.fillStyle = "#cbd5e1"; 
                     ctx.fillRect(0, MEMBRANE_Y - 20, CANVAS_WIDTH, 40);
                     
-                    // Phospholipid Heads
-                    ctx.fillStyle = "#fca5a5"; // Pink
+                    ctx.fillStyle = "#fca5a5"; 
                     for(let i=0; i<CANVAS_WIDTH; i+=20) {
-                        if (Math.abs(i - CANVAS_WIDTH/2) > 40) { // Don't draw over pump
+                        if (Math.abs(i - PUMP_X) > 40) {
                             ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y - 25, 8, 0, Math.PI*2); ctx.fill();
                             ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y + 25, 8, 0, Math.PI*2); ctx.fill();
                         }
                     }
                     
-                    // 2. Draw Pump (Carrier Protein)
-                    const pumpX = CANVAS_WIDTH / 2;
-                    ctx.fillStyle = "#34d399"; // Green
+                    // 2. Draw Pump
+                    ctx.fillStyle = "#34d399"; 
 
-                    // Determine shape based on state
-                    // V-shape (Open Top) or A-shape (Open Bottom)
+                    // Determine Shape
                     let gapTop = 25;
                     let gapBot = 5;
 
                     if (state.pumpState === 'pumping' || state.pumpState === 'releasing' || state.pumpState === 'resetting') {
-                        // Conformational Change: Open to Inside
                         gapTop = 5;
                         gapBot = 25;
                     }
 
-                    // Animation transition for smooth visual (Optional, instant is clearer for logic)
-                    
                     // Left Arm
                     ctx.beginPath();
-                    ctx.moveTo(pumpX - 40, MEMBRANE_Y - 40); // Top Outer
-                    ctx.lineTo(pumpX - 10 - gapTop, MEMBRANE_Y - 20); // Top Inner (Pore)
-                    ctx.lineTo(pumpX - 10 - gapBot, MEMBRANE_Y + 20); // Bot Inner (Pore)
-                    ctx.lineTo(pumpX - 40, MEMBRANE_Y + 40); // Bot Outer
+                    ctx.moveTo(PUMP_X - 40, MEMBRANE_Y - 40); 
+                    ctx.lineTo(PUMP_X - 10 - gapTop, MEMBRANE_Y - 20); 
+                    ctx.lineTo(PUMP_X - 10 - gapBot, MEMBRANE_Y + 20); 
+                    ctx.lineTo(PUMP_X - 40, MEMBRANE_Y + 40); 
                     ctx.closePath();
                     ctx.fill();
 
                     // Right Arm
                     ctx.beginPath();
-                    ctx.moveTo(pumpX + 40, MEMBRANE_Y - 40);
-                    ctx.lineTo(pumpX + 10 + gapTop, MEMBRANE_Y - 20);
-                    ctx.lineTo(pumpX + 10 + gapBot, MEMBRANE_Y + 20);
-                    ctx.lineTo(pumpX + 40, MEMBRANE_Y + 40);
+                    ctx.moveTo(PUMP_X + 40, MEMBRANE_Y - 40);
+                    ctx.lineTo(PUMP_X + 10 + gapTop, MEMBRANE_Y - 20);
+                    ctx.lineTo(PUMP_X + 10 + gapBot, MEMBRANE_Y + 20);
+                    ctx.lineTo(PUMP_X + 40, MEMBRANE_Y + 40);
                     ctx.closePath();
                     ctx.fill();
 
-                    // 3. Pump Logic
+                    // 3. Pump Logic (Continuous Loop)
                     if (isRunning && state.atp > 0) {
                         if (state.pumpState === 'idle') {
-                            // Look for particles near the top opening
-                            // Must be 'out' particle and reasonably close
-                            // INCREASED CAPTURE RANGE to ensure it works visually
+                            // Search for candidate
                             const candidate = state.particles.find(p => 
                                 p.location === 'out' && 
-                                Math.abs(p.x - pumpX) < 60 && 
-                                Math.abs(p.y - (MEMBRANE_Y - 40)) < 40
+                                Math.abs(p.x - PUMP_X) < 60 && 
+                                Math.abs(p.y - (MEMBRANE_Y - 40)) < 50
                             );
                             
                             if (candidate) {
@@ -208,41 +199,41 @@
                             }
                         } 
                         else if (state.pumpState === 'binding') {
-                            // Pull particle into center
                             if (state.targetParticle) {
                                 const tp = state.targetParticle;
-                                const dx = pumpX - tp.x;
-                                const dy = MEMBRANE_Y - tp.y; // Target center
-                                // STRONG pull
-                                tp.x += dx * 0.2;
-                                tp.y += dy * 0.2;
+                                const dx = PUMP_X - tp.x;
+                                const dy = MEMBRANE_Y - tp.y; 
+                                // Force pull to center
+                                tp.x += dx * 0.15;
+                                tp.y += dy * 0.15;
                                 tp.vx = 0; tp.vy = 0;
 
-                                if (Math.abs(dy) < 5) {
-                                    // Bound! Consume ATP
+                                if (Math.abs(dy) < 5 && Math.abs(dx) < 5) {
                                     state.pumpState = 'pumping';
-                                    state.atp = Math.max(0, state.atp - 5);
+                                    state.atp = Math.max(0, state.atp - 5); // Consume
                                     state.pumpTimer = 0;
-                                    state.atpEffects.push({x: pumpX + 50, y: MEMBRANE_Y, age: 0}); // Visual effect
+                                    state.atpEffects.push({x: PUMP_X + 60, y: MEMBRANE_Y - 10, age: 0}); 
                                 }
                             } else {
-                                state.pumpState = 'idle'; // Lost it
+                                state.pumpState = 'idle';
                             }
                         }
                         else if (state.pumpState === 'pumping') {
-                            // Protein Changes Shape (Visual handled by gap vars)
-                            // Wait a bit
+                            // Hold particle, change shape
                             state.pumpTimer++;
+                            if (state.targetParticle) {
+                                state.targetParticle.x = PUMP_X;
+                                state.targetParticle.y = MEMBRANE_Y;
+                            }
                             if (state.pumpTimer > 20) {
                                 state.pumpState = 'releasing';
                             }
                         }
                         else if (state.pumpState === 'releasing') {
-                            // Push particle out to the bottom (Inside)
                             if (state.targetParticle) {
                                 state.targetParticle.location = 'in';
-                                state.targetParticle.vy = 4; // Shoot down faster
-                                state.targetParticle.y += 5; // Ensure it clears the center
+                                state.targetParticle.vy = 3; // Shoot down
+                                state.targetParticle.y += 5; 
                             }
                             state.targetParticle = null;
                             state.pumpState = 'resetting';
@@ -251,77 +242,64 @@
                         else if (state.pumpState === 'resetting') {
                             state.pumpTimer++;
                             if (state.pumpTimer > 20) {
-                                state.pumpState = 'idle'; // Ready for next
+                                state.pumpState = 'idle'; // Loop back to idle
                             }
                         }
                     }
 
                     // 4. ATP Visuals
-                    state.atpEffects = state.atpEffects.filter(e => e.age < 30);
+                    state.atpEffects = state.atpEffects.filter(e => e.age < 40);
                     state.atpEffects.forEach(e => {
                         e.age++;
                         ctx.beginPath();
-                        ctx.arc(e.x, e.y - e.age, 5 + e.age/2, 0, Math.PI*2);
-                        ctx.fillStyle = `rgba(250, 204, 21, ${1 - e.age/30})`;
+                        ctx.arc(e.x, e.y - e.age * 0.5, 8 + e.age/3, 0, Math.PI*2);
+                        ctx.fillStyle = `rgba(250, 204, 21, ${1 - e.age/40})`;
                         ctx.fill();
-                        ctx.fillStyle = `rgba(255, 255, 255, ${1 - e.age/30})`;
-                        ctx.font = "bold 12px sans-serif";
-                        ctx.fillText("-ATP", e.x + 10, e.y - e.age);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${1 - e.age/40})`;
+                        ctx.font = "bold 14px sans-serif";
+                        ctx.fillText("-ATP", e.x + 15, e.y - e.age * 0.5);
                     });
 
-                    // 5. Particles Update & Draw
+                    // 5. Particles
                     let countIn = 0;
                     state.particles.forEach(p => {
-                        // Only move if not being held by pump
                         const isCaptured = (p === state.targetParticle);
                         
                         if (isRunning && !isCaptured) {
                             p.x += p.vx;
                             p.y += p.vy;
-
-                            // Random movement
+                            
+                            // Random walk
                             p.vx += (Math.random() - 0.5) * 0.2;
                             p.vy += (Math.random() - 0.5) * 0.2;
-                            
-                            // Friction/Limit
                             p.vx *= 0.95; p.vy *= 0.95;
 
-                            // Bounce Walls
+                            // Bounds
                             if (p.x < 5 || p.x > CANVAS_WIDTH - 5) p.vx *= -1;
                             if (p.y < 5 || p.y > CANVAS_HEIGHT - 5) p.vy *= -1;
 
-                            // Membrane Barrier (Impermeable except pump)
-                            // Top barrier
+                            // Membrane Barrier
                             if (p.location === 'out' && p.y > MEMBRANE_Y - 25) {
-                                // If not near pump center, bounce
-                                if (Math.abs(p.x - pumpX) > 20) {
-                                    p.y = MEMBRANE_Y - 25; p.vy *= -1;
-                                }
+                                if (Math.abs(p.x - PUMP_X) > 25) { p.y = MEMBRANE_Y - 25; p.vy *= -1; }
                             }
-                            // Bottom barrier
                             if (p.location === 'in' && p.y < MEMBRANE_Y + 25) {
-                                // If not near pump center, bounce
-                                if (Math.abs(p.x - pumpX) > 20) {
-                                    p.y = MEMBRANE_Y + 25; p.vy *= -1;
-                                }
+                                if (Math.abs(p.x - PUMP_X) > 25) { p.y = MEMBRANE_Y + 25; p.vy *= -1; }
                             }
                         }
 
-                        // Draw
                         ctx.beginPath();
                         ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-                        ctx.fillStyle = isCaptured ? "#fbbf24" : "#3b82f6"; // Yellow if captured
+                        ctx.fillStyle = isCaptured ? "#fbbf24" : "#3b82f6";
                         ctx.fill();
 
                         if (p.location === 'in') countIn++;
                     });
 
-                    // Sync UI (Throttled)
                     if (frame % 10 === 0) {
                         setUiAtp(state.atp);
                         setHistory(prev => {
                             const newData = [...prev, { time: frame, count: countIn }];
-                            if (newData.length > 50) newData.shift();
+                            if (newData.length > 60) newData.shift();
                             return newData;
                         });
                     }
@@ -332,7 +310,7 @@
 
                 render();
                 return () => cancelAnimationFrame(animationId);
-            }, [isRunning]); // Only recreate loop if run state toggles
+            }, [isRunning]);
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
