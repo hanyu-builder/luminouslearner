@@ -23,22 +23,12 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Pump Animation */
-        .pump-open-out { transform: scaleY(1); }
-        .pump-open-in { transform: scaleY(-1); }
-        
-        /* ATP Glow */
-        .atp-glow {
-            animation: glow 1.5s infinite alternate;
-        }
-        @keyframes glow {
-            from { filter: drop-shadow(0 0 2px #facc15); }
-            to { filter: drop-shadow(0 0 8px #facc15); }
-        }
-
-        /* Particle Move */
-        .moving-particle {
-            transition: all 0.5s ease-in-out;
+        /* ATP Flash */
+        .atp-flash { animation: flash 0.5s ease-out; }
+        @keyframes flash {
+            0% { opacity: 0; transform: scale(0.5); }
+            50% { opacity: 1; transform: scale(1.5); }
+            100% { opacity: 0; transform: scale(1); }
         }
     </style>
 </head>
@@ -68,31 +58,42 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- SIMULATION ENGINE ---
+        // --- SIMULATION CONFIG ---
         const CANVAS_WIDTH = 600;
         const CANVAS_HEIGHT = 400;
         const MEMBRANE_Y = 200;
         
         const App = () => {
             const canvasRef = useRef(null);
-            const [atpLevel, setAtpLevel] = useState(100); // 0-100
-            const [concOut, setConcOut] = useState(10); // Low conc (Outside)
-            const [concIn, setConcIn] = useState(50);   // High conc (Inside)
+            
+            // UI State (React State for rendering UI)
+            const [uiAtp, setUiAtp] = useState(100);
+            const [concOut, setConcOut] = useState(10); 
+            const [concIn, setConcIn] = useState(40);
             const [isRunning, setIsRunning] = useState(false);
-            const [pumpState, setPumpState] = useState('idle'); // idle, binding, pumping, resetting
-            
-            // Chart Data
             const [history, setHistory] = useState([]);
-            const particlesRef = useRef([]);
-            
-            // Initialize
+
+            // Simulation State (Refs for performance & stability)
+            // This ensures variables persist across renders without resetting
+            const simRef = useRef({
+                atp: 100,
+                pumpState: 'idle', // idle, binding, pumping, releasing, resetting
+                pumpTimer: 0,
+                targetParticle: null,
+                particles: [],
+                atpEffects: []
+            });
+
+            // Initialize Particles
             const initParticles = () => {
                 const p = [];
+                let idCounter = 0;
                 // Outside (Top) - Low Conc
                 for(let i=0; i<concOut; i++) {
                     p.push({
+                        id: idCounter++,
                         x: Math.random() * CANVAS_WIDTH,
-                        y: Math.random() * (MEMBRANE_Y - 40),
+                        y: Math.random() * (MEMBRANE_Y - 60), // Keep clear of pump initially
                         vx: (Math.random() - 0.5),
                         vy: (Math.random() - 0.5),
                         location: 'out'
@@ -101,22 +102,32 @@
                 // Inside (Bottom) - High Conc
                 for(let i=0; i<concIn; i++) {
                     p.push({
+                        id: idCounter++,
                         x: Math.random() * CANVAS_WIDTH,
-                        y: Math.random() * (CANVAS_HEIGHT - MEMBRANE_Y - 40) + MEMBRANE_Y + 40,
+                        y: Math.random() * (CANVAS_HEIGHT - MEMBRANE_Y - 60) + MEMBRANE_Y + 60,
                         vx: (Math.random() - 0.5),
                         vy: (Math.random() - 0.5),
                         location: 'in'
                     });
                 }
-                particlesRef.current = p;
+                simRef.current.particles = p;
+                simRef.current.atp = 100;
+                simRef.current.pumpState = 'idle';
+                simRef.current.targetParticle = null;
+                setUiAtp(100);
                 setHistory([]);
             };
 
+            // Initial Setup
             useEffect(() => {
                 initParticles();
-                setIsRunning(false);
-                setAtpLevel(100);
             }, []);
+
+            // Reset Handler
+            const handleReset = () => {
+                setIsRunning(false);
+                initParticles();
+            };
 
             // Animation Loop
             useEffect(() => {
@@ -125,140 +136,187 @@
                 let animationId;
                 let frame = 0;
                 
-                // Pump Logic Variables
-                let pumpTimer = 0;
-                let targetParticle = null; // The particle being pumped
-                
                 const render = () => {
+                    // Access mutable state directly
+                    const state = simRef.current;
+
                     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-                    // --- Draw Membrane ---
-                    ctx.fillStyle = "#e2e8f0"; // Membrane Core
+                    // 1. Draw Membrane
+                    ctx.fillStyle = "#cbd5e1"; // Membrane Core
                     ctx.fillRect(0, MEMBRANE_Y - 20, CANVAS_WIDTH, 40);
                     
                     // Phospholipid Heads
-                    ctx.fillStyle = "#fca5a5"; // Reddish
+                    ctx.fillStyle = "#fca5a5"; // Pink
                     for(let i=0; i<CANVAS_WIDTH; i+=20) {
-                        // Top layer
-                        ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y - 25, 8, 0, Math.PI*2); ctx.fill();
-                        // Bottom layer
-                        ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y + 25, 8, 0, Math.PI*2); ctx.fill();
+                        if (Math.abs(i - CANVAS_WIDTH/2) > 40) { // Don't draw over pump
+                            ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y - 25, 8, 0, Math.PI*2); ctx.fill();
+                            ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y + 25, 8, 0, Math.PI*2); ctx.fill();
+                        }
                     }
                     
-                    // --- Draw Pump (Carrier Protein) ---
+                    // 2. Draw Pump (Carrier Protein)
                     const pumpX = CANVAS_WIDTH / 2;
                     ctx.fillStyle = "#34d399"; // Green
-                    
-                    // Simple visualization of shape change
-                    // State: 'idle' (open out), 'binding' (particle in), 'pumping' (closed, opening in), 'release' (open in)
-                    // Wait, Active Transport usually pumps OUT or IN depending on type.
-                    // Let's simulate pumping from OUT (Low) to IN (High) -> Accumulation.
-                    
-                    // Default: Open to Outside (Top)
-                    let gapTop = 20;
-                    let gapBot = 2;
-                    
-                    if (pumpState === 'pumping' || pumpState === 'resetting') {
-                        // Open to Inside (Bottom)
-                        gapTop = 2;
-                        gapBot = 20;
+
+                    // Determine shape based on state
+                    // V-shape (Open Top) or A-shape (Open Bottom)
+                    let gapTop = 25;
+                    let gapBot = 5;
+
+                    if (state.pumpState === 'pumping' || state.pumpState === 'releasing' || state.pumpState === 'resetting') {
+                        // Conformational Change: Open to Inside
+                        gapTop = 5;
+                        gapBot = 25;
                     }
 
-                    // Left half of protein
+                    // Animation transition for smooth visual (Optional, instant is clearer for logic)
+                    
+                    // Left Arm
                     ctx.beginPath();
-                    ctx.moveTo(pumpX - 30, MEMBRANE_Y - 35);
-                    ctx.lineTo(pumpX - 10 - gapTop, MEMBRANE_Y); // Inner pinch
-                    ctx.lineTo(pumpX - 10 - gapBot, MEMBRANE_Y + 35);
-                    ctx.lineTo(pumpX - 50, MEMBRANE_Y + 35);
-                    ctx.lineTo(pumpX - 50, MEMBRANE_Y - 35);
+                    ctx.moveTo(pumpX - 40, MEMBRANE_Y - 40); // Top Outer
+                    ctx.lineTo(pumpX - 10 - gapTop, MEMBRANE_Y - 20); // Top Inner (Pore)
+                    ctx.lineTo(pumpX - 10 - gapBot, MEMBRANE_Y + 20); // Bot Inner (Pore)
+                    ctx.lineTo(pumpX - 40, MEMBRANE_Y + 40); // Bot Outer
+                    ctx.closePath();
                     ctx.fill();
 
-                    // Right half
+                    // Right Arm
                     ctx.beginPath();
-                    ctx.moveTo(pumpX + 30, MEMBRANE_Y - 35);
-                    ctx.lineTo(pumpX + 10 + gapTop, MEMBRANE_Y); 
-                    ctx.lineTo(pumpX + 10 + gapBot, MEMBRANE_Y + 35);
-                    ctx.lineTo(pumpX + 50, MEMBRANE_Y + 35);
-                    ctx.lineTo(pumpX + 50, MEMBRANE_Y - 35);
+                    ctx.moveTo(pumpX + 40, MEMBRANE_Y - 40);
+                    ctx.lineTo(pumpX + 10 + gapTop, MEMBRANE_Y - 20);
+                    ctx.lineTo(pumpX + 10 + gapBot, MEMBRANE_Y + 20);
+                    ctx.lineTo(pumpX + 40, MEMBRANE_Y + 40);
+                    ctx.closePath();
                     ctx.fill();
 
-                    // --- Pump Logic ---
-                    if (isRunning && atpLevel > 0) {
-                        if (pumpState === 'idle') {
-                            // Find a particle near the pump opening (Outside/Top)
-                            const candidates = particlesRef.current.filter(p => p.location === 'out' && Math.abs(p.x - pumpX) < 40 && p.y > MEMBRANE_Y - 60);
-                            if (candidates.length > 0) {
-                                targetParticle = candidates[0];
-                                setPumpState('binding');
+                    // 3. Pump Logic
+                    if (isRunning && state.atp > 0) {
+                        if (state.pumpState === 'idle') {
+                            // Look for particles near the top opening
+                            // Must be 'out' particle
+                            const candidate = state.particles.find(p => 
+                                p.location === 'out' && 
+                                Math.abs(p.x - pumpX) < 30 && 
+                                Math.abs(p.y - (MEMBRANE_Y - 40)) < 20
+                            );
+                            
+                            if (candidate) {
+                                state.targetParticle = candidate;
+                                state.pumpState = 'binding';
                             }
-                        } else if (pumpState === 'binding') {
-                            // Move particle into binding site
-                            if (targetParticle) {
-                                const dx = pumpX - targetParticle.x;
-                                const dy = MEMBRANE_Y - targetParticle.y;
-                                targetParticle.x += dx * 0.1;
-                                targetParticle.y += dy * 0.1;
-                                targetParticle.vx = 0; targetParticle.vy = 0;
-                                
+                        } 
+                        else if (state.pumpState === 'binding') {
+                            // Pull particle into center
+                            if (state.targetParticle) {
+                                const tp = state.targetParticle;
+                                const dx = pumpX - tp.x;
+                                const dy = MEMBRANE_Y - tp.y; // Target center
+                                tp.x += dx * 0.1;
+                                tp.y += dy * 0.1;
+                                tp.vx = 0; tp.vy = 0;
+
                                 if (Math.abs(dy) < 2) {
-                                    setPumpState('pumping');
-                                    setAtpLevel(prev => Math.max(0, prev - 2)); // Consume Energy
-                                    pumpTimer = 0;
+                                    // Bound! Consume ATP
+                                    state.pumpState = 'pumping';
+                                    state.atp = Math.max(0, state.atp - 5);
+                                    state.pumpTimer = 0;
+                                    state.atpEffects.push({x: pumpX + 50, y: MEMBRANE_Y, age: 0}); // Visual effect
                                 }
                             } else {
-                                setPumpState('idle'); // Particle lost
+                                state.pumpState = 'idle'; // Lost it
                             }
-                        } else if (pumpState === 'pumping') {
-                            // Shape changed (Visual handled by gap vars), wait briefly
-                            pumpTimer++;
-                            if (pumpTimer > 30) {
-                                // Push particle IN (Down)
-                                targetParticle.location = 'in';
-                                targetParticle.vy = 2; // Shoot out
-                                targetParticle = null;
-                                setPumpState('resetting');
-                                pumpTimer = 0;
+                        }
+                        else if (state.pumpState === 'pumping') {
+                            // Protein Changes Shape (Visual handled by gap vars)
+                            // Wait a bit
+                            state.pumpTimer++;
+                            if (state.pumpTimer > 20) {
+                                state.pumpState = 'releasing';
                             }
-                        } else if (pumpState === 'resetting') {
-                            pumpTimer++;
-                            if (pumpTimer > 30) {
-                                setPumpState('idle');
+                        }
+                        else if (state.pumpState === 'releasing') {
+                            // Push particle out to the bottom (Inside)
+                            if (state.targetParticle) {
+                                state.targetParticle.location = 'in';
+                                state.targetParticle.vy = 2; // Shoot down
+                                state.targetParticle.y += 2; // Ensure it clears the center
+                            }
+                            state.targetParticle = null;
+                            state.pumpState = 'resetting';
+                            state.pumpTimer = 0;
+                        }
+                        else if (state.pumpState === 'resetting') {
+                            state.pumpTimer++;
+                            if (state.pumpTimer > 20) {
+                                state.pumpState = 'idle'; // Ready for next
                             }
                         }
                     }
 
-                    // --- Particles ---
+                    // 4. ATP Visuals
+                    state.atpEffects = state.atpEffects.filter(e => e.age < 30);
+                    state.atpEffects.forEach(e => {
+                        e.age++;
+                        ctx.beginPath();
+                        ctx.arc(e.x, e.y - e.age, 5 + e.age/2, 0, Math.PI*2);
+                        ctx.fillStyle = `rgba(250, 204, 21, ${1 - e.age/30})`;
+                        ctx.fill();
+                        ctx.fillStyle = `rgba(255, 255, 255, ${1 - e.age/30})`;
+                        ctx.font = "bold 12px sans-serif";
+                        ctx.fillText("-ATP", e.x + 10, e.y - e.age);
+                    });
+
+                    // 5. Particles Update & Draw
                     let countIn = 0;
-                    particlesRef.current.forEach(p => {
-                        // Physics
-                        if (p !== targetParticle) { // Don't move target normally
+                    state.particles.forEach(p => {
+                        // Only move if not being held by pump
+                        const isCaptured = (p === state.targetParticle);
+                        
+                        if (isRunning && !isCaptured) {
                             p.x += p.vx;
                             p.y += p.vy;
 
-                            // Bounce off walls
+                            // Random movement
+                            p.vx += (Math.random() - 0.5) * 0.2;
+                            p.vy += (Math.random() - 0.5) * 0.2;
+                            
+                            // Friction/Limit
+                            p.vx *= 0.95; p.vy *= 0.95;
+
+                            // Bounce Walls
                             if (p.x < 5 || p.x > CANVAS_WIDTH - 5) p.vx *= -1;
                             if (p.y < 5 || p.y > CANVAS_HEIGHT - 5) p.vy *= -1;
 
-                            // Bounce off Membrane (Impermeable)
-                            if (p.location === 'out' && p.y > MEMBRANE_Y - 30 && Math.abs(p.x - pumpX) > 30) {
-                                p.y = MEMBRANE_Y - 30; p.vy *= -1;
+                            // Membrane Barrier (Impermeable except pump)
+                            // Top barrier
+                            if (p.location === 'out' && p.y > MEMBRANE_Y - 25) {
+                                // If not near pump center, bounce
+                                if (Math.abs(p.x - pumpX) > 20) {
+                                    p.y = MEMBRANE_Y - 25; p.vy *= -1;
+                                }
                             }
-                            if (p.location === 'in' && p.y < MEMBRANE_Y + 30 && Math.abs(p.x - pumpX) > 30) {
-                                p.y = MEMBRANE_Y + 30; p.vy *= -1;
+                            // Bottom barrier
+                            if (p.location === 'in' && p.y < MEMBRANE_Y + 25) {
+                                // If not near pump center, bounce
+                                if (Math.abs(p.x - pumpX) > 20) {
+                                    p.y = MEMBRANE_Y + 25; p.vy *= -1;
+                                }
                             }
                         }
 
-                        // Render
+                        // Draw
                         ctx.beginPath();
                         ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-                        ctx.fillStyle = p === targetParticle ? "#fbbf24" : "#3b82f6"; // Highlight target
+                        ctx.fillStyle = isCaptured ? "#fbbf24" : "#3b82f6"; // Yellow if captured
                         ctx.fill();
-                        
+
                         if (p.location === 'in') countIn++;
                     });
 
-                    // Stats
-                    if (frame % 20 === 0) {
+                    // Sync UI (Throttled)
+                    if (frame % 10 === 0) {
+                        setUiAtp(state.atp);
                         setHistory(prev => {
                             const newData = [...prev, { time: frame, count: countIn }];
                             if (newData.length > 50) newData.shift();
@@ -269,17 +327,10 @@
                     frame++;
                     animationId = requestAnimationFrame(render);
                 };
-                
+
                 render();
                 return () => cancelAnimationFrame(animationId);
-            }, [isRunning, atpLevel, pumpState]); // Dependencies trigger re-bind of render loop
-
-            const handleReset = () => {
-                setIsRunning(false);
-                setPumpState('idle');
-                setAtpLevel(100);
-                initParticles();
-            };
+            }, [isRunning]); // Only recreate loop if run state toggles
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
@@ -299,16 +350,21 @@
                             <div className="space-y-2">
                                 <div className="flex justify-between text-xs font-bold uppercase">
                                     <span className="text-slate-500">ATP Energy Level</span>
-                                    <span className={atpLevel < 20 ? "text-red-400 animate-pulse" : "text-yellow-400"}>{atpLevel.toFixed(0)}%</span>
+                                    <span className={uiAtp < 20 ? "text-red-400 animate-pulse" : "text-yellow-400"}>{uiAtp.toFixed(0)}%</span>
                                 </div>
                                 <div className="h-4 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
                                     <div 
                                         className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 transition-all duration-300" 
-                                        style={{width: `${atpLevel}%`}}
+                                        style={{width: `${uiAtp}%`}}
                                     ></div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setAtpLevel(Math.min(100, atpLevel + 20))} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded text-xs text-yellow-400 border border-slate-600">+ Recharge</button>
+                                    <button 
+                                        onClick={() => { simRef.current.atp = Math.min(100, simRef.current.atp + 20); setUiAtp(simRef.current.atp); }} 
+                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-yellow-400 border border-slate-600 flex items-center justify-center gap-2"
+                                    >
+                                        <Icon name="battery-charging" size={14}/> + Recharge ATP
+                                    </button>
                                 </div>
                             </div>
 
@@ -380,7 +436,7 @@
                                     {isRunning ? 'Pause' : 'Start Pump'}
                                 </button>
                                 <div className="text-center text-[10px] text-slate-500 uppercase font-bold">
-                                    Status: {isRunning ? (atpLevel > 0 ? 'Active Pumping' : 'No Energy') : 'Paused'}
+                                    Status: {isRunning ? (uiAtp > 0 ? 'ACTIVE PUMPING' : 'NO ENERGY (ATP DEPLETED)') : 'PAUSED'}
                                 </div>
                             </div>
 
