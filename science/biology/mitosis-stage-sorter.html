@@ -11,11 +11,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- DnD Kit (Lightweight drag and drop) -->
-    <script src="https://unpkg.com/@dnd-kit/core@6.0.8/dist/index.umd.min.js"></script>
-    <script src="https://unpkg.com/@dnd-kit/sortable@7.0.2/dist/index.umd.min.js"></script>
-    <script src="https://unpkg.com/@dnd-kit/utilities@3.2.1/dist/index.umd.min.js"></script>
-
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -24,9 +19,13 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow-y: auto; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Card Hover */
-        .stage-card { transition: transform 0.2s, box-shadow 0.2s; cursor: grab; }
+        /* Card Styling */
+        .stage-card { 
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s; 
+            cursor: grab; 
+        }
         .stage-card:active { cursor: grabbing; }
+        .stage-card.dragging { opacity: 0.5; border: 2px dashed #94a3b8; }
         
         /* Success Animation */
         .success-ring { animation: ring 0.5s ease-out; }
@@ -37,11 +36,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
-        // Dnd Kit imports from global window object
-        const { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } = window.DndKitCore;
-        const { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, horizontalListSortingStrategy } = window.DndKitSortable;
-        const { CSS } = window.DndKitUtilities;
+        const { useState, useEffect, useRef } = React;
 
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
@@ -129,33 +124,33 @@
             { id: '5', name: 'Telophase (末期)', desc: 'Nuclear membranes reform. Cytokinesis begins.', Component: TelophaseSVG }
         ];
 
-        // --- SORTABLE ITEM ---
-        const SortableItem = (props) => {
-            const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: props.id });
+        // --- DRAGGABLE ITEM ---
+        const DraggableItem = ({ data, index, dragging, onDragStart, onDragEnter, onDragEnd, showAnswer }) => {
+            const { Component } = data;
             
-            const style = {
-                transform: CSS.Transform.toString(transform),
-                transition,
-            };
-            
-            const { Component } = props.data;
-
             return (
-                <div ref={setNodeRef} style={style} {...attributes} {...listeners} 
-                     className="stage-card bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center gap-3 select-none touch-none w-32 md:w-40 shrink-0 relative group">
-                    
-                    <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-full overflow-hidden shadow-inner border-4 border-slate-200">
+                <div 
+                    draggable
+                    onDragStart={() => onDragStart(index)}
+                    onDragEnter={() => onDragEnter(index)}
+                    onDragEnd={onDragEnd}
+                    onDragOver={(e) => e.preventDefault()} // Necessary to allow dropping
+                    className={`stage-card bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col items-center gap-3 select-none w-32 md:w-40 shrink-0 relative group
+                        ${dragging ? 'dragging' : ''}
+                    `}
+                >
+                    <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-full overflow-hidden shadow-inner border-4 border-slate-200 pointer-events-none">
                         <Component />
                     </div>
                     
                     {/* Hidden Name (Reveal on Check) */}
-                    <div className="text-center min-h-[3rem] flex items-center justify-center">
-                         {props.showAnswer ? (
+                    <div className="text-center min-h-[3rem] flex items-center justify-center pointer-events-none">
+                         {showAnswer ? (
                              <div className="animate-in fade-in zoom-in">
-                                 <div className="text-xs font-bold text-white">{props.data.name}</div>
+                                 <div className="text-xs font-bold text-white">{data.name}</div>
                              </div>
                          ) : (
-                             <div className="w-8 h-1 bg-slate-700 rounded"></div> // Placeholder
+                             <div className="w-8 h-1 bg-slate-700 rounded"></div>
                          )}
                     </div>
                     
@@ -168,11 +163,12 @@
 
         // --- MAIN APP ---
         const App = () => {
-            // Initial State: Shuffle the correct order [1,2,3,4,5]
             const [items, setItems] = useState([]);
             const [isCorrect, setIsCorrect] = useState(false);
             const [checked, setChecked] = useState(false);
             const [feedback, setFeedback] = useState("");
+            const dragItem = useRef(null);
+            const dragOverItem = useRef(null);
 
             useEffect(() => {
                 shuffle();
@@ -186,20 +182,27 @@
                 setFeedback("");
             };
 
-            const sensors = useSensors(
-                useSensor(PointerSensor),
-                useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-            );
+            // Native Drag and Drop Handlers
+            const handleDragStart = (index) => {
+                dragItem.current = index;
+            };
 
-            const handleDragEnd = (event) => {
-                const { active, over } = event;
-                if (active.id !== over.id) {
-                    setItems((items) => {
-                        const oldIndex = items.findIndex(i => i.id === active.id);
-                        const newIndex = items.findIndex(i => i.id === over.id);
-                        return arrayMove(items, oldIndex, newIndex);
-                    });
-                }
+            const handleDragEnter = (index) => {
+                dragOverItem.current = index;
+                
+                // Reorder immediately for visual feedback
+                const _items = [...items];
+                const draggedItemContent = _items[dragItem.current];
+                _items.splice(dragItem.current, 1);
+                _items.splice(dragOverItem.current, 0, draggedItemContent);
+                
+                dragItem.current = index; // Update drag index to new position
+                setItems(_items);
+            };
+
+            const handleDragEnd = () => {
+                dragItem.current = null;
+                dragOverItem.current = null;
             };
 
             const checkOrder = () => {
@@ -230,15 +233,20 @@
 
                     {/* Game Area */}
                     <div className="w-full max-w-5xl overflow-x-auto pb-4">
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={items} strategy={horizontalListSortingStrategy}>
-                                <div className="flex justify-center gap-4 min-w-max px-4">
-                                    {items.map(item => (
-                                        <SortableItem key={item.id} id={item.id} data={item} showAnswer={checked} />
-                                    ))}
-                                </div>
-                            </SortableContext>
-                        </DndContext>
+                        <div className="flex justify-center gap-4 min-w-max px-4">
+                            {items.map((item, index) => (
+                                <DraggableItem 
+                                    key={item.id} // Stable key
+                                    index={index}
+                                    data={item} 
+                                    showAnswer={checked}
+                                    onDragStart={handleDragStart}
+                                    onDragEnter={handleDragEnter}
+                                    onDragEnd={handleDragEnd}
+                                    dragging={false} // Visual state can be enhanced if needed
+                                />
+                            ))}
+                        </div>
                     </div>
 
                     {/* Timeline Labels */}
