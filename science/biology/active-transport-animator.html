@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Transport Animator</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Pump Animation */
+        .pump-open-out { transform: scaleY(1); }
+        .pump-open-in { transform: scaleY(-1); }
+        
+        /* ATP Glow */
+        .atp-glow {
+            animation: glow 1.5s infinite alternate;
+        }
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 2px #facc15); }
+            to { filter: drop-shadow(0 0 8px #facc15); }
+        }
+
+        /* Particle Move */
+        .moving-particle {
+            transition: all 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- SIMULATION ENGINE ---
+        const CANVAS_WIDTH = 600;
+        const CANVAS_HEIGHT = 400;
+        const MEMBRANE_Y = 200;
+        
+        const App = () => {
+            const canvasRef = useRef(null);
+            const [atpLevel, setAtpLevel] = useState(100); // 0-100
+            const [concOut, setConcOut] = useState(10); // Low conc (Outside)
+            const [concIn, setConcIn] = useState(50);   // High conc (Inside)
+            const [isRunning, setIsRunning] = useState(false);
+            const [pumpState, setPumpState] = useState('idle'); // idle, binding, pumping, resetting
+            
+            // Chart Data
+            const [history, setHistory] = useState([]);
+            const particlesRef = useRef([]);
+            
+            // Initialize
+            const initParticles = () => {
+                const p = [];
+                // Outside (Top) - Low Conc
+                for(let i=0; i<concOut; i++) {
+                    p.push({
+                        x: Math.random() * CANVAS_WIDTH,
+                        y: Math.random() * (MEMBRANE_Y - 40),
+                        vx: (Math.random() - 0.5),
+                        vy: (Math.random() - 0.5),
+                        location: 'out'
+                    });
+                }
+                // Inside (Bottom) - High Conc
+                for(let i=0; i<concIn; i++) {
+                    p.push({
+                        x: Math.random() * CANVAS_WIDTH,
+                        y: Math.random() * (CANVAS_HEIGHT - MEMBRANE_Y - 40) + MEMBRANE_Y + 40,
+                        vx: (Math.random() - 0.5),
+                        vy: (Math.random() - 0.5),
+                        location: 'in'
+                    });
+                }
+                particlesRef.current = p;
+                setHistory([]);
+            };
+
+            useEffect(() => {
+                initParticles();
+                setIsRunning(false);
+                setAtpLevel(100);
+            }, []);
+
+            // Animation Loop
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationId;
+                let frame = 0;
+                
+                // Pump Logic Variables
+                let pumpTimer = 0;
+                let targetParticle = null; // The particle being pumped
+                
+                const render = () => {
+                    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+                    // --- Draw Membrane ---
+                    ctx.fillStyle = "#e2e8f0"; // Membrane Core
+                    ctx.fillRect(0, MEMBRANE_Y - 20, CANVAS_WIDTH, 40);
+                    
+                    // Phospholipid Heads
+                    ctx.fillStyle = "#fca5a5"; // Reddish
+                    for(let i=0; i<CANVAS_WIDTH; i+=20) {
+                        // Top layer
+                        ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y - 25, 8, 0, Math.PI*2); ctx.fill();
+                        // Bottom layer
+                        ctx.beginPath(); ctx.arc(i+10, MEMBRANE_Y + 25, 8, 0, Math.PI*2); ctx.fill();
+                    }
+                    
+                    // --- Draw Pump (Carrier Protein) ---
+                    const pumpX = CANVAS_WIDTH / 2;
+                    ctx.fillStyle = "#34d399"; // Green
+                    
+                    // Simple visualization of shape change
+                    // State: 'idle' (open out), 'binding' (particle in), 'pumping' (closed, opening in), 'release' (open in)
+                    // Wait, Active Transport usually pumps OUT or IN depending on type.
+                    // Let's simulate pumping from OUT (Low) to IN (High) -> Accumulation.
+                    
+                    // Default: Open to Outside (Top)
+                    let gapTop = 20;
+                    let gapBot = 2;
+                    
+                    if (pumpState === 'pumping' || pumpState === 'resetting') {
+                        // Open to Inside (Bottom)
+                        gapTop = 2;
+                        gapBot = 20;
+                    }
+
+                    // Left half of protein
+                    ctx.beginPath();
+                    ctx.moveTo(pumpX - 30, MEMBRANE_Y - 35);
+                    ctx.lineTo(pumpX - 10 - gapTop, MEMBRANE_Y); // Inner pinch
+                    ctx.lineTo(pumpX - 10 - gapBot, MEMBRANE_Y + 35);
+                    ctx.lineTo(pumpX - 50, MEMBRANE_Y + 35);
+                    ctx.lineTo(pumpX - 50, MEMBRANE_Y - 35);
+                    ctx.fill();
+
+                    // Right half
+                    ctx.beginPath();
+                    ctx.moveTo(pumpX + 30, MEMBRANE_Y - 35);
+                    ctx.lineTo(pumpX + 10 + gapTop, MEMBRANE_Y); 
+                    ctx.lineTo(pumpX + 10 + gapBot, MEMBRANE_Y + 35);
+                    ctx.lineTo(pumpX + 50, MEMBRANE_Y + 35);
+                    ctx.lineTo(pumpX + 50, MEMBRANE_Y - 35);
+                    ctx.fill();
+
+                    // --- Pump Logic ---
+                    if (isRunning && atpLevel > 0) {
+                        if (pumpState === 'idle') {
+                            // Find a particle near the pump opening (Outside/Top)
+                            const candidates = particlesRef.current.filter(p => p.location === 'out' && Math.abs(p.x - pumpX) < 40 && p.y > MEMBRANE_Y - 60);
+                            if (candidates.length > 0) {
+                                targetParticle = candidates[0];
+                                setPumpState('binding');
+                            }
+                        } else if (pumpState === 'binding') {
+                            // Move particle into binding site
+                            if (targetParticle) {
+                                const dx = pumpX - targetParticle.x;
+                                const dy = MEMBRANE_Y - targetParticle.y;
+                                targetParticle.x += dx * 0.1;
+                                targetParticle.y += dy * 0.1;
+                                targetParticle.vx = 0; targetParticle.vy = 0;
+                                
+                                if (Math.abs(dy) < 2) {
+                                    setPumpState('pumping');
+                                    setAtpLevel(prev => Math.max(0, prev - 2)); // Consume Energy
+                                    pumpTimer = 0;
+                                }
+                            } else {
+                                setPumpState('idle'); // Particle lost
+                            }
+                        } else if (pumpState === 'pumping') {
+                            // Shape changed (Visual handled by gap vars), wait briefly
+                            pumpTimer++;
+                            if (pumpTimer > 30) {
+                                // Push particle IN (Down)
+                                targetParticle.location = 'in';
+                                targetParticle.vy = 2; // Shoot out
+                                targetParticle = null;
+                                setPumpState('resetting');
+                                pumpTimer = 0;
+                            }
+                        } else if (pumpState === 'resetting') {
+                            pumpTimer++;
+                            if (pumpTimer > 30) {
+                                setPumpState('idle');
+                            }
+                        }
+                    }
+
+                    // --- Particles ---
+                    let countIn = 0;
+                    particlesRef.current.forEach(p => {
+                        // Physics
+                        if (p !== targetParticle) { // Don't move target normally
+                            p.x += p.vx;
+                            p.y += p.vy;
+
+                            // Bounce off walls
+                            if (p.x < 5 || p.x > CANVAS_WIDTH - 5) p.vx *= -1;
+                            if (p.y < 5 || p.y > CANVAS_HEIGHT - 5) p.vy *= -1;
+
+                            // Bounce off Membrane (Impermeable)
+                            if (p.location === 'out' && p.y > MEMBRANE_Y - 30 && Math.abs(p.x - pumpX) > 30) {
+                                p.y = MEMBRANE_Y - 30; p.vy *= -1;
+                            }
+                            if (p.location === 'in' && p.y < MEMBRANE_Y + 30 && Math.abs(p.x - pumpX) > 30) {
+                                p.y = MEMBRANE_Y + 30; p.vy *= -1;
+                            }
+                        }
+
+                        // Render
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = p === targetParticle ? "#fbbf24" : "#3b82f6"; // Highlight target
+                        ctx.fill();
+                        
+                        if (p.location === 'in') countIn++;
+                    });
+
+                    // Stats
+                    if (frame % 20 === 0) {
+                        setHistory(prev => {
+                            const newData = [...prev, { time: frame, count: countIn }];
+                            if (newData.length > 50) newData.shift();
+                            return newData;
+                        });
+                    }
+
+                    frame++;
+                    animationId = requestAnimationFrame(render);
+                };
+                
+                render();
+                return () => cancelAnimationFrame(animationId);
+            }, [isRunning, atpLevel, pumpState]); // Dependencies trigger re-bind of render loop
+
+            const handleReset = () => {
+                setIsRunning(false);
+                setPumpState('idle');
+                setAtpLevel(100);
+                initParticles();
+            };
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="zap" className="text-yellow-400" /> Active Transport
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Energy-driven Pump</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                            
+                            {/* ATP Control */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs font-bold uppercase">
+                                    <span className="text-slate-500">ATP Energy Level</span>
+                                    <span className={atpLevel < 20 ? "text-red-400 animate-pulse" : "text-yellow-400"}>{atpLevel.toFixed(0)}%</span>
+                                </div>
+                                <div className="h-4 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 transition-all duration-300" 
+                                        style={{width: `${atpLevel}%`}}
+                                    ></div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setAtpLevel(Math.min(100, atpLevel + 20))} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded text-xs text-yellow-400 border border-slate-600">+ Recharge</button>
+                                </div>
+                            </div>
+
+                            {/* Initial Conditions */}
+                            <div className="space-y-4 pt-4 border-t border-slate-800">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Initial Conditions</label>
+                                
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1">
+                                        <span className="text-slate-400">Outside Conc. (Low)</span>
+                                        <span className="text-blue-400">{concOut}</span>
+                                    </div>
+                                    <input type="range" min="5" max="30" value={concOut} onChange={(e) => setConcOut(parseInt(e.target.value))} className="w-full accent-blue-500" />
+                                </div>
+                                
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1">
+                                        <span className="text-slate-400">Inside Conc. (High)</span>
+                                        <span className="text-blue-400">{concIn}</span>
+                                    </div>
+                                    <input type="range" min="30" max="100" value={concIn} onChange={(e) => setConcIn(parseInt(e.target.value))} className="w-full accent-blue-500" />
+                                </div>
+
+                                <button onClick={handleReset} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold border border-slate-600 flex items-center justify-center gap-2">
+                                    <Icon name="rotate-ccw" size={14}/> Reset & Apply
+                                </button>
+                            </div>
+                            
+                            {/* Info */}
+                            <div className="bg-emerald-900/20 p-4 rounded-xl border border-emerald-500/30">
+                                <div className="flex items-center gap-2 mb-2 text-emerald-400 font-bold text-xs uppercase">
+                                    <Icon name="info" size={14} /> Mechanism
+                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed">
+                                    Carrier proteins use ATP energy to pump substances <strong>against</strong> the concentration gradient (Low to High).
+                                </p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-4 overflow-hidden">
+                        
+                        {/* Animation Area */}
+                        <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col">
+                            <div className="absolute top-4 left-4 z-10 flex gap-4">
+                                <div className="text-xs font-bold text-slate-400 uppercase bg-black/40 px-3 py-1 rounded border border-white/10">Outside Cell (Low)</div>
+                            </div>
+                            <div className="absolute bottom-4 left-4 z-10">
+                                <div className="text-xs font-bold text-slate-400 uppercase bg-black/40 px-3 py-1 rounded border border-white/10">Inside Cell (High)</div>
+                            </div>
+
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        </div>
+
+                        {/* Control Bar & Graph */}
+                        <div className="h-40 mt-4 flex gap-4">
+                            
+                            {/* Play Controls */}
+                            <div className="w-48 bg-slate-900 rounded-2xl border border-slate-800 p-4 flex flex-col justify-center gap-3 shrink-0">
+                                <button 
+                                    onClick={() => setIsRunning(!isRunning)}
+                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg
+                                        ${isRunning ? 'bg-yellow-600 text-white' : 'bg-emerald-600 text-white'}
+                                    `}
+                                >
+                                    <Icon name={isRunning ? "pause" : "play"} size={20} fill="currentColor" />
+                                    {isRunning ? 'Pause' : 'Start Pump'}
+                                </button>
+                                <div className="text-center text-[10px] text-slate-500 uppercase font-bold">
+                                    Status: {isRunning ? (atpLevel > 0 ? 'Active Pumping' : 'No Energy') : 'Paused'}
+                                </div>
+                            </div>
+
+                            {/* Graph */}
+                            <div className="flex-1 bg-slate-900 rounded-2xl border border-slate-800 p-4 relative">
+                                <div className="absolute top-4 left-4 text-xs font-bold text-slate-500 uppercase">Accumulation Inside Cell</div>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={history}>
+                                        <defs>
+                                            <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                        <XAxis dataKey="time" hide />
+                                        <YAxis hide domain={['auto', 'auto']} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} itemStyle={{ color: '#fff' }} />
+                                        <Area type="monotone" dataKey="count" stroke="#3b82f6" fillOpacity={1} fill="url(#colorCount)" name="Inside Count" isAnimationActive={false} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
