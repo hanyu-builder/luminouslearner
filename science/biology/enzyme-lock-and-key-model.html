@@ -99,18 +99,7 @@
                 scene.add(pointLight);
 
                 // --- BUILD ENZYME (The "Lock") ---
-                // A pacman-like shape or C-shape
                 const enzymeGroup = new THREE.Group();
-                
-                // Main body
-                const bodyGeo = new THREE.SphereGeometry(3, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.8); // Partial sphere (top missing)
-                // Actually let's use a C-shape constructed from a Torus or boolean... or simple geometry combo
-                // Simple approach: A sphere with a wedge cut out?
-                // Three.js geometries don't support boolean easily. Let's build a C-shape using a Tube or Torus segment.
-                
-                // Let's make a custom shape: A cylinder with a notch.
-                // Notch shape: Rectangular for specificity visual.
-                // Let's use a Box with a hole? No, let's use a Group of primitive shapes to form a "C".
                 
                 // Top part
                 const topGeo = new THREE.BoxGeometry(4, 2, 4);
@@ -138,6 +127,19 @@
 
                 enzymeRef.current = enzymeGroup;
                 scene.add(enzymeGroup);
+
+                // Helper: Create Products (Defined here to be accessible in animate)
+                const createProducts = (scene) => {
+                    const p1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), new THREE.MeshStandardMaterial({ color: 0x4ade80 })); // Green product
+                    p1.position.set(0, 1, 0);
+                    
+                    const p2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), new THREE.MeshStandardMaterial({ color: 0x4ade80 })); 
+                    p2.position.set(0, -1, 0);
+                    
+                    scene.add(p1);
+                    scene.add(p2);
+                    productsRef.current = [p1, p2];
+                };
 
                 // Animation Loop
                 let frameId;
@@ -198,30 +200,14 @@
                 };
                 animate();
 
-                // Helper: Create Products
-                const createProducts = (scene) => {
-                    // Based on current substrate shape (Box splits into two small boxes)
-                    // Or Cylinder splits?
-                    // Let's assume default reaction is decomposition for visual clarity
-                    
-                    const p1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), new THREE.MeshStandardMaterial({ color: 0x4ade80 })); // Green product
-                    p1.position.set(0, 1, 0);
-                    
-                    const p2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), new THREE.MeshStandardMaterial({ color: 0x4ade80 })); 
-                    p2.position.set(0, -1, 0);
-                    
-                    scene.add(p1);
-                    scene.add(p2);
-                    productsRef.current = [p1, p2];
-                };
-
                 // Cleanup
                 return () => {
                     cancelAnimationFrame(frameId);
                     if (mountRef.current && renderer.domElement) {
                         mountRef.current.removeChild(renderer.domElement);
                     }
-                    // Dispose
+                    // Dispose geometries/materials if needed
+                    renderer.dispose();
                 };
             }, []); // Init once
 
@@ -272,8 +258,10 @@
                                 mesh.position.lerpVectors(targetPos, new THREE.Vector3(10, 5, 0), t - 1); // Fly away
                             } else {
                                 clearInterval(animInterval);
-                                sceneRef.current.remove(mesh);
-                                substrateRef.current = null;
+                                if (substrateRef.current) {
+                                    sceneRef.current.remove(mesh);
+                                    substrateRef.current = null;
+                                }
                                 if (onReactionComplete) onReactionComplete(false); // False = failed
                             }
                         }, 16);
@@ -290,7 +278,6 @@
         const App = () => {
             const [substrate, setSubstrate] = useState(null);
             const [feedback, setFeedback] = useState(null); // { type: 'success'|'fail', msg: '' }
-            const [key, setKey] = useState(0); // Force re-render scene if needed
 
             const handleSelectSubstrate = (shape) => {
                 if (substrate) return; // Wait for current to finish
@@ -380,7 +367,8 @@
                     <div className="flex-1 relative bg-[#020617] flex flex-col">
                         
                         <div className="flex-1 relative overflow-hidden">
-                            <BioScene activeSubstrate={substrate} onReactionComplete={handleReactionEnd} />
+                            {/* FIX: Use correct component name EnzymeScene */}
+                            <EnzymeScene activeSubstrate={substrate} onReactionComplete={handleReactionEnd} />
                             
                             {/* Labels */}
                             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none">
