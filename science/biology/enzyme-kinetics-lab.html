@@ -330,7 +330,7 @@
                         </div>
 
                         {/* Graph */}
-                        <div className="h-64 bg-slate-900 rounded-2xl border border-slate-800 p-4">
+                        <div className="h-64 bg-slate-900 rounded-2xl border border-slate-800 p-4 relative">
                             <div className="text-xs font-bold text-slate-500 uppercase mb-2">
                                 Rate vs {mode === 'temp' ? 'Temperature' : mode === 'ph' ? 'pH' : 'Substrate Conc.'}
                             </div>
@@ -359,6 +359,18 @@
                                     <ReferenceLine x={currentX} stroke="#ef4444" strokeDasharray="3 3" />
                                 </LineChart>
                             </ResponsiveContainer>
+
+                            {/* INFO OVERLAY - OPTIMAL CONDITIONS */}
+                            {(mode === 'temp' || mode === 'ph') && (
+                                <div className="absolute top-4 right-4 bg-slate-800/80 backdrop-blur border border-slate-600 p-2 rounded-lg text-xs shadow-lg">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                        <span className="text-slate-300 font-bold">Optimal Conditions</span>
+                                    </div>
+                                    {mode === 'temp' && <div className="text-emerald-400 font-mono">Temp: {OPT_TEMP}°C</div>}
+                                    {mode === 'ph' && <div className="text-emerald-400 font-mono">pH: {OPT_PH}</div>}
+                                </div>
+                            )}
                         </div>
 
                     </div>
