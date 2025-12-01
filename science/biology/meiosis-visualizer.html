@@ -136,6 +136,14 @@
             );
         };
 
+        // Helper for single chromatid in Telophase II
+        const SingleChromatid = ({ x, y, color, rotation, scale = 1 }) => (
+            <g transform={`translate(${x}, ${y}) rotate(${rotation}) scale(${scale})`}>
+                <path d="M0 -20 Q -8 0 0 20" stroke={color} strokeWidth="6" fill="none" strokeLinecap="round" />
+                <circle cx="0" cy="0" r="3" fill="white" stroke="#333" strokeWidth="1" />
+            </g>
+        );
+
         // Main Visualization Canvas
         const MeiosisCanvas = ({ stageIdx, crossedOver }) => {
             const state = STAGES[stageIdx].state;
@@ -147,11 +155,6 @@
             // Colors
             const paternalColor = "#3b82f6"; // Blue
             const maternalColor = "#ef4444"; // Red
-            // Crossed Over Colors (Tips swapped)
-            // We simulate crossing over visually by swapping colors of tips in later stages
-            // Or simplistically: keep whole arm color consistent for basic visualization, 
-            // but swap entire arms or segments. 
-            // Let's use a simple model: Paternal gets Red tips, Maternal gets Blue tips.
             
             const pColor = crossedOver ? "url(#gradP)" : paternalColor;
             const mColor = crossedOver ? "url(#gradM)" : maternalColor;
@@ -262,22 +265,33 @@
                     case 'four_cells':
                          return (
                             <g transform={`translate(${cx}, ${cy})`}>
-                                {/* 4 Cells */}
+                                {/* Top Left Cell */}
                                 <circle cx="-100" cy="-60" r="50" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-                                <path d="M-100 -80 L -100 -40" stroke={pColor} strokeWidth="4" strokeLinecap="round"/>
-                                <path d="M-100 -50 L -100 -30" stroke={mColor} strokeWidth="4" strokeLinecap="round"/>
+                                <circle cx="-100" cy="-60" r="35" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="3,3" /> {/* Nucleus */}
+                                <SingleChromatid x="-100" y="-75" color={pColor} rotation={-10} scale={1.0} />
+                                <SingleChromatid x="-100" y="-45" color={mColor} rotation={10} scale={0.7} />
+                                <text x="-100" y="-60" textAnchor="middle" fontSize="40" fill="white" opacity="0.1" fontWeight="bold">n</text>
                                 
+                                {/* Top Right Cell */}
                                 <circle cx="100" cy="-60" r="50" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-                                <path d="M100 -80 L 100 -40" stroke={pColor} strokeWidth="4" strokeLinecap="round"/>
-                                <path d="M100 -50 L 100 -30" stroke={mColor} strokeWidth="4" strokeLinecap="round"/>
+                                <circle cx="100" cy="-60" r="35" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="3,3" />
+                                <SingleChromatid x="100" y="-75" color={pColor} rotation={10} scale={1.0} />
+                                <SingleChromatid x="100" y="-45" color={mColor} rotation={-10} scale={0.7} />
+                                <text x="100" y="-60" textAnchor="middle" fontSize="40" fill="white" opacity="0.1" fontWeight="bold">n</text>
                                 
+                                {/* Bottom Left Cell */}
                                 <circle cx="-100" cy="60" r="50" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-                                <path d="M-100 40 L -100 80" stroke={mColor} strokeWidth="4" strokeLinecap="round"/>
-                                <path d="M-100 70 L -100 90" stroke={pColor} strokeWidth="4" strokeLinecap="round"/>
+                                <circle cx="-100" cy="60" r="35" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="3,3" />
+                                <SingleChromatid x="-100" y="45" color={mColor} rotation={-10} scale={1.0} />
+                                <SingleChromatid x="-100" y="75" color={pColor} rotation={10} scale={0.7} />
+                                <text x="-100" y="60" textAnchor="middle" fontSize="40" fill="white" opacity="0.1" fontWeight="bold">n</text>
 
+                                {/* Bottom Right Cell */}
                                 <circle cx="100" cy="60" r="50" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-                                <path d="M100 40 L 100 80" stroke={mColor} strokeWidth="4" strokeLinecap="round"/>
-                                <path d="M100 70 L 100 90" stroke={pColor} strokeWidth="4" strokeLinecap="round"/>
+                                <circle cx="100" cy="60" r="35" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="3,3" />
+                                <SingleChromatid x="100" y="45" color={mColor} rotation={10} scale={1.0} />
+                                <SingleChromatid x="100" y="75" color={pColor} rotation={-10} scale={0.7} />
+                                <text x="100" y="60" textAnchor="middle" fontSize="40" fill="white" opacity="0.1" fontWeight="bold">n</text>
                             </g>
                          );
                          
