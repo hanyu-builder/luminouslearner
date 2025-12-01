@@ -56,7 +56,6 @@
         };
 
         // --- MOLECULE DATA (Simplified Coordinates for Visualization) ---
-        // Note: Real atomic coordinates are complex. We use simplified geometric representations for educational clarity.
         
         const ATOM_COLORS = {
             C: 0x333333, // Carbon - Black/Grey
@@ -144,6 +143,11 @@
             useEffect(() => {
                 if (!mountRef.current) return;
                 const container = mountRef.current;
+                
+                // Clean up previous scene
+                while(container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
 
                 // 1. Setup
                 const width = container.clientWidth;
