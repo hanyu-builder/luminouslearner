@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sex-Linkage Simulator</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Grid Animation */
+        .grid-cell { transition: all 0.3s ease; }
+        .grid-cell:hover { transform: scale(1.05); background-color: rgba(239, 68, 68, 0.1); }
+        
+        /* Color Blindness Filter */
+        .protanopia { filter: url('#protanopia-filter'); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <!-- SVG Filter for Color Blindness Simulation -->
+    <svg style="display: none;">
+        <defs>
+            <filter id="protanopia-filter">
+                <feColorMatrix type="matrix" values="0.567, 0.433, 0, 0, 0
+                                                     0.558, 0.442, 0, 0, 0
+                                                     0, 0.242, 0.758, 0, 0
+                                                     0, 0, 0, 1, 0" />
+            </filter>
+        </defs>
+    </svg>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } = window.Recharts;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- LOGIC ---
+        const CONDITIONS = {
+            color_blindness: {
+                name: 'Red-Green Color Blindness (紅綠色盲)',
+                dom: 'N (Normal Vision)',
+                rec: 'n (Color Blind)',
+                desc: 'An X-linked recessive condition affecting color perception.'
+            },
+            haemophilia: {
+                name: 'Haemophilia (血友病)',
+                dom: 'H (Normal Clotting)',
+                rec: 'h (Haemophilia)',
+                desc: 'An X-linked recessive disorder impairing blood clotting.'
+            }
+        };
+
+        // Possible Genotypes
+        // Father: XNY, XnY
+        // Mother: XNXN, XNXn, XnXn
+        
+        const FATHER_OPTIONS = [
+            { geno: 'XNY', label: 'Unaffected Male (正常)', affected: false },
+            { geno: 'XnY', label: 'Affected Male (患病)', affected: true }
+        ];
+
+        const MOTHER_OPTIONS = [
+            { geno: 'XNXN', label: 'Unaffected Female (正常)', affected: false, carrier: false },
+            { geno: 'XNXn', label: 'Carrier Female (攜帶者)', affected: false, carrier: true },
+            { geno: 'XnXn', label: 'Affected Female (患病)', affected: true, carrier: false }
+        ];
+
+        const App = () => {
+            const [conditionKey, setConditionKey] = useState('color_blindness');
+            const [fatherIdx, setFatherIdx] = useState(0); // 0 or 1
+            const [motherIdx, setMotherIdx] = useState(1); // 0, 1 or 2 (Default carrier)
+            const [showSim, setShowSim] = useState(false); // Toggle color blindness sim view
+
+            const currentCondition = CONDITIONS[conditionKey];
+            const father = FATHER_OPTIONS[fatherIdx];
+            const mother = MOTHER_OPTIONS[motherIdx];
+
+            // Replace placeholders with actual gene symbols
+            const formatGeno = (g) => {
+                const dom = conditionKey === 'color_blindness' ? 'N' : 'H';
+                const rec = conditionKey === 'color_blindness' ? 'n' : 'h';
+                return g.replace(/N/g, dom).replace(/n/g, rec);
+            };
+
+            // Calculate Cross
+            const fGametes = [father.geno.substring(0, 2), 'Y']; // e.g. XN, Y
+            const mGametes = [mother.geno.substring(0, 2), mother.geno.substring(2, 4)]; // e.g. XN, Xn
+
+            const offspring = [];
+            const stats = {
+                sons_affected: 0,
+                sons_normal: 0,
+                daughters_affected: 0,
+                daughters_carrier: 0,
+                daughters_normal: 0
+            };
+
+            for (let m = 0; m < 2; m++) {
+                for (let f = 0; f < 2; f++) {
+                    const mG = mGametes[m]; // Egg
+                    const fG = fGametes[f]; // Sperm
+                    
+                    let geno = '';
+                    let sex = '';
+                    let status = ''; // normal, carrier, affected
+
+                    if (fG === 'Y') {
+                        sex = 'Male';
+                        geno = mG + 'Y';
+                        if (mG.includes('n')) {
+                            status = 'affected';
+                            stats.sons_affected++;
+                        } else {
+                            status = 'normal';
+                            stats.sons_normal++;
+                        }
+                    } else {
+                        sex = 'Female';
+                        // Sort X chromosomes: Dominant first if hetero
+                        if (mG.includes('N') || fG.includes('N')) {
+                            if (mG.includes('n') || fG.includes('n')) {
+                                geno = 'XNXn';
+                                status = 'carrier';
+                                stats.daughters_carrier++;
+                            } else {
+                                geno = 'XNXN';
+                                status = 'normal';
+                                stats.daughters_normal++;
+                            }
+                        } else {
+                            geno = 'XnXn';
+                            status = 'affected';
+                            stats.daughters_affected++;
+                        }
+                    }
+
+                    offspring.push({
+                        geno: formatGeno(geno),
+                        sex,
+                        status,
+                        mGamete: formatGeno(mG),
+                        fGamete: formatGeno(fG)
+                    });
+                }
+            }
+
+            // Chart Data
+            const sonData = [
+                { name: 'Affected', value: stats.sons_affected, color: '#ef4444' },
+                { name: 'Normal', value: stats.sons_normal, color: '#3b82f6' }
+            ].filter(d => d.value > 0);
+
+            const daughterData = [
+                { name: 'Affected', value: stats.daughters_affected, color: '#ef4444' },
+                { name: 'Carrier', value: stats.daughters_carrier, color: '#eab308' },
+                { name: 'Normal', value: stats.daughters_normal, color: '#3b82f6' }
+            ].filter(d => d.value > 0);
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="dna" className="text-pink-400" /> Sex-Linkage Sim
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">X-Linked Inheritance</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                            
+                            {/* Condition Select */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Condition</label>
+                                <div className="flex gap-2">
+                                    {Object.entries(CONDITIONS).map(([key, val]) => (
+                                        <button 
+                                            key={key}
+                                            onClick={() => setConditionKey(key)}
+                                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all border
+                                                ${conditionKey === key ? 'bg-slate-800 border-pink-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                            `}
+                                        >
+                                            {val.name.split(' (')[0]}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-slate-400 italic mt-1">{currentCondition.desc}</p>
+                            </div>
+
+                            {/* Parents Config */}
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-xs font-bold text-blue-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2">
+                                        <Icon name="user" size={14}/> Father (XY)
+                                    </label>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {FATHER_OPTIONS.map((opt, i) => (
+                                            <button 
+                                                key={i}
+                                                onClick={() => setFatherIdx(i)}
+                                                className={`p-2 rounded text-sm text-left border flex justify-between items-center
+                                                    ${fatherIdx === i ? 'bg-blue-900/30 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}
+                                                `}
+                                            >
+                                                <span>{opt.label}</span>
+                                                <span className="font-mono font-bold">{formatGeno(opt.geno)}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-pink-400 uppercase tracking-widest px-1 mb-2 flex items-center gap-2">
+                                        <Icon name="user" size={14}/> Mother (XX)
+                                    </label>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {MOTHER_OPTIONS.map((opt, i) => (
+                                            <button 
+                                                key={i}
+                                                onClick={() => setMotherIdx(i)}
+                                                className={`p-2 rounded text-sm text-left border flex justify-between items-center
+                                                    ${motherIdx === i ? 'bg-pink-900/30 border-pink-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}
+                                                `}
+                                            >
+                                                <span>{opt.label}</span>
+                                                <span className="font-mono font-bold">{formatGeno(opt.geno)}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vision Sim Button */}
+                            {conditionKey === 'color_blindness' && (
+                                <div className="pt-4 border-t border-slate-800">
+                                    <button 
+                                        onClick={() => setShowSim(!showSim)}
+                                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border
+                                            ${showSim ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white'}
+                                        `}
+                                    >
+                                        <Icon name="eye" size={18} /> {showSim ? 'Hide Vision Sim' : 'Simulate Color Blindness'}
+                                    </button>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-8 overflow-y-auto custom-scrollbar">
+                        
+                        {showSim ? (
+                            <div className="flex flex-col items-center justify-center h-full animate-in fade-in">
+                                <h2 className="text-2xl font-bold mb-8">Vision Simulation</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                    <div className="text-center">
+                                        <div className="w-64 h-64 rounded-full bg-gradient-to-br from-red-500 via-green-500 to-blue-500 mb-4 flex items-center justify-center text-4xl font-bold shadow-xl">
+                                            <span className="drop-shadow-md">74</span>
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-300">Normal Vision</div>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="w-64 h-64 rounded-full bg-gradient-to-br from-red-500 via-green-500 to-blue-500 mb-4 flex items-center justify-center text-4xl font-bold shadow-xl protanopia">
+                                            <span className="drop-shadow-md">21</span>
+                                        </div>
+                                        <div className="text-sm font-bold text-red-400">Protanopia (Red-Blind)</div>
+                                    </div>
+                                </div>
+                                <p className="mt-8 text-slate-400 text-sm max-w-md text-center">
+                                    People with red-green color blindness have difficulty distinguishing red and green hues. The number '74' might appear as '21' or be invisible.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-12 w-full max-w-3xl mx-auto">
+                                
+                                {/* Punnett Square */}
+                                <div className="flex flex-col items-center w-full">
+                                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                        <Icon name="grid" /> Inheritance Pattern
+                                    </h2>
+                                    
+                                    <div className="relative p-4">
+                                        {/* Top Labels (Mother Gametes) */}
+                                        <div className="flex mb-2 ml-14 gap-2">
+                                            {mGametes.map((g, i) => (
+                                                <div key={i} className="w-24 text-center font-bold text-pink-400 text-xl bg-slate-900/50 rounded py-2 border border-pink-500/30 font-mono">
+                                                    {formatGeno(g)}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            {/* Side Labels (Father Gametes) */}
+                                            <div className="flex flex-col gap-2 justify-center mr-2">
+                                                {fGametes.map((g, i) => (
+                                                    <div key={i} className="h-24 w-12 flex items-center justify-center font-bold text-blue-400 text-xl bg-slate-900/50 rounded border border-blue-500/30 font-mono">
+                                                        {formatGeno(g)}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Grid */}
+                                            <div className="grid grid-cols-2 gap-2 bg-slate-800 p-2 rounded-xl border border-slate-700">
+                                                {offspring.map((child, i) => (
+                                                    <div key={i} className="w-24 h-24 bg-slate-900 rounded-lg flex flex-col items-center justify-center border border-slate-700 shadow-inner grid-cell relative overflow-hidden group">
+                                                        <span className="text-xl font-mono font-black text-white mb-1">{child.geno}</span>
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full text-white mb-0.5 ${child.sex === 'Male' ? 'bg-blue-600' : 'bg-pink-600'}`}>
+                                                                {child.sex}
+                                                            </span>
+                                                            <span className={`text-[9px] uppercase font-bold ${child.status === 'affected' ? 'text-red-400' : child.status === 'carrier' ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                                                {child.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Statistics Panel */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    
+                                    {/* Sons Stats */}
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+                                        <div className="text-xs font-bold text-blue-400 uppercase mb-4 flex items-center gap-2">
+                                            <Icon name="user" size={14}/> Chance for Sons (XY)
+                                        </div>
+                                        <div className="h-32 flex items-center gap-4">
+                                            <ResponsiveContainer width="40%" height="100%">
+                                                <PieChart>
+                                                    <Pie data={sonData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={5} dataKey="value">
+                                                        {sonData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                                    </Pie>
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                            <div className="flex-1 space-y-1">
+                                                {sonData.map((d, i) => (
+                                                    <div key={i} className="flex justify-between text-xs">
+                                                        <span style={{color: d.color}}>{d.name}</span>
+                                                        <span className="font-bold">{d.value * 50}%</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Daughters Stats */}
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+                                        <div className="text-xs font-bold text-pink-400 uppercase mb-4 flex items-center gap-2">
+                                            <Icon name="user" size={14}/> Chance for Daughters (XX)
+                                        </div>
+                                        <div className="h-32 flex items-center gap-4">
+                                            <ResponsiveContainer width="40%" height="100%">
+                                                <PieChart>
+                                                    <Pie data={daughterData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={5} dataKey="value">
+                                                        {daughterData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                                    </Pie>
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                            <div className="flex-1 space-y-1">
+                                                {daughterData.map((d, i) => (
+                                                    <div key={i} className="flex justify-between text-xs">
+                                                        <span style={{color: d.color}}>{d.name}</span>
+                                                        <span className="font-bold">{d.value * 50}%</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                            </div>
+                        )}
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
