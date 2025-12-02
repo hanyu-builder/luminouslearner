@@ -32,6 +32,11 @@
             70% { border-color: rgba(16, 185, 129, 0); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
             100% { border-color: rgba(16, 185, 129, 0); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
+        
+        /* Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -96,11 +101,13 @@
             'GGA': { aa: 'Gly', name: 'Glycine' }, 'GGG': { aa: 'Gly', name: 'Glycine' }
         };
 
-        // Example Sequences
+        // Updated Presets with Textbook Examples
         const PRESETS = [
-            { name: 'Start -> Stop', seq: 'AUG UUU GGC UAA' },
-            { name: 'Met-Ser-Val', seq: 'AUG UCU GUU UAG' },
-            { name: 'Custom Protein', seq: 'AUG CCC AAA GGG UGA' }
+            { name: 'HbA (Normal)', seq: 'AUG GUG CAC CUG ACU CCU GAG GAG', desc: 'Hemoglobin Beta (Start)' },
+            { name: 'HbS (Sickle Cell)', seq: 'AUG GUG CAC CUG ACU CCU GUG GAG', desc: 'Mutation: Glu → Val' },
+            { name: 'Insulin (Chain A)', seq: 'AUG GGC AUC GUG GAA CAA UGC UGU', desc: 'Human Insulin' },
+            { name: 'Poly-U (Nirenberg)', seq: 'UUU UUU UUU UUU UUU', desc: 'Poly-Phenylalanine' },
+            { name: 'Start → Stop', seq: 'AUG CCC GGG UAA', desc: 'Simple Sequence' }
         ];
 
         const App = () => {
@@ -174,7 +181,7 @@
                             <p className="text-xs text-slate-400 mt-1">mRNA to Protein Translation</p>
                         </div>
 
-                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
                             
                             {/* Input Area */}
                             <div className="space-y-3">
@@ -210,15 +217,19 @@
 
                             {/* Presets */}
                             <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 mb-2 block">Examples</label>
-                                <div className="flex flex-wrap gap-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1 mb-2 block">Textbook Examples</label>
+                                <div className="flex flex-col gap-2">
                                     {PRESETS.map((p, i) => (
                                         <button 
                                             key={i}
                                             onClick={() => setInputSeq(p.seq)}
-                                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs border border-slate-700 transition-colors"
+                                            className="px-4 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs border border-slate-700 transition-all hover:border-emerald-500 text-left group"
                                         >
-                                            {p.name}
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-emerald-400 group-hover:text-emerald-300">{p.name}</span>
+                                                <Icon name="chevron-right" size={14} className="text-slate-500 group-hover:text-white"/>
+                                            </div>
+                                            <div className="text-slate-500 font-mono text-[10px] truncate">{p.desc}</div>
                                         </button>
                                     ))}
                                 </div>
