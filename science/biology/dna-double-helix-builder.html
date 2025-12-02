@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DNA Double Helix Builder</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        canvas { outline: none; }
+        
+        /* Base Styles */
+        .base-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        .base-card:active { transform: scale(0.95); }
+        
+        /* Match Animation */
+        .match-success { animation: pulse-green 0.5s ease-out; }
+        .match-fail { animation: shake 0.4s ease-in-out; }
+        
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); transform: scale(1); }
+            50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); transform: scale(1.05); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); transform: scale(1); }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* DNA Strand Animation */
+        .strand-enter { animation: slideIn 0.5s ease-out; }
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const BASES = {
+            'A': { name: 'Adenine', color: 'bg-red-500', pair: 'T', shape: 'rounded-r-xl' },
+            'T': { name: 'Thymine', color: 'bg-blue-500', pair: 'A', shape: 'rounded-l-xl' },
+            'C': { name: 'Cytosine', color: 'bg-green-500', pair: 'G', shape: 'rounded-r-full' },
+            'G': { name: 'Guanine', color: 'bg-yellow-500', pair: 'C', shape: 'rounded-l-full' }
+        };
+
+        // --- 3D DNA SCENE ---
+        const DNAScene = ({ sequence }) => {
+            const mountRef = useRef(null);
+            
+            useEffect(() => {
+                if (!mountRef.current) return;
+                const container = mountRef.current;
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x020617); 
+                // scene.fog = new THREE.FogExp2(0x020617, 0.05); // Optional fog
+
+                const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+                camera.position.set(0, 0, 20);
+
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(width, height);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                
+                // Clear container
+                while (container.firstChild) container.removeChild(container.firstChild);
+                container.appendChild(renderer.domElement);
+
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.autoRotate = true;
+                controls.autoRotateSpeed = 2.0;
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+                dirLight.position.set(10, 10, 10);
+                scene.add(dirLight);
+                
+                // --- BUILD DNA ---
+                const group = new THREE.Group();
+                
+                // Materials
+                const materials = {
+                    'A': new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 }),
+                    'T': new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3 }),
+                    'C': new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.3 }),
+                    'G': new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.3 }),
+                    'backbone': new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.3 })
+                };
+                
+                const atomGeo = new THREE.SphereGeometry(0.4, 16, 16);
+                const stickGeo = new THREE.CylinderGeometry(0.1, 0.1, 1, 8);
+                const backboneGeo = new THREE.SphereGeometry(0.2, 8, 8);
+
+                // Generate based on sequence
+                // If sequence is empty or too short, use default
+                const seq = sequence && sequence.length > 0 ? sequence : "ATCGATCGATCG";
+                
+                for (let i = 0; i < seq.length; i++) {
+                    const base1 = seq[i];
+                    const base2 = BASES[base1].pair;
+                    
+                    const angle = i * 0.6;
+                    const y = (i - seq.length/2) * 0.8;
+                    const r = 2;
+                    
+                    // Helix 1 position
+                    const x1 = Math.cos(angle) * r;
+                    const z1 = Math.sin(angle) * r;
+                    
+                    // Helix 2 position (opposite)
+                    const x2 = Math.cos(angle + Math.PI) * r;
+                    const z2 = Math.sin(angle + Math.PI) * r;
+                    
+                    // Base 1
+                    const b1 = new THREE.Mesh(atomGeo, materials[base1]);
+                    b1.position.set(x1*0.4, y, z1*0.4);
+                    group.add(b1);
+                    
+                    // Base 2
+                    const b2 = new THREE.Mesh(atomGeo, materials[base2]);
+                    b2.position.set(x2*0.4, y, z2*0.4);
+                    group.add(b2);
+                    
+                    // Hydrogen Bond (Connect bases)
+                    const hBond = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, r*0.8, 8), materials.backbone);
+                    hBond.position.set(0, y, 0);
+                    hBond.rotation.z = Math.PI/2;
+                    hBond.rotation.y = -angle; // Rotate to align with helix
+                    group.add(hBond);
+                    
+                    // Backbone Atoms (Phosphate)
+                    const bb1 = new THREE.Mesh(backboneGeo, materials.backbone);
+                    bb1.position.set(x1, y, z1);
+                    group.add(bb1);
+                    
+                    const bb2 = new THREE.Mesh(backboneGeo, materials.backbone);
+                    bb2.position.set(x2, y, z2);
+                    group.add(bb2);
+                    
+                    // Backbone Links (Vertical)
+                    if (i > 0) {
+                        const prevAngle = (i-1) * 0.6;
+                        const prevY = (i - 1 - seq.length/2) * 0.8;
+                        
+                        // Link 1
+                        const px1 = Math.cos(prevAngle) * r;
+                        const pz1 = Math.sin(prevAngle) * r;
+                        const link1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1, 8), materials.backbone);
+                        // Need to position and rotate cylinder between two points - simplified for now just vertical-ish
+                        // Or use TubeGeometry for smooth curve.
+                        // Simple method: Stick between points
+                        const start1 = new THREE.Vector3(x1, y, z1);
+                        const end1 = new THREE.Vector3(px1, prevY, pz1);
+                        const mid1 = new THREE.Vector3().addVectors(start1, end1).multiplyScalar(0.5);
+                        link1.position.copy(mid1);
+                        link1.lookAt(end1);
+                        link1.rotateX(Math.PI/2);
+                        link1.scale.y = start1.distanceTo(end1); // Scale length
+                        group.add(link1);
+
+                        // Link 2
+                        const px2 = Math.cos(prevAngle + Math.PI) * r;
+                        const pz2 = Math.sin(prevAngle + Math.PI) * r;
+                        const link2 = link1.clone();
+                        const start2 = new THREE.Vector3(x2, y, z2);
+                        const end2 = new THREE.Vector3(px2, prevY, pz2);
+                        const mid2 = new THREE.Vector3().addVectors(start2, end2).multiplyScalar(0.5);
+                        link2.position.copy(mid2);
+                        link2.lookAt(end2);
+                        link2.rotateX(Math.PI/2);
+                        link2.scale.y = start2.distanceTo(end2);
+                        group.add(link2);
+                    }
+                }
+                
+                scene.add(group);
+
+                // Animation
+                let frameId;
+                const animate = () => {
+                    frameId = requestAnimationFrame(animate);
+                    controls.update();
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                // Resize
+                const handleResize = () => {
+                    if (!container) return;
+                    const w = container.clientWidth;
+                    const h = container.clientHeight;
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                };
+                window.addEventListener('resize', handleResize);
+
+                return () => {
+                    cancelAnimationFrame(frameId);
+                    window.removeEventListener('resize', handleResize);
+                    renderer.dispose();
+                };
+            }, [sequence]);
+
+            return <div ref={mountRef} className="w-full h-full" />;
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [mode, setMode] = useState('game'); // game, 3d
+            const [templateStrand, setTemplateStrand] = useState([]);
+            const [playerStrand, setPlayerStrand] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [score, setScore] = useState(0);
+            const [streak, setStreak] = useState(0);
+            const [timeLeft, setTimeLeft] = useState(60);
+            const [isGameOver, setIsGameOver] = useState(false);
+            const [isPlaying, setIsPlaying] = useState(false);
+
+            // Initialize Game
+            const startGame = () => {
+                // Generate random sequence (length 12)
+                const bases = ['A', 'T', 'C', 'G'];
+                const seq = Array(12).fill(0).map(() => bases[Math.floor(Math.random() * 4)]);
+                setTemplateStrand(seq);
+                setPlayerStrand(Array(12).fill(null));
+                setCurrentIndex(0);
+                setScore(0);
+                setStreak(0);
+                setTimeLeft(60);
+                setIsGameOver(false);
+                setIsPlaying(true);
+                setMode('game');
+            };
+
+            // Timer
+            useEffect(() => {
+                let timer;
+                if (isPlaying && timeLeft > 0) {
+                    timer = setInterval(() => {
+                        setTimeLeft(t => t - 1);
+                    }, 1000);
+                } else if (timeLeft === 0 && isPlaying) {
+                    setIsPlaying(false);
+                    setIsGameOver(true);
+                }
+                return () => clearInterval(timer);
+            }, [isPlaying, timeLeft]);
+
+            const handleBaseClick = (base) => {
+                if (!isPlaying || isGameOver) return;
+
+                const targetBase = templateStrand[currentIndex];
+                const correctPair = BASES[targetBase].pair;
+
+                if (base === correctPair) {
+                    // Correct
+                    const newStrand = [...playerStrand];
+                    newStrand[currentIndex] = base;
+                    setPlayerStrand(newStrand);
+                    setScore(s => s + 10 + streak * 2);
+                    setStreak(s => s + 1);
+                    
+                    // Advance or Win
+                    if (currentIndex < templateStrand.length - 1) {
+                        setCurrentIndex(c => c + 1);
+                    } else {
+                        // Level Complete
+                        setIsPlaying(false);
+                        setIsGameOver(true); // Treat as "Round Complete" state
+                    }
+                } else {
+                    // Wrong
+                    setStreak(0);
+                    // Visual shake (handled by CSS class toggle logic if complex, here simplified)
+                    // For now just score penalty
+                    setScore(s => Math.max(0, s - 5));
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="dna" className="text-emerald-400" /> DNA Builder
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Base Pairing Game</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                            
+                            {/* Stats */}
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                <div className="grid grid-cols-2 gap-4 text-center">
+                                    <div>
+                                        <div className="text-xs font-bold text-slate-500 uppercase">Score</div>
+                                        <div className="text-2xl font-mono font-black text-emerald-400">{score}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-bold text-slate-500 uppercase">Time</div>
+                                        <div className={`text-2xl font-mono font-black ${timeLeft < 10 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                                            {timeLeft}s
+                                        </div>
+                                    </div>
+                                </div>
+                                {streak > 2 && (
+                                    <div className="mt-3 text-center text-xs font-bold text-orange-400 animate-bounce">
+                                        🔥 {streak} Combo!
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Controls */}
+                            <div className="space-y-2">
+                                {!isPlaying ? (
+                                    <button 
+                                        onClick={startGame}
+                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Icon name="play" size={18}/> {isGameOver ? 'Play Again' : 'Start Game'}
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => setIsPlaying(false)}
+                                        className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all"
+                                    >
+                                        Pause
+                                    </button>
+                                )}
+                                
+                                {isGameOver && playerStrand.filter(x=>x).length === templateStrand.length && (
+                                    <button 
+                                        onClick={() => setMode(mode === 'game' ? '3d' : 'game')}
+                                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Icon name={mode === 'game' ? 'box' : 'layout'} size={18}/> 
+                                        {mode === 'game' ? 'View 3D Helix' : 'Back to Game'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Rules */}
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-2">
+                                <div className="font-bold text-slate-400 uppercase mb-1">Pairing Rules</div>
+                                <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-700">
+                                    <span className="text-red-400 font-bold">A (Adenine)</span>
+                                    <Icon name="arrow-right" size={12}/>
+                                    <span className="text-blue-400 font-bold">T (Thymine)</span>
+                                </div>
+                                <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-700">
+                                    <span className="text-green-400 font-bold">C (Cytosine)</span>
+                                    <Icon name="arrow-right" size={12}/>
+                                    <span className="text-yellow-400 font-bold">G (Guanine)</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 relative bg-[#020617] flex flex-col overflow-hidden">
+                        
+                        {mode === 'game' ? (
+                            <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+                                
+                                {/* DNA Ladder Container */}
+                                <div className="w-full max-w-3xl flex gap-4 overflow-x-auto p-4 no-scrollbar justify-start md:justify-center min-h-[300px] items-center">
+                                    
+                                    {templateStrand.map((base, i) => {
+                                        const isActive = i === currentIndex;
+                                        const matchedBase = playerStrand[i];
+                                        const isDone = !!matchedBase;
+
+                                        return (
+                                            <div 
+                                                key={i} 
+                                                className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'scale-110 z-10' : 'opacity-70 scale-90'}`}
+                                            >
+                                                {/* Template Base (Top) */}
+                                                <div className={`w-12 h-16 ${BASES[base].color} flex items-center justify-center font-black text-xl text-white shadow-lg rounded-t-lg border-b-2 border-black/20`}>
+                                                    {base}
+                                                </div>
+                                                
+                                                {/* Backbone connection visual */}
+                                                <div className="w-1 h-4 bg-slate-600"></div>
+
+                                                {/* Player Base Slot (Bottom) */}
+                                                <div className={`w-12 h-16 flex items-center justify-center font-black text-xl text-white shadow-lg rounded-b-lg border-t-2 border-black/20 transition-all
+                                                    ${isDone ? BASES[matchedBase].color : 'bg-slate-800 border-2 border-dashed border-slate-600'}
+                                                    ${isActive ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#020617]' : ''}
+                                                `}>
+                                                    {isDone ? matchedBase : '?'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    
+                                </div>
+
+                                {/* Keyboard Controls / Button Pad */}
+                                <div className="mt-8 grid grid-cols-4 gap-4 w-full max-w-xl px-4">
+                                    {['A', 'T', 'C', 'G'].map(base => (
+                                        <button
+                                            key={base}
+                                            onClick={() => handleBaseClick(base)}
+                                            disabled={!isPlaying}
+                                            className={`h-24 rounded-2xl flex flex-col items-center justify-center gap-1 font-black text-2xl text-white transition-all transform active:scale-95 base-card
+                                                ${BASES[base].color} hover:brightness-110 shadow-xl
+                                                ${!isPlaying ? 'opacity-50 cursor-not-allowed' : ''}
+                                            `}
+                                        >
+                                            {base}
+                                            <span className="text-[10px] font-normal opacity-80 uppercase tracking-wider">{BASES[base].name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {!isPlaying && !isGameOver && (
+                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20">
+                                        <div className="text-center">
+                                            <Icon name="gamepad-2" size={64} className="mx-auto text-emerald-400 mb-4"/>
+                                            <h2 className="text-3xl font-black text-white mb-2">Ready to Build?</h2>
+                                            <p className="text-slate-300">Click 'Start Game' to begin.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {isGameOver && (
+                                    <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-20 animate-in fade-in">
+                                        <div className="text-center bg-slate-900 p-8 rounded-3xl border border-slate-700 shadow-2xl">
+                                            <div className="text-6xl mb-4">🧬</div>
+                                            <h2 className="text-3xl font-black text-white mb-2">Sequence Complete!</h2>
+                                            <div className="text-emerald-400 font-mono text-4xl font-bold mb-6">{score} pts</div>
+                                            <p className="text-slate-400 text-sm mb-6 max-w-xs mx-auto">
+                                                You successfully constructed a DNA strand. 
+                                                {playerStrand.filter(x=>x).length === templateStrand.length && " Now try viewing it in 3D!"}
+                                            </p>
+                                            <div className="flex gap-3 justify-center">
+                                                <button onClick={startGame} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-bold">Retry</button>
+                                                {playerStrand.filter(x=>x).length === templateStrand.length && (
+                                                    <button onClick={() => setMode('3d')} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white font-bold">View 3D</button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
+                        ) : (
+                            <div className="flex-1 relative">
+                                <DNAScene sequence={playerStrand.filter(x=>x).join('')} />
+                                <div className="absolute top-4 left-4">
+                                    <button onClick={() => setMode('game')} className="bg-black/50 backdrop-blur px-4 py-2 rounded-full text-white text-sm hover:bg-black/70 transition border border-white/10">
+                                        ← Back to Game
+                                    </button>
+                                </div>
+                                <div className="absolute bottom-8 center-x text-slate-500 text-xs text-center w-full pointer-events-none">
+                                    Drag to Rotate • Scroll to Zoom
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
