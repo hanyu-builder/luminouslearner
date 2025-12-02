@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dichotomous Key Maker</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Connector Lines */
+        .connector {
+            position: absolute;
+            background-color: #475569;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const ORGANISMS = [
+            { id: 'bird', name: 'Sparrow (麻雀)', icon: 'bird', traits: ['vertebrate', 'legs', 'wings', 'feathers'] },
+            { id: 'fish', name: 'Goldfish (金魚)', icon: 'fish', traits: ['vertebrate', 'fins', 'scales'] },
+            { id: 'spider', name: 'Spider (蜘蛛)', icon: 'bug', traits: ['invertebrate', 'legs', '8-legs'] },
+            { id: 'bee', name: 'Bee (蜜蜂)', icon: 'bug-off', traits: ['invertebrate', 'legs', 'wings', '6-legs'] }, // using bug-off as distinct icon
+            { id: 'worm', name: 'Earthworm (蚯蚓)', icon: 'tornado', traits: ['invertebrate', 'no-legs'] }, // tornado as worm
+        ];
+
+        // Initial Tree Structure
+        // Node: { id, question, yesChild (Node/Organism), noChild (Node/Organism) }
+        const INITIAL_TREE = {
+            id: 'root',
+            question: 'Does it have a backbone (Vertebrate)?',
+            yes: { 
+                id: 'node1', 
+                question: 'Does it have feathers?', 
+                yes: 'bird', 
+                no: 'fish' 
+            },
+            no: { 
+                id: 'node2', 
+                question: 'Does it have legs?', 
+                yes: { 
+                    id: 'node3', 
+                    question: 'Does it have 6 legs?', 
+                    yes: 'bee', 
+                    no: 'spider' 
+                },
+                no: 'worm' 
+            }
+        };
+
+        // --- COMPONENTS ---
+
+        const OrganismCard = ({ id, isTarget = false }) => {
+            const org = ORGANISMS.find(o => o.id === id);
+            if (!org) return null;
+
+            return (
+                <div className={`flex flex-col items-center gap-2 p-3 bg-slate-800 rounded-xl border transition-all
+                    ${isTarget ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-105' : 'border-slate-700'}
+                `}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white
+                        ${isTarget ? 'bg-emerald-600' : 'bg-slate-700'}
+                    `}>
+                        <Icon name={org.icon} size={24} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{org.name.split(' (')[0]}</span>
+                </div>
+            );
+        };
+
+        // Recursive Tree Node
+        const TreeNode = ({ node, depth = 0, path = [] }) => {
+            if (typeof node === 'string') {
+                // Leaf Node (Organism)
+                return (
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center mt-4"
+                    >
+                        <OrganismCard id={node} isTarget={true} />
+                    </motion.div>
+                );
+            }
+
+            return (
+                <div className="flex flex-col items-center relative">
+                    {/* Question Box */}
+                    <div className="bg-slate-900 border border-blue-500/50 text-blue-200 px-4 py-2 rounded-lg text-sm font-bold mb-8 shadow-lg relative z-10">
+                        {node.question}
+                        {/* Connectors */}
+                        <div className="absolute top-full left-1/2 w-px h-4 bg-slate-600 -translate-x-1/2"></div>
+                        <div className="absolute top-[calc(100%+16px)] left-0 right-0 h-px bg-slate-600"></div>
+                        <div className="absolute top-[calc(100%+16px)] left-0 w-px h-4 bg-slate-600"></div>
+                        <div className="absolute top-[calc(100%+16px)] right-0 w-px h-4 bg-slate-600"></div>
+                    </div>
+
+                    {/* Children Container */}
+                    <div className="flex gap-8 md:gap-16 items-start">
+                        {/* Yes Branch (Left) */}
+                        <div className="flex flex-col items-center">
+                            <div className="bg-emerald-600/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded mb-2 border border-emerald-500/30">YES</div>
+                            <TreeNode node={node.yes} depth={depth + 1} path={[...path, 'yes']} />
+                        </div>
+
+                        {/* No Branch (Right) */}
+                        <div className="flex flex-col items-center">
+                            <div className="bg-red-600/20 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded mb-2 border border-red-500/30">NO</div>
+                            <TreeNode node={node.no} depth={depth + 1} path={[...path, 'no']} />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [mode, setMode] = useState('tree'); // tree, text
+            const [treeData, setTreeData] = useState(INITIAL_TREE);
+            
+            // Function to generate text key from tree
+            const generateTextKey = (node, step = 1) => {
+                if (typeof node === 'string') return null; // Should not happen at top level calls
+
+                let output = [];
+                
+                // Question (Yes)
+                const yesDest = typeof node.yes === 'string' 
+                    ? ORGANISMS.find(o=>o.id===node.yes).name 
+                    : `Go to ${step + 1}`;
+                
+                // Question (No) - Need to calculate next step index for NO branch
+                // This simple recursive logic is tricky for standard numbering.
+                // Let's use a simpler visualization for "Text Mode"
+                
+                return (
+                    <div className="space-y-4 font-mono text-sm">
+                        <div className="p-4 bg-slate-800 rounded-lg border border-slate-700">
+                            <div className="text-slate-500 mb-1 text-xs">Step {step}</div>
+                            <div className="flex justify-between items-center py-1 border-b border-slate-700/50">
+                                <span>1a. {node.question.replace('?', '')} ....................................</span>
+                                <span className="font-bold text-emerald-400">{yesDest}</span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                                <span>1b. Not as above ............................................................</span>
+                                <span className="font-bold text-red-400">Go to Next Step</span> 
+                            </div>
+                        </div>
+                        {/* Recursive render for demo purposes is complex without linearizing the tree first */}
+                        <div className="text-center text-slate-500 italic text-xs mt-4">
+                            (Full text generation requires linearizing the tree structure)
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="git-fork" className="text-blue-400" /> Key Maker
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Dichotomous Key Generator</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                            
+                            {/* Organisms List */}
+                            <div>
+                                <div className="flex justify-between items-center mb-3">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Organisms</label>
+                                    <span className="bg-slate-700 text-xs px-2 py-0.5 rounded text-white">5</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {ORGANISMS.map(org => (
+                                        <div key={org.id} className="flex items-center gap-3 p-2 bg-slate-800 rounded-lg border border-slate-700">
+                                            <div className="p-1.5 bg-slate-700 rounded text-slate-300">
+                                                <Icon name={org.icon} size={16}/>
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="text-sm font-bold">{org.name.split(' (')[0]}</div>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {org.traits.slice(0,2).map(t => (
+                                                        <span key={t} className="text-[9px] px-1.5 py-0.5 bg-slate-900 rounded text-slate-400">{t}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Controls */}
+                            <div className="space-y-3 pt-4 border-t border-slate-800">
+                                <button 
+                                    onClick={() => setMode('tree')}
+                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
+                                        ${mode === 'tree' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <Icon name="network" size={18}/> Tree View
+                                </button>
+                                <button 
+                                    onClick={() => setMode('text')}
+                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
+                                        ${mode === 'text' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <Icon name="file-text" size={18}/> Text View
+                                </button>
+                            </div>
+                            
+                            {/* Info */}
+                            <div className="bg-yellow-900/20 p-4 rounded-xl border border-yellow-500/30">
+                                <div className="flex items-center gap-2 mb-2 text-yellow-400 font-bold text-xs uppercase">
+                                    <Icon name="lightbulb" size={14} /> Concept
+                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed">
+                                    A <strong>Dichotomous Key</strong> is a tool that allows the user to determine the identity of items in the natural world based on characteristics. It always splits into <strong>two</strong> choices.
+                                </p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-8 overflow-hidden">
+                        
+                        <div className="flex-1 overflow-auto flex items-center justify-center">
+                            {mode === 'tree' ? (
+                                <div className="min-w-max p-8">
+                                    <TreeNode node={treeData} />
+                                </div>
+                            ) : (
+                                <div className="w-full max-w-2xl mx-auto space-y-6 animate-in fade-in">
+                                    <div className="text-center mb-8">
+                                        <h2 className="text-2xl font-bold text-white mb-2">Biological Classification Key</h2>
+                                        <p className="text-slate-400 text-sm">Follow the steps to identify the organism.</p>
+                                    </div>
+
+                                    {/* Static Text View for Demo */}
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4 font-mono text-sm">
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>1a. Organism has a backbone (Vertebrate)</span>
+                                            <span className="font-bold text-blue-400">Go to 2</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>1b. Organism has NO backbone (Invertebrate)</span>
+                                            <span className="font-bold text-blue-400">Go to 3</span>
+                                        </div>
+
+                                        <div className="mt-4 pt-2"></div>
+                                        
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>2a. Has feathers</span>
+                                            <span className="font-bold text-emerald-400">Sparrow</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>2b. Does not have feathers (Has scales)</span>
+                                            <span className="font-bold text-emerald-400">Goldfish</span>
+                                        </div>
+                                        
+                                        <div className="mt-4 pt-2"></div>
+
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>3a. Has legs</span>
+                                            <span className="font-bold text-blue-400">Go to 4</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>3b. Does not have legs</span>
+                                            <span className="font-bold text-emerald-400">Earthworm</span>
+                                        </div>
+
+                                        <div className="mt-4 pt-2"></div>
+
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>4a. Has 6 legs (and wings)</span>
+                                            <span className="font-bold text-emerald-400">Bee</span>
+                                        </div>
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                            <span>4b. Has 8 legs</span>
+                                            <span className="font-bold text-emerald-400">Spider</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Floating Instructions */}
+                        {mode === 'tree' && (
+                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-6 py-3 rounded-full border border-white/10 text-xs text-white shadow-xl pointer-events-none">
+                                This is a branching key. Each node splits based on a specific trait.
+                            </div>
+                        )}
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
