@@ -113,12 +113,35 @@
                 controls.autoRotateSpeed = 2.0;
 
                 // Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
                 scene.add(ambientLight);
                 const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
                 dirLight.position.set(10, 10, 10);
                 scene.add(dirLight);
                 
+                // --- Helper to create text sprites ---
+                const makeTextSprite = (message) => {
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = 128;
+                    canvas.height = 64;
+                    
+                    context.font = "bold 48px Inter, sans-serif";
+                    context.textAlign = "center";
+                    context.textBaseline = "middle";
+                    context.fillStyle = "rgba(255, 255, 255, 1.0)";
+                    context.strokeStyle = "rgba(0, 0, 0, 0.5)";
+                    context.lineWidth = 4;
+                    context.strokeText(message, 64, 32);
+                    context.fillText(message, 64, 32);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                    const sprite = new THREE.Sprite(spriteMaterial);
+                    sprite.scale.set(1, 0.5, 1);
+                    return sprite;
+                };
+
                 // --- BUILD DNA ---
                 const group = new THREE.Group();
                 
@@ -132,7 +155,7 @@
                 
                 const atomGeo = new THREE.SphereGeometry(0.4, 16, 16);
                 const backboneGeo = new THREE.SphereGeometry(0.25, 8, 8);
-                const bondGeo = new THREE.CylinderGeometry(0.08, 0.08, 1, 8);
+                // Cylinder geometry reuse not ideal for varied lengths, creating dynamically
 
                 const seq = sequence && sequence.length > 0 ? sequence : "ATCGATCGATCG";
                 
@@ -153,23 +176,36 @@
                     const x2 = Math.cos(angle + Math.PI) * r;
                     const z2 = Math.sin(angle + Math.PI) * r;
                     
-                    // Bases
+                    // Base 1 (Sphere)
                     const b1 = new THREE.Mesh(atomGeo, materials[base1]);
                     b1.position.set(x1*0.4, y, z1*0.4);
                     group.add(b1);
+
+                    // Label for Base 1
+                    const label1 = makeTextSprite(base1);
+                    label1.position.copy(b1.position);
+                    label1.position.y += 0.5; // Offset slightly above
+                    group.add(label1);
                     
+                    // Base 2 (Sphere)
                     const b2 = new THREE.Mesh(atomGeo, materials[base2]);
                     b2.position.set(x2*0.4, y, z2*0.4);
                     group.add(b2);
+
+                    // Label for Base 2
+                    const label2 = makeTextSprite(base2);
+                    label2.position.copy(b2.position);
+                    label2.position.y += 0.5;
+                    group.add(label2);
                     
-                    // Hydrogen Bond
+                    // Hydrogen Bond (Connect bases)
                     const hBond = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, r*0.8, 8), materials.backbone);
                     hBond.position.set(0, y, 0);
                     hBond.rotation.z = Math.PI/2;
                     hBond.rotation.y = -angle; 
                     group.add(hBond);
                     
-                    // Backbone Atoms
+                    // Backbone Atoms (Phosphate)
                     const bb1 = new THREE.Mesh(backboneGeo, materials.backbone);
                     bb1.position.set(x1, y, z1);
                     group.add(bb1);
