@@ -95,15 +95,12 @@
                         vx: (Math.random() - 0.5),
                         vy: (Math.random() - 0.5),
                         color: TYPE_ANCESTOR,
-                        gene: 0.5 // 0 = Blue, 1 = Red
+                        gene: 0.5 // 0 = Blue/Square, 1 = Red/Triangle
                     });
                 }
-                // Split into left/right for internal tracking, though visually mixed initially
                 populationsRef.current.left = p.filter(o => o.x < CANVAS_WIDTH/2);
                 populationsRef.current.right = p.filter(o => o.x >= CANVAS_WIDTH/2);
                 
-                // For React state (only needed for stats/rendering if not using canvas for everything)
-                // We use canvas for render loop, state for UI control
                 setGeneration(0);
             };
 
@@ -118,7 +115,6 @@
                 const left = populationsRef.current.left;
                 const right = populationsRef.current.right;
                 
-                // Re-sort based on position just in case
                 const all = [...left, ...right];
                 populationsRef.current.left = [];
                 populationsRef.current.right = [];
@@ -211,21 +207,35 @@
                                     o.gene = Math.min(1, o.gene + 0.05);
                                 }
                                 // Update visual color based on gene
-                                // Interpolate #3b82f6 (Blue) to #ef4444 (Red)
-                                // Simple approximation for demo
                                 if (o.gene < 0.4) o.color = TYPE_A;
                                 else if (o.gene > 0.6) o.color = TYPE_B;
                                 else o.color = TYPE_ANCESTOR;
                             }
                         }
 
-                        // Draw
-                        ctx.beginPath();
-                        ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
+                        // Draw Shape based on Gene
                         ctx.fillStyle = o.color;
-                        ctx.fill();
                         ctx.strokeStyle = "white";
                         ctx.lineWidth = 1;
+                        ctx.beginPath();
+
+                        const size = 6;
+
+                        if (o.gene <= 0.3) {
+                            // Square (Species A - Cold)
+                            ctx.rect(o.x - size, o.y - size, size * 2, size * 2);
+                        } else if (o.gene >= 0.7) {
+                            // Triangle (Species B - Hot)
+                            ctx.moveTo(o.x, o.y - size);
+                            ctx.lineTo(o.x + size, o.y + size);
+                            ctx.lineTo(o.x - size, o.y + size);
+                            ctx.closePath();
+                        } else {
+                            // Circle (Ancestor)
+                            ctx.arc(o.x, o.y, size, 0, Math.PI * 2);
+                        }
+                        
+                        ctx.fill();
                         ctx.stroke();
                     };
 
@@ -327,13 +337,31 @@
                                     <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-xl animate-in fade-in">
                                         <div className="text-emerald-400 font-bold text-sm mb-1 flex items-center gap-2"><Icon name="check-circle" size={16}/> Speciation Complete!</div>
                                         <p className="text-xs text-slate-300 leading-relaxed">
-                                            The two populations have diverged so much (Blue vs Red) that they can no longer interbreed. Two new species have formed.
+                                            The two populations have diverged into distinct shapes (Squares vs Triangles) and colors. They are now separate species.
                                         </p>
                                         <button onClick={reset} className="mt-3 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded text-xs font-bold text-white border border-slate-600">
                                             Reset Simulation
                                         </button>
                                     </div>
                                 )}
+                            </div>
+                            
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                <div className="text-xs font-bold text-slate-500 uppercase mb-2">Species Key</div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-4 h-4 rounded-full bg-slate-400 border border-white"></div>
+                                        <span className="text-xs text-slate-300">Ancestor (Circle)</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-4 h-4 bg-blue-500 border border-white"></div>
+                                        <span className="text-xs text-slate-300">Species A (Square)</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[16px] border-b-red-500 relative top-[-4px]"></div>
+                                        <span className="text-xs text-slate-300">Species B (Triangle)</span>
+                                    </div>
+                                </div>
                             </div>
 
                         </div>
@@ -349,10 +377,10 @@
                             {/* Overlay Labels */}
                             {stage !== 'initial' && (
                                 <>
-                                    <div className="absolute top-4 left-4 text-xs font-bold text-blue-300 bg-blue-900/50 px-3 py-1 rounded backdrop-blur border border-blue-500/30">
+                                    <div className="absolute top-4 left-4 text-xs font-bold text-blue-300 bg-blue-900/50 px-3 py-1 rounded backdrop-blur border border-blue-500/30 shadow-lg">
                                         Environment A (Cold)
                                     </div>
-                                    <div className="absolute top-4 right-4 text-xs font-bold text-red-300 bg-red-900/50 px-3 py-1 rounded backdrop-blur border border-red-500/30">
+                                    <div className="absolute top-4 right-4 text-xs font-bold text-red-300 bg-red-900/50 px-3 py-1 rounded backdrop-blur border border-red-500/30 shadow-lg">
                                         Environment B (Hot)
                                     </div>
                                 </>
