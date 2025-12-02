@@ -74,8 +74,6 @@
         // ATP/ADP Molecule
         const Molecule = ({ state, x, y }) => {
             // state: 'ATP' or 'ADP'
-            // Adenosine: Hexagon + Pentagon
-            // Phosphates: 3 Circles for ATP, 2 for ADP
             
             const phosphateColor = "#facc15"; // Yellow
             const riboseColor = "#60a5fa"; // Blue
@@ -120,8 +118,6 @@
                             </motion.g>
                         )}
                     </AnimatePresence>
-                    
-                    {/* Free Phosphate (Only for ADP context visually, usually floating separately) */}
                 </g>
             );
         };
@@ -285,22 +281,28 @@
                             <div className="relative">
                                 {/* Molecule Visual */}
                                 <svg width="400" height="200" viewBox="0 0 300 100" className="overflow-visible">
+                                    {/* Logic Fix: 
+                                        - During 'hydrolysis', we want molecule to become ADP (show P3 leaving).
+                                        - During 'phosphorylation', we want molecule to become ATP (show P3 arriving).
+                                        - During 'idle', we reset to ATP so user can click again (demonstration cycle).
+                                    */}
                                     <Molecule 
-                                        state={cycleState === 'phosphorylation' ? 'ADP' : 'ATP'} 
+                                        state={cycleState === 'hydrolysis' ? 'ADP' : 'ATP'} 
                                         x={50} y={30} 
                                     />
                                     
-                                    {/* Floating Pi for ADP state */}
+                                    {/* Floating Pi - Only Visible During Hydrolysis */}
                                     <AnimatePresence>
-                                        {(cycleState === 'hydrolysis' || (cycleState === 'idle' && atpCount < 100)) && (
+                                        {cycleState === 'hydrolysis' && (
                                             <motion.g 
-                                                initial={{ x: 200, opacity: 0 }}
+                                                initial={{ x: 200, y: 55, opacity: 0 }} 
                                                 animate={{ x: 240, y: 20, opacity: 1 }}
-                                                exit={{ x: 200, opacity: 0 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: 1.0 }}
                                                 className="pointer-events-none"
                                             >
-                                                <circle cx="0" cy="0" r="10" fill="#facc15" stroke="#ca8a04" strokeWidth="2" />
-                                                <text x="0" y="3" fontSize="8" fill="#713f12" fontWeight="bold" textAnchor="middle">Pi</text>
+                                                <circle cx="0" cy="0" r="12" fill="#facc15" stroke="#ca8a04" strokeWidth="2" />
+                                                <text x="0" y="3" fontSize="10" fill="#713f12" fontWeight="bold" textAnchor="middle">Pi</text>
                                             </motion.g>
                                         )}
                                     </AnimatePresence>
