@@ -223,10 +223,10 @@
                                     key={i} 
                                     onClick={() => !isProtein && setCursorPos(i)}
                                     className={`
-                                        w-8 h-10 flex items-center justify-center rounded cursor-pointer transition-colors relative
+                                        ${isProtein ? 'w-14' : 'w-8'} h-10 flex items-center justify-center rounded cursor-pointer transition-colors relative
                                         ${!isProtein && i === cursorPos ? 'bg-blue-600 ring-2 ring-blue-400 z-10' : 'bg-slate-800'}
                                         ${isDiff ? 'bg-red-900 text-red-200' : ''}
-                                        ${item === 'STOP' ? 'bg-red-600 text-white font-bold' : ''}
+                                        ${item === 'STOP' ? 'bg-red-600 text-white font-bold text-xs' : ''}
                                     `}
                                 >
                                     {item}
@@ -347,7 +347,7 @@
                                 <div className="text-xs font-bold text-slate-500 uppercase mb-2">Original Protein</div>
                                 <div className="flex flex-wrap gap-1">
                                     {originalProtein.map((aa, i) => (
-                                        <div key={i} className="px-3 py-2 bg-slate-800 rounded-lg text-slate-400 text-xs font-bold border border-slate-700">
+                                        <div key={i} className="w-14 h-10 flex items-center justify-center bg-slate-800 rounded-lg text-slate-400 text-xs font-bold border border-slate-700">
                                             {aa}
                                         </div>
                                     ))}
