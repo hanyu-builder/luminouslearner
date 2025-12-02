@@ -22,7 +22,7 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Connector Lines */
+        /* Connector Lines for Tree View */
         .connector {
             position: absolute;
             background-color: #475569;
@@ -65,21 +65,21 @@
         // --- EXPANDED DATA ---
         const ORGANISMS = [
             // Vertebrates
-            { id: 'cat', name: 'Cat (貓)', icon: 'cat', traits: ['vertebrate', 'hair', 'milk', 'mammal'] },
-            { id: 'bird', name: 'Sparrow (麻雀)', icon: 'bird', traits: ['vertebrate', 'feathers', 'wings', 'bird'] },
-            { id: 'turtle', name: 'Turtle (烏龜)', icon: 'snail', traits: ['vertebrate', 'dry scales', 'shell', 'reptile'] }, // using snail as closest shell icon
-            { id: 'frog', name: 'Frog (青蛙)', icon: 'flower', traits: ['vertebrate', 'moist skin', 'no scales', 'amphibian'] }, // using flower as placeholder, ideally 'frog'
-            { id: 'fish', name: 'Goldfish (金魚)', icon: 'fish', traits: ['vertebrate', 'wet scales', 'gills', 'fish'] },
+            { id: 'cat', name: 'Cat (貓)', icon: 'cat', class: 'Mammal (哺乳類)', traits: ['vertebrate', 'hair', 'milk'] },
+            { id: 'bird', name: 'Sparrow (麻雀)', icon: 'bird', class: 'Bird (鳥類)', traits: ['vertebrate', 'feathers', 'wings'] },
+            { id: 'turtle', name: 'Turtle (烏龜)', icon: 'snail', class: 'Reptile (爬行類)', traits: ['vertebrate', 'dry scales', 'shell'] }, // using snail as closest shell icon
+            { id: 'frog', name: 'Frog (青蛙)', icon: 'flower', class: 'Amphibian (兩棲類)', traits: ['vertebrate', 'moist skin', 'no scales'] }, // using flower as placeholder
+            { id: 'fish', name: 'Goldfish (金魚)', icon: 'fish', class: 'Fish (魚類)', traits: ['vertebrate', 'wet scales', 'gills'] },
             
             // Invertebrates
-            { id: 'butterfly', name: 'Butterfly (蝴蝶)', icon: 'wind', traits: ['invertebrate', 'wings', '6-legs', 'insect'] }, // wind for wings
-            { id: 'spider', name: 'Spider (蜘蛛)', icon: 'bug', traits: ['invertebrate', '8-legs', 'arachnid'] },
-            { id: 'bee', name: 'Bee (蜜蜂)', icon: 'bug-off', traits: ['invertebrate', 'wings', '6-legs', 'insect'] },
-            { id: 'worm', name: 'Earthworm (蚯蚓)', icon: 'tornado', traits: ['invertebrate', 'no-legs', 'segmented'] },
-            { id: 'snail', name: 'Snail (蝸牛)', icon: 'circle-dot', traits: ['invertebrate', 'shell', 'soft body'] }
+            { id: 'butterfly', name: 'Butterfly (蝴蝶)', icon: 'wind', class: 'Insect (昆蟲)', traits: ['invertebrate', 'wings', '6-legs'] }, // wind for wings
+            { id: 'spider', name: 'Spider (蜘蛛)', icon: 'bug', class: 'Arachnid (蛛形綱)', traits: ['invertebrate', '8-legs'] },
+            { id: 'bee', name: 'Bee (蜜蜂)', icon: 'bug-off', class: 'Insect (昆蟲)', traits: ['invertebrate', 'wings', '6-legs'] },
+            { id: 'worm', name: 'Earthworm (蚯蚓)', icon: 'tornado', class: 'Annelid (環節動物)', traits: ['invertebrate', 'no-legs', 'segmented'] },
+            { id: 'snail', name: 'Snail (蝸牛)', icon: 'circle-dot', class: 'Mollusc (軟體動物)', traits: ['invertebrate', 'shell', 'soft body'] }
         ];
 
-        // Updated Initial Tree Structure (Covering Vertebrates vs Invertebrates)
+        // Updated Initial Tree Structure
         const INITIAL_TREE = {
             id: 'root',
             question: 'Does it have a backbone (Vertebrate)?',
@@ -133,65 +133,135 @@
             const org = ORGANISMS.find(o => o.id === id);
             if (!org) return null;
 
-            // Mapping icons manually if lucide doesn't have exact match
             let displayIcon = org.icon;
-            if (id === 'frog') displayIcon = 'meh'; // Placeholder
+            if (id === 'frog') displayIcon = 'meh'; 
             if (id === 'turtle') displayIcon = 'shield'; 
             if (id === 'snail') displayIcon = 'disc';
             if (id === 'butterfly') displayIcon = 'feather';
 
             return (
-                <div className={`flex flex-col items-center gap-2 p-3 bg-slate-800 rounded-xl border transition-all w-24
-                    ${isTarget ? 'border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-105' : 'border-slate-700'}
+                <div className={`flex flex-col items-center gap-3 p-4 bg-slate-800 rounded-2xl border transition-all w-40 shadow-xl animate-in zoom-in
+                    ${isTarget ? 'border-emerald-500 bg-emerald-900/20' : 'border-slate-700'}
                 `}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-lg
                         ${isTarget ? 'bg-emerald-600' : 'bg-slate-700'}
                     `}>
-                        <Icon name={displayIcon} size={20} />
+                        <Icon name={displayIcon} size={32} />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-200 text-center leading-tight">{org.name.split(' (')[0]}</span>
+                    <div className="text-center">
+                        <span className="block text-sm font-bold text-white mb-1">{org.name.split(' (')[0]}</span>
+                        <span className="block text-[10px] font-mono text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            {org.class}
+                        </span>
+                    </div>
                 </div>
             );
         };
 
-        // Recursive Tree Node
+        // Interactive Step-by-Step Node
+        const InteractiveNode = ({ node, onReset }) => {
+            // If it's a leaf string, we found the organism
+            if (typeof node === 'string') {
+                return (
+                    <div className="flex flex-col items-center justify-center h-full gap-6">
+                        <div className="text-xl font-bold text-emerald-400 animate-bounce">Identification Complete!</div>
+                        <OrganismCard id={node} isTarget={true} />
+                        <button 
+                            onClick={onReset}
+                            className="mt-4 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-white font-bold flex items-center gap-2 transition-all"
+                        >
+                            <Icon name="rotate-ccw" size={18}/> Start Over
+                        </button>
+                    </div>
+                );
+            }
+
+            // Otherwise, it's a question node
+            // We manage internal state to show only current question
+            const [choice, setChoice] = useState(null); // 'yes' or 'no'
+
+            if (choice === 'yes') {
+                return <InteractiveNode node={node.yes} onReset={onReset} />;
+            }
+            if (choice === 'no') {
+                return <InteractiveNode node={node.no} onReset={onReset} />;
+            }
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+                    <div className="w-full bg-slate-900 border border-blue-500/30 p-8 rounded-3xl shadow-2xl text-center">
+                        <div className="text-xs font-bold text-blue-400 uppercase mb-4 tracking-widest">Diagnostic Question</div>
+                        <h2 className="text-2xl md:text-3xl font-bold text-white mb-10 leading-tight">
+                            {node.question}
+                        </h2>
+                        
+                        <div className="grid grid-cols-2 gap-6">
+                            <button 
+                                onClick={() => setChoice('yes')}
+                                className="py-6 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xl shadow-lg hover:scale-105 transition-all flex flex-col items-center gap-2 group"
+                            >
+                                <Icon name="check-circle" size={32} className="group-hover:animate-pulse"/>
+                                YES
+                            </button>
+                            <button 
+                                onClick={() => setChoice('no')}
+                                className="py-6 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-bold text-xl shadow-lg hover:scale-105 transition-all flex flex-col items-center gap-2 group"
+                            >
+                                <Icon name="x-circle" size={32} className="group-hover:animate-pulse"/>
+                                NO
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={onReset}
+                        className="mt-12 text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2"
+                    >
+                        <Icon name="rotate-ccw" size={14}/> Restart Key
+                    </button>
+                </div>
+            );
+        };
+
+        // Original Tree Node (For Tree View Mode)
         const TreeNode = ({ node, depth = 0, path = [] }) => {
             if (typeof node === 'string') {
-                // Leaf Node (Organism)
+                const org = ORGANISMS.find(o => o.id === node);
+                let displayIcon = org ? org.icon : 'help-circle';
+                if (node === 'frog') displayIcon = 'meh'; 
+                if (node === 'turtle') displayIcon = 'shield'; 
+                if (node === 'snail') displayIcon = 'disc';
+                if (node === 'butterfly') displayIcon = 'feather';
+
                 return (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-                        className="flex flex-col items-center mt-4"
-                    >
-                        <OrganismCard id={node} isTarget={true} />
-                    </motion.div>
+                    <div className="flex flex-col items-center mt-4 p-2 bg-slate-800 rounded-lg border border-slate-700 w-28">
+                        <div className="w-8 h-8 rounded-full bg-emerald-900 text-emerald-400 flex items-center justify-center mb-1">
+                            <Icon name={displayIcon} size={16} />
+                        </div>
+                        <span className="text-[10px] font-bold text-white">{org ? org.name.split(' (')[0] : node}</span>
+                        <span className="text-[8px] text-slate-400">{org ? org.class.split(' ')[0] : ''}</span>
+                    </div>
                 );
             }
 
             return (
                 <div className="flex flex-col items-center relative">
-                    {/* Question Box */}
-                    <div className="bg-slate-900 border border-blue-500/50 text-blue-200 px-4 py-2 rounded-lg text-xs md:text-sm font-bold mb-8 shadow-lg relative z-10 whitespace-nowrap">
+                    <div className="bg-slate-900 border border-slate-700 px-3 py-2 rounded text-[10px] font-bold mb-6 shadow whitespace-nowrap z-10">
                         {node.question}
-                        {/* Connectors */}
-                        <div className="absolute top-full left-1/2 w-px h-4 bg-slate-600 -translate-x-1/2"></div>
-                        <div className="absolute top-[calc(100%+16px)] left-0 right-0 h-px bg-slate-600"></div>
-                        <div className="absolute top-[calc(100%+16px)] left-0 w-px h-4 bg-slate-600"></div>
-                        <div className="absolute top-[calc(100%+16px)] right-0 w-px h-4 bg-slate-600"></div>
+                        <div className="absolute top-full left-1/2 w-px h-3 bg-slate-600 -translate-x-1/2"></div>
+                        <div className="absolute top-[calc(100%+12px)] left-0 right-0 h-px bg-slate-600"></div>
+                        <div className="absolute top-[calc(100%+12px)] left-0 w-px h-3 bg-slate-600"></div>
+                        <div className="absolute top-[calc(100%+12px)] right-0 w-px h-3 bg-slate-600"></div>
                     </div>
 
-                    {/* Children Container */}
-                    <div className="flex gap-8 md:gap-12 items-start">
-                        {/* Yes Branch (Left) */}
+                    <div className="flex gap-6 items-start">
                         <div className="flex flex-col items-center">
-                            <div className="bg-emerald-600/20 text-emerald-400 text-[9px] font-bold px-2 py-0.5 rounded mb-2 border border-emerald-500/30">YES</div>
-                            <TreeNode node={node.yes} depth={depth + 1} path={[...path, 'yes']} />
+                            <div className="text-[8px] text-emerald-400 font-bold mb-1 bg-slate-900 px-1 rounded">YES</div>
+                            <TreeNode node={node.yes} depth={depth + 1} />
                         </div>
-
-                        {/* No Branch (Right) */}
                         <div className="flex flex-col items-center">
-                            <div className="bg-red-600/20 text-red-400 text-[9px] font-bold px-2 py-0.5 rounded mb-2 border border-red-500/30">NO</div>
-                            <TreeNode node={node.no} depth={depth + 1} path={[...path, 'no']} />
+                            <div className="text-[8px] text-red-400 font-bold mb-1 bg-slate-900 px-1 rounded">NO</div>
+                            <TreeNode node={node.no} depth={depth + 1} />
                         </div>
                     </div>
                 </div>
@@ -200,20 +270,12 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [mode, setMode] = useState('tree'); // tree, text
-            const [treeData, setTreeData] = useState(INITIAL_TREE);
-            
-            // Helper to flatten tree for text view
-            const generateSteps = (node, steps = [], nextIndex = { val: 1 }) => {
-                if (typeof node === 'string') return;
-                
-                const currentIndex = nextIndex.val;
-                nextIndex.val++; // Increment for next available step
-                
-                // We need to know the index of the children to point to them
-                // This recursive logic is complex for a linear list.
-                // For simplicity in this demo, we will render a predefined text for the complex tree
-                // or just show the tree view as primary.
+            const [mode, setMode] = useState('interactive'); // interactive, tree, list
+            // Force reset interactive component
+            const [resetKey, setResetKey] = useState(0); 
+
+            const handleReset = () => {
+                setResetKey(k => k + 1);
             };
 
             return (
@@ -225,69 +287,49 @@
                             <h1 className="text-xl font-bold flex items-center gap-2">
                                 <Icon name="git-fork" className="text-blue-400" /> Key Maker
                             </h1>
-                            <p className="text-xs text-slate-400 mt-1">Expanded Biological Key</p>
+                            <p className="text-xs text-slate-400 mt-1">Biological Classification</p>
                         </div>
 
                         <div className="p-6 space-y-8 flex-1 overflow-y-auto">
                             
-                            {/* Organisms List */}
-                            <div>
-                                <div className="flex justify-between items-center mb-3">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Database</label>
-                                    <span className="bg-slate-700 text-xs px-2 py-0.5 rounded text-white">{ORGANISMS.length} Species</span>
+                            {/* Mode Select */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">View Mode</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button 
+                                        onClick={() => setMode('interactive')}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-bold
+                                            ${mode === 'interactive' ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                                        `}
+                                    >
+                                        <Icon name="play-circle" size={18}/> Interactive (Step-by-Step)
+                                    </button>
+                                    <button 
+                                        onClick={() => setMode('tree')}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-bold
+                                            ${mode === 'tree' ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                                        `}
+                                    >
+                                        <Icon name="network" size={18}/> Tree Diagram (Full Map)
+                                    </button>
+                                    <button 
+                                        onClick={() => setMode('list')}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-sm font-bold
+                                            ${mode === 'list' ? 'bg-purple-600 border-purple-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                                        `}
+                                    >
+                                        <Icon name="list" size={18}/> Database List
+                                    </button>
                                 </div>
-                                <div className="space-y-2">
-                                    {ORGANISMS.map(org => (
-                                        <div key={org.id} className="flex items-center gap-3 p-2 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors">
-                                            <div className="p-1.5 bg-slate-700 rounded text-slate-300">
-                                                {/* Dynamic Icon mapping same as card */}
-                                                <Icon name={
-                                                    org.id === 'frog' ? 'meh' : 
-                                                    org.id === 'turtle' ? 'shield' : 
-                                                    org.id === 'snail' ? 'disc' : 
-                                                    org.id === 'butterfly' ? 'feather' : org.icon
-                                                } size={16}/>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-bold truncate">{org.name.split(' (')[0]}</div>
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                    {org.traits.slice(0,2).map(t => (
-                                                        <span key={t} className="text-[9px] px-1.5 py-0.5 bg-slate-900 rounded text-slate-400 truncate max-w-full">{t}</span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Controls */}
-                            <div className="space-y-3 pt-4 border-t border-slate-800">
-                                <button 
-                                    onClick={() => setMode('tree')}
-                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                                        ${mode === 'tree' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
-                                    `}
-                                >
-                                    <Icon name="network" size={18}/> Tree View
-                                </button>
-                                <button 
-                                    onClick={() => setMode('text')}
-                                    className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all
-                                        ${mode === 'text' ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
-                                    `}
-                                >
-                                    <Icon name="file-text" size={18}/> Text View
-                                </button>
                             </div>
                             
                             {/* Info */}
-                            <div className="bg-yellow-900/20 p-4 rounded-xl border border-yellow-500/30">
-                                <div className="flex items-center gap-2 mb-2 text-yellow-400 font-bold text-xs uppercase">
-                                    <Icon name="lightbulb" size={14} /> Key Concept
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                <div className="flex items-center gap-2 mb-2 text-blue-400 font-bold text-xs uppercase">
+                                    <Icon name="info" size={14} /> Tip
                                 </div>
                                 <p className="text-xs text-slate-300 leading-relaxed">
-                                    Classification often starts with broad traits (e.g. Vertebrate vs Invertebrate) and narrows down to specific features.
+                                    Start with "Interactive" mode to simulate how a biologist identifies an unknown organism in the field. Use "Tree Diagram" to see the whole classification logic.
                                 </p>
                             </div>
 
@@ -297,112 +339,48 @@
                     {/* Main Stage */}
                     <div className="flex-1 bg-[#020617] relative flex flex-col overflow-hidden">
                         
-                        <div className="flex-1 overflow-auto flex items-start justify-center pt-10 pb-20 px-10 cursor-grab active:cursor-grabbing">
-                            {mode === 'tree' ? (
-                                <div className="min-w-max transform origin-top transition-transform">
-                                    <TreeNode node={treeData} />
-                                </div>
-                            ) : (
-                                <div className="w-full max-w-3xl mx-auto space-y-6 animate-in fade-in pt-8">
-                                    <div className="text-center mb-8">
-                                        <h2 className="text-2xl font-bold text-white mb-2">Biological Classification Key</h2>
-                                        <p className="text-slate-400 text-sm">Text-based representation of the classification logic.</p>
-                                    </div>
+                        <div className="flex-1 overflow-auto p-8 relative">
+                            
+                            {mode === 'interactive' && (
+                                <InteractiveNode key={resetKey} node={INITIAL_TREE} onReset={handleReset} />
+                            )}
 
-                                    {/* Hardcoded Text View for the Complex Tree */}
-                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-6 font-mono text-sm">
-                                        
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 1</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>1a. Organism has a backbone (Vertebrate)</span>
-                                                <span className="font-bold text-blue-400">Go to 2</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>1b. No backbone (Invertebrate)</span>
-                                                <span className="font-bold text-blue-400">Go to 6</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 2</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>2a. Has hair or fur</span>
-                                                <span className="font-bold text-emerald-400">Cat</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>2b. No hair or fur</span>
-                                                <span className="font-bold text-blue-400">Go to 3</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 3</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>3a. Has feathers</span>
-                                                <span className="font-bold text-emerald-400">Sparrow</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>3b. No feathers</span>
-                                                <span className="font-bold text-blue-400">Go to 4</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 4</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>4a. Has dry scaly skin</span>
-                                                <span className="font-bold text-emerald-400">Turtle</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>4b. Moist skin or wet scales</span>
-                                                <span className="font-bold text-blue-400">Go to 5</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 5</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>5a. Lives in water with gills (scales)</span>
-                                                <span className="font-bold text-emerald-400">Goldfish</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>5b. Lives on land/water (moist skin)</span>
-                                                <span className="font-bold text-emerald-400">Frog</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="w-full h-px bg-slate-700 my-4"></div>
-
-                                        <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase tracking-widest mb-1">Step 6 (Invertebrates)</div>
-                                            <div className="flex justify-between items-center border-b border-slate-800/50 pb-1">
-                                                <span>6a. Has jointed legs</span>
-                                                <span className="font-bold text-blue-400">Go to 7</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>6b. No jointed legs</span>
-                                                <span className="font-bold text-blue-400">Go to 9</span>
-                                            </div>
-                                        </div>
-
-                                        {/* ... Continuing logic for insects/spiders etc ... */}
-                                        <div className="text-center text-xs text-slate-600 italic">
-                                            (Remaining steps for invertebrates...)
-                                        </div>
-
-                                    </div>
+                            {mode === 'tree' && (
+                                <div className="min-w-max flex justify-center pt-8 pb-20">
+                                    <TreeNode node={INITIAL_TREE} />
                                 </div>
                             )}
+
+                            {mode === 'list' && (
+                                <div className="w-full max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in">
+                                    {ORGANISMS.map(org => {
+                                        let displayIcon = org.icon;
+                                        if (org.id === 'frog') displayIcon = 'meh'; 
+                                        if (org.id === 'turtle') displayIcon = 'shield'; 
+                                        if (org.id === 'snail') displayIcon = 'disc';
+                                        if (org.id === 'butterfly') displayIcon = 'feather';
+
+                                        return (
+                                            <div key={org.id} className="flex items-center gap-4 p-4 bg-slate-800 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors">
+                                                <div className="p-3 bg-slate-700 rounded-full text-white shrink-0">
+                                                    <Icon name={displayIcon} size={24}/>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="font-bold text-white truncate">{org.name.split(' (')[0]}</div>
+                                                    <div className="text-xs text-emerald-400 font-mono mb-1">{org.class}</div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {org.traits.map(t => (
+                                                            <span key={t} className="text-[9px] px-1.5 py-0.5 bg-slate-900 rounded text-slate-400 border border-slate-700">{t}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
                         </div>
-
-                        {/* Floating Instructions */}
-                        {mode === 'tree' && (
-                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-6 py-3 rounded-full border border-white/10 text-xs text-white shadow-xl pointer-events-none">
-                                Expanded Key: Vertebrates & Invertebrates
-                            </div>
-                        )}
-
                     </div>
 
                 </div>
