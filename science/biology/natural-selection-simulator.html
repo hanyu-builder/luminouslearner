@@ -26,9 +26,8 @@
         /* Moth Animation */
         .moth { transition: transform 0.5s ease-in-out, opacity 0.3s; cursor: crosshair; }
         .moth:hover { transform: scale(1.1); }
-        .moth.eaten { transform: scale(0); opacity: 0; }
         
-        /* Bark Textures (CSS Patterns) */
+        /* Bark Textures */
         .bark-light {
             background-color: #e2e8f0;
             background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E");
@@ -66,13 +65,12 @@
         };
 
         // --- MOTH COMPONENT ---
-        // Simplified moth shape SVG
         const Moth = ({ type, x, y, onClick, isEaten }) => {
-            const color = type === 'light' ? '#f1f5f9' : '#1e293b'; // Slate-100 vs Slate-800
+            const color = type === 'light' ? '#f1f5f9' : '#1e293b'; 
             const stroke = type === 'light' ? '#94a3b8' : '#0f172a';
             const patternOpacity = type === 'light' ? 0.3 : 0.1;
 
-            if (isEaten) return null; // Or animate out
+            if (isEaten) return null;
 
             return (
                 <div 
@@ -81,16 +79,12 @@
                     onClick={onClick}
                 >
                     <svg viewBox="0 0 100 100" width="100%" height="100%">
-                        {/* Wings */}
                         <path d="M50 50 L20 20 Q5 50 20 80 L50 50 L80 20 Q95 50 80 80 Z" fill={color} stroke={stroke} strokeWidth="2" />
-                        {/* Speckles */}
                         <circle cx="30" cy="30" r="2" fill="black" opacity={patternOpacity} />
                         <circle cx="70" cy="30" r="2" fill="black" opacity={patternOpacity} />
                         <circle cx="25" cy="60" r="3" fill="black" opacity={patternOpacity} />
                         <circle cx="75" cy="60" r="3" fill="black" opacity={patternOpacity} />
-                        {/* Body */}
                         <ellipse cx="50" cy="50" rx="5" ry="20" fill="#475569" />
-                        {/* Antennae */}
                         <path d="M48 30 L40 10" stroke="#475569" strokeWidth="2" />
                         <path d="M52 30 L60 10" stroke="#475569" strokeWidth="2" />
                     </svg>
@@ -100,73 +94,79 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [background, setBackground] = useState('light'); // 'light' (Lichen) or 'dark' (Soot)
+            const [background, setBackground] = useState('light');
             const [generation, setGeneration] = useState(1);
             const [moths, setMoths] = useState([]);
-            const [stats, setStats] = useState([{ gen: 0, light: 50, dark: 50 }]);
+            const [stats, setStats] = useState([{ gen: 1, light: 20, dark: 20 }]);
             const [isPlaying, setIsPlaying] = useState(false);
-            const [predatorTimer, setPredatorTimer] = useState(0);
 
-            // Constants
             const POPULATION_SIZE = 40;
-            const CANVAS_WIDTH = 600; // Will be responsive
-            const CANVAS_HEIGHT = 400;
 
             // Initialize
             useEffect(() => {
                 resetSim();
             }, []);
 
+            const createMoth = (type) => ({
+                id: Math.random().toString(36).substr(2, 9),
+                type: type,
+                x: Math.random() * 90 + 5 + '%',
+                y: Math.random() * 90 + 5 + '%',
+                isEaten: false
+            });
+
             const resetSim = () => {
                 const initialMoths = [];
+                // Start with 50/50 population
                 for (let i = 0; i < POPULATION_SIZE; i++) {
                     initialMoths.push(createMoth(i % 2 === 0 ? 'light' : 'dark'));
                 }
                 setMoths(initialMoths);
                 setGeneration(1);
-                setStats([{ gen: 1, light: 20, dark: 20 }]); // Start 50/50
+                setStats([{ gen: 1, light: POPULATION_SIZE/2, dark: POPULATION_SIZE/2 }]);
                 setIsPlaying(false);
             };
 
-            const createMoth = (type) => ({
-                id: Math.random().toString(36).substr(2, 9),
-                type: type,
-                x: Math.random() * 90 + 5 + '%', // Percent positioning
-                y: Math.random() * 90 + 5 + '%',
-                isEaten: false
-            });
-
-            // Breeding Logic (Next Generation)
+            // Breeding Logic (Key Logic Fix)
             const nextGeneration = () => {
-                // Survivors
+                // 1. Count Survivors
                 const survivors = moths.filter(m => !m.isEaten);
                 
                 if (survivors.length === 0) {
-                    alert("Extinction! All moths were eaten.");
+                    alert("Extinction! All moths were eaten. Resetting...");
                     resetSim();
                     return;
                 }
 
+                // 2. Calculate Ratios
+                const lightSurvivors = survivors.filter(m => m.type === 'light').length;
+                const darkSurvivors = survivors.filter(m => m.type === 'dark').length;
+                const totalSurvivors = survivors.length;
+
+                const lightRatio = lightSurvivors / totalSurvivors;
+
+                // 3. Generate New Population based on Survivor Ratio
                 const newMoths = [];
-                // Reproduce to fill population
                 for (let i = 0; i < POPULATION_SIZE; i++) {
-                    // Pick a random parent from survivors
-                    const parent = survivors[Math.floor(Math.random() * survivors.length)];
-                    // Mutation chance (1%)
-                    let childType = parent.type;
-                    if (Math.random() < 0.01) {
-                        childType = childType === 'light' ? 'dark' : 'light';
+                    // Basic Inheritance
+                    let type = Math.random() < lightRatio ? 'light' : 'dark';
+                    
+                    // Mutation (Small chance to flip)
+                    if (Math.random() < 0.02) { // 2% mutation rate
+                        type = type === 'light' ? 'dark' : 'light';
                     }
-                    newMoths.push(createMoth(childType));
+                    newMoths.push(createMoth(type));
                 }
 
                 setMoths(newMoths);
                 setGeneration(g => g + 1);
 
                 // Update Stats
-                const lightCount = newMoths.filter(m => m.type === 'light').length;
-                const darkCount = newMoths.filter(m => m.type === 'dark').length;
-                setStats(prev => [...prev, { gen: generation + 1, light: lightCount, dark: darkCount }]);
+                const newLightCount = newMoths.filter(m => m.type === 'light').length;
+                const newDarkCount = newMoths.filter(m => m.type === 'dark').length;
+                setStats(prev => [...prev, { gen: generation + 1, light: newLightCount, dark: newDarkCount }]);
+                
+                setIsPlaying(false); // Stop auto-play after breeding
             };
 
             // Predator Logic (Auto-hunt)
@@ -175,18 +175,12 @@
                 if (isPlaying) {
                     interval = setInterval(() => {
                         setMoths(currentMoths => {
-                            // Chance to eat a moth
-                            // Probability depends on camouflage (contrast with background)
-                            // Light BG: Dark moths high risk, Light moths low risk
-                            // Dark BG: Light moths high risk, Dark moths low risk
-                            
-                            // Find uneaten moths
                             const uneaten = currentMoths.filter(m => !m.isEaten);
-                            if (uneaten.length < POPULATION_SIZE / 2) {
-                                // Stop hunting if half population eaten, trigger next gen automatically? 
-                                // Or let user trigger? Let's auto-trigger for smooth sim.
+                            
+                            // Stop if half population is eaten (simulates predator satiation)
+                            if (uneaten.length <= POPULATION_SIZE / 2) {
                                 setIsPlaying(false);
-                                setTimeout(nextGeneration, 1000); // Delay for visual
+                                // Auto-trigger next gen for smoother flow? Optional, let's keep manual for control
                                 return currentMoths;
                             }
 
@@ -196,16 +190,19 @@
 
                             if (target.isEaten) return currentMoths;
 
-                            // Calculate survival chance
-                            let detectionChance = 0.5;
+                            // Selection Pressure Logic (Fix)
+                            // High probability of being eaten if NOT camouflaged
+                            let eatProbability = 0;
+                            
                             if (background === 'light') {
-                                detectionChance = target.type === 'dark' ? 0.8 : 0.2; 
-                            } else { // dark bg
-                                detectionChance = target.type === 'light' ? 0.8 : 0.2;
+                                // Light BG: Dark moths stand out (High risk), Light moths blend in (Low risk)
+                                eatProbability = target.type === 'dark' ? 0.9 : 0.1; 
+                            } else {
+                                // Dark BG: Light moths stand out (High risk), Dark moths blend in (Low risk)
+                                eatProbability = target.type === 'light' ? 0.9 : 0.1;
                             }
 
-                            if (Math.random() < detectionChance) {
-                                // EATEN!
+                            if (Math.random() < eatProbability) {
                                 const newMoths = [...currentMoths];
                                 newMoths[targetIndex] = { ...target, isEaten: true };
                                 return newMoths;
@@ -213,14 +210,12 @@
                             
                             return currentMoths;
                         });
-                    }, 200); // Hunt speed
+                    }, 50); // Faster hunting speed for better UX
                 }
                 return () => clearInterval(interval);
             }, [isPlaying, background]);
 
-            // Manual Hunt
             const handleMothClick = (id) => {
-                if (!isPlaying) return; // Only hunt when active? Or allow anytime? Let's allow anytime.
                 setMoths(prev => prev.map(m => m.id === id ? { ...m, isEaten: true } : m));
             };
 
@@ -263,8 +258,8 @@
                                 </div>
                                 <p className="text-[10px] text-slate-400 leading-tight">
                                     {background === 'light' 
-                                        ? "Pre-industrial: Trees are covered in light lichens. Light moths are camouflaged." 
-                                        : "Industrial Revolution: Soot kills lichens and darkens bark. Dark moths are camouflaged."}
+                                        ? "Pre-industrial: Light moths are camouflaged. Dark moths are easy prey." 
+                                        : "Industrial: Dark moths are camouflaged. Light moths are easy prey."}
                                 </p>
                             </div>
 
@@ -277,17 +272,22 @@
                                 
                                 <button 
                                     onClick={() => setIsPlaying(!isPlaying)}
+                                    disabled={moths.filter(m=>!m.isEaten).length <= POPULATION_SIZE/2}
                                     className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg
                                         ${isPlaying ? 'bg-yellow-600 text-white' : 'bg-emerald-600 text-white'}
+                                        ${moths.filter(m=>!m.isEaten).length <= POPULATION_SIZE/2 ? 'opacity-50 cursor-not-allowed' : ''}
                                     `}
                                 >
                                     <Icon name={isPlaying ? "pause" : "play"} size={18} fill="currentColor" />
-                                    {isPlaying ? 'Pause Sim' : 'Start Predation'}
+                                    {isPlaying ? 'Pause Predation' : 'Start Predation'}
                                 </button>
 
                                 <button 
                                     onClick={nextGeneration}
-                                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                                    disabled={isPlaying || moths.filter(m=>!m.isEaten).length > POPULATION_SIZE/2}
+                                    className={`w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all
+                                        ${isPlaying || moths.filter(m=>!m.isEaten).length > POPULATION_SIZE/2 ? 'opacity-50 cursor-not-allowed' : 'animate-pulse'}
+                                    `}
                                 >
                                     <Icon name="fast-forward" size={18} fill="currentColor" /> Next Generation
                                 </button>
@@ -310,9 +310,8 @@
                         <div className={`flex-1 rounded-3xl border-8 border-slate-800 shadow-2xl relative overflow-hidden transition-colors duration-1000
                             ${background === 'light' ? 'bark-light' : 'bark-dark'}
                         `}>
-                            {/* Status Text */}
                             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur px-4 py-2 rounded-full text-xs font-bold text-white z-10 pointer-events-none">
-                                Click moths to eat them (or Auto-Play)
+                                {isPlaying ? "Birds are hunting..." : moths.filter(m=>!m.isEaten).length <= POPULATION_SIZE/2 ? "Feeding done. Click Next Generation." : "Click 'Start Predation'"}
                             </div>
 
                             {moths.map(moth => (
@@ -338,13 +337,13 @@
                                     <AreaChart data={stats}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                                         <XAxis dataKey="gen" stroke="#64748b" fontSize={10} tickCount={stats.length} />
-                                        <YAxis stroke="#64748b" fontSize={10} />
+                                        <YAxis stroke="#64748b" fontSize={10} domain={[0, 40]}/>
                                         <Tooltip 
                                             contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} 
                                             itemStyle={{ color: '#fff' }}
                                         />
-                                        <Area type="monotone" dataKey="light" stackId="1" stroke="#cbd5e1" fill="#e2e8f0" />
-                                        <Area type="monotone" dataKey="dark" stackId="1" stroke="#475569" fill="#64748b" />
+                                        <Area type="monotone" dataKey="light" stackId="1" stroke="#cbd5e1" fill="#e2e8f0" name="Light Moths" animationDuration={500} />
+                                        <Area type="monotone" dataKey="dark" stackId="1" stroke="#475569" fill="#64748b" name="Dark Moths" animationDuration={500} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
