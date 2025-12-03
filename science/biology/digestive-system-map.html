@@ -114,231 +114,233 @@
             useEffect(() => {
                 if (!mountRef.current) return;
 
+                const container = mountRef.current;
+                // Wait for container to have dimensions
+                if (container.clientWidth === 0) return;
+
                 // 1. Setup
-                const width = mountRef.current.clientWidth;
-                const height = mountRef.current.clientHeight;
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x020617); 
-                scene.fog = new THREE.FogExp2(0x020617, 0.02);
-                sceneRef.current = scene;
+                const width = container.clientWidth;
+                const height = container.clientHeight;
 
-                const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-                camera.position.set(0, 10, 40);
+                try {
+                    const scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x020617); 
+                    scene.fog = new THREE.FogExp2(0x020617, 0.02);
+                    sceneRef.current = scene;
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                renderer.setSize(width, height);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                mountRef.current.appendChild(renderer.domElement);
+                    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+                    camera.position.set(0, 5, 30);
 
-                const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.autoRotate = true;
-                controls.autoRotateSpeed = 1.0;
-                controls.maxPolarAngle = Math.PI / 1.5; // Limit vertical rotation
+                    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                    
+                    while(container.firstChild) container.removeChild(container.firstChild);
+                    container.appendChild(renderer.domElement);
 
-                // Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-                dirLight.position.set(10, 20, 10);
-                scene.add(dirLight);
-                const pointLight = new THREE.PointLight(0x38bdf8, 0.5);
-                pointLight.position.set(-10, 5, 10);
-                scene.add(pointLight);
+                    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                    controls.enableDamping = true;
+                    controls.autoRotate = true;
+                    controls.autoRotateSpeed = 1.0;
+                    controls.maxPolarAngle = Math.PI / 1.5; 
 
-                // --- BUILD ORGANS (Procedural Geometry) ---
-                
-                // Helper Materials
-                const createMat = (color) => new THREE.MeshStandardMaterial({ 
-                    color: color, 
-                    roughness: 0.4, 
-                    metalness: 0.1,
-                });
+                    // Lights
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                    scene.add(ambientLight);
+                    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+                    dirLight.position.set(10, 20, 10);
+                    scene.add(dirLight);
+                    const pointLight = new THREE.PointLight(0x38bdf8, 0.5);
+                    pointLight.position.set(-10, 5, 10);
+                    scene.add(pointLight);
 
-                const organGroup = new THREE.Group();
+                    // --- BUILD ORGANS (Procedural Geometry) ---
+                    
+                    const createMat = (color) => new THREE.MeshStandardMaterial({ 
+                        color: color, 
+                        roughness: 0.4, 
+                        metalness: 0.1,
+                    });
 
-                // 1. Oesophagus (Tube)
-                const oesPath = new THREE.CatmullRomCurve3([
-                    new THREE.Vector3(0, 12, 0),
-                    new THREE.Vector3(0, 4, 0)
-                ]);
-                const oesGeo = new THREE.TubeGeometry(oesPath, 10, 0.8, 8, false);
-                const oesMesh = new THREE.Mesh(oesGeo, createMat(ORGANS.oesophagus.color));
-                oesMesh.userData = { id: 'oesophagus' };
-                organGroup.add(oesMesh);
-                meshesRef.current['oesophagus'] = oesMesh;
+                    const organGroup = new THREE.Group();
 
-                // 2. Stomach (Deformed Sphere/Bag)
-                // We combine a sphere and scale it
-                const stomachGeo = new THREE.SphereGeometry(2.5, 32, 32);
-                const stomachMesh = new THREE.Mesh(stomachGeo, createMat(ORGANS.stomach.color));
-                stomachMesh.position.set(1.5, 2, 0.5);
-                stomachMesh.scale.set(1.5, 1, 1);
-                stomachMesh.rotation.z = Math.PI / 6;
-                stomachMesh.userData = { id: 'stomach' };
-                organGroup.add(stomachMesh);
-                meshesRef.current['stomach'] = stomachMesh;
+                    // 1. Oesophagus (Tube)
+                    const oesGeo = new THREE.CylinderGeometry(0.6, 0.6, 8, 16);
+                    const oesMesh = new THREE.Mesh(oesGeo, createMat(ORGANS.oesophagus.color));
+                    oesMesh.position.set(0, 8, 0);
+                    oesMesh.userData = { id: 'oesophagus' };
+                    organGroup.add(oesMesh);
 
-                // 3. Liver (Large shape on right)
-                // Tetrahedral shape approximation
-                const liverGeo = new THREE.ConeGeometry(4, 6, 4);
-                const liverMesh = new THREE.Mesh(liverGeo, createMat(ORGANS.liver.color));
-                liverMesh.position.set(-3, 4, 1);
-                liverMesh.rotation.z = -Math.PI / 3;
-                liverMesh.rotation.y = Math.PI / 4;
-                liverMesh.scale.set(1, 1, 0.6); // Flatten slightly
-                liverMesh.userData = { id: 'liver' };
-                organGroup.add(liverMesh);
-                meshesRef.current['liver'] = liverMesh;
+                    // 2. Stomach (J-shape: approximated by a distorted sphere + cylinder)
+                    const stomachGroup = new THREE.Group();
+                    const stBody = new THREE.Mesh(new THREE.SphereGeometry(2.5, 32, 32), createMat(ORGANS.stomach.color));
+                    stBody.scale.set(1.2, 1.5, 1);
+                    stomachGroup.add(stBody);
+                    stomachGroup.position.set(1.5, 2, 0.5);
+                    stomachGroup.rotation.z = 0.5;
+                    stomachGroup.userData = { id: 'stomach' };
+                    // We need to set userData on children for raycast to bubble up or traverse manually
+                    stBody.userData = { id: 'stomach' }; 
+                    organGroup.add(stomachGroup);
 
-                // 4. Gall Bladder (Small sphere under liver)
-                const gbGeo = new THREE.SphereGeometry(0.6, 16, 16);
-                const gbMesh = new THREE.Mesh(gbGeo, createMat(ORGANS.gall_bladder.color));
-                gbMesh.position.set(-2, 2, 2);
-                gbMesh.userData = { id: 'gall_bladder' };
-                organGroup.add(gbMesh);
-                meshesRef.current['gall_bladder'] = gbMesh;
+                    // 3. Liver (Large Cone/Tetrahedron)
+                    const liverGeo = new THREE.ConeGeometry(4.5, 5, 4);
+                    const liverMesh = new THREE.Mesh(liverGeo, createMat(ORGANS.liver.color));
+                    liverMesh.position.set(-2.5, 4, 1);
+                    liverMesh.rotation.z = -0.5;
+                    liverMesh.rotation.y = 0.8;
+                    liverMesh.userData = { id: 'liver' };
+                    organGroup.add(liverMesh);
 
-                // 5. Pancreas (Behind stomach, elongated)
-                const panGeo = new THREE.CapsuleGeometry(0.6, 3, 4, 8);
-                const panMesh = new THREE.Mesh(panGeo, createMat(ORGANS.pancreas.color));
-                panMesh.position.set(0.5, 2, -1.5); // Behind
-                panMesh.rotation.z = Math.PI / 2;
-                panMesh.rotation.y = -Math.PI / 6;
-                panMesh.userData = { id: 'pancreas' };
-                organGroup.add(panMesh);
-                meshesRef.current['pancreas'] = panMesh;
+                    // 4. Gall Bladder (Small sphere)
+                    const gbGeo = new THREE.SphereGeometry(0.7, 16, 16);
+                    const gbMesh = new THREE.Mesh(gbGeo, createMat(ORGANS.gall_bladder.color));
+                    gbMesh.position.set(-1.5, 2, 2.5);
+                    gbMesh.userData = { id: 'gall_bladder' };
+                    organGroup.add(gbMesh);
 
-                // 6. Small Intestine (Coiled Tube)
-                // Generate a random winding path
-                const siPoints = [];
-                for(let i=0; i<40; i++) {
-                    const t = i / 40;
-                    // Spiral-like structure
-                    siPoints.push(new THREE.Vector3(
-                        Math.sin(t * 20) * 1.5 + (Math.random()-0.5),
-                        -1 - t * 4 + (Math.random()-0.5),
-                        Math.cos(t * 20) * 1.5 + (Math.random()-0.5)
-                    ));
-                }
-                const siPath = new THREE.CatmullRomCurve3(siPoints);
-                const siGeo = new THREE.TubeGeometry(siPath, 64, 0.6, 8, false);
-                const siMesh = new THREE.Mesh(siGeo, createMat(ORGANS.small_intestine.color));
-                siMesh.position.y = 0;
-                siMesh.userData = { id: 'small_intestine' };
-                organGroup.add(siMesh);
-                meshesRef.current['small_intestine'] = siMesh;
+                    // 5. Pancreas (Elongated box/cylinder behind stomach)
+                    const panGeo = new THREE.BoxGeometry(4, 1, 1);
+                    const panMesh = new THREE.Mesh(panGeo, createMat(ORGANS.pancreas.color));
+                    panMesh.position.set(0.5, 1.5, -1.5);
+                    panMesh.rotation.z = 0.3;
+                    panMesh.userData = { id: 'pancreas' };
+                    organGroup.add(panMesh);
 
-                // 7. Large Intestine (Frame around small intestine)
-                const liPath = new THREE.CatmullRomCurve3([
-                    new THREE.Vector3(3, -5, 0), // Start right bottom
-                    new THREE.Vector3(3, 0, 0), // Up right
-                    new THREE.Vector3(0, 1, 0), // Across top
-                    new THREE.Vector3(-3, 0, 0), // Top left
-                    new THREE.Vector3(-3, -6, 0), // Down left
-                ]);
-                const liGeo = new THREE.TubeGeometry(liPath, 20, 1.2, 12, false); // Thicker
-                const liMesh = new THREE.Mesh(liGeo, createMat(ORGANS.large_intestine.color));
-                liMesh.userData = { id: 'large_intestine' };
-                organGroup.add(liMesh);
-                meshesRef.current['large_intestine'] = liMesh;
+                    // 6. Small Intestine (Coiled Tubes - Simplified as Torus Knots or multiple spheres)
+                    // Using a TorusKnot for "coiled" look is easiest procedural way
+                    const siGeo = new THREE.TorusKnotGeometry(1.8, 0.6, 64, 8, 2, 3);
+                    const siMesh = new THREE.Mesh(siGeo, createMat(ORGANS.small_intestine.color));
+                    siMesh.position.set(0, -3, 0);
+                    siMesh.scale.set(1, 0.8, 1);
+                    siMesh.userData = { id: 'small_intestine' };
+                    organGroup.add(siMesh);
 
-                scene.add(organGroup);
-                
-                // Mouth (Simple sphere representation for context)
-                const mouthGeo = new THREE.SphereGeometry(1.5);
-                const mouthMesh = new THREE.Mesh(mouthGeo, createMat(ORGANS.mouth.color));
-                mouthMesh.position.set(0, 13, 0);
-                mouthMesh.userData = { id: 'mouth' };
-                organGroup.add(mouthMesh);
-                meshesRef.current['mouth'] = mouthMesh;
+                    // 7. Large Intestine (Frame around SI)
+                    // Constructed from 3 cylinders (Top, Left, Right)
+                    const liGroup = new THREE.Group();
+                    const liMat = createMat(ORGANS.large_intestine.color);
+                    
+                    const topLi = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 7, 16), liMat);
+                    topLi.rotation.z = Math.PI / 2;
+                    topLi.position.set(0, 1, 0);
+                    liGroup.add(topLi);
 
+                    const leftLi = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 7, 16), liMat);
+                    leftLi.position.set(-3.5, -2.5, 0);
+                    liGroup.add(leftLi);
 
-                // Interaction
-                const raycaster = new THREE.Raycaster();
-                const mouse = new THREE.Vector2();
-                let hoveredObj = null;
+                    const rightLi = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 7, 16), liMat);
+                    rightLi.position.set(3.5, -2.5, 0);
+                    liGroup.add(rightLi);
+                    
+                    liGroup.position.y = -1;
+                    // Apply userData to all children for raycasting
+                    liGroup.children.forEach(child => child.userData = { id: 'large_intestine' });
+                    
+                    organGroup.add(liGroup);
 
-                // Highlight Glow Material
-                const highlightMat = new THREE.MeshStandardMaterial({ 
-                    color: 0xffffff, 
-                    emissive: 0x444444,
-                    roughness: 0.2,
-                    transparent: true, 
-                    opacity: 0.8
-                });
+                    scene.add(organGroup);
 
-                const onMouseMove = (event) => {
-                    event.preventDefault();
-                    const rect = renderer.domElement.getBoundingClientRect();
-                    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                    // Interaction
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2();
+                    let hoveredObj = null;
 
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects(organGroup.children);
+                    const onMouseMove = (event) => {
+                        event.preventDefault();
+                        const rect = renderer.domElement.getBoundingClientRect();
+                        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-                    if (intersects.length > 0) {
-                        const obj = intersects[0].object;
-                        if (hoveredObj !== obj) {
-                            // Reset previous
-                            if (hoveredObj) hoveredObj.material = hoveredObj.userData.originalMat;
-                            
-                            // Highlight new
-                            hoveredObj = obj;
-                            if (!obj.userData.originalMat) obj.userData.originalMat = obj.material;
-                            obj.material = obj.material.clone();
-                            obj.material.emissive.setHex(0x333333);
-                            
-                            document.body.style.cursor = 'pointer';
+                        raycaster.setFromCamera(mouse, camera);
+                        // Recursively check children
+                        const intersects = raycaster.intersectObjects(organGroup.children, true);
+
+                        if (intersects.length > 0) {
+                            const obj = intersects[0].object;
+                            // Traverse up to find the group or mesh with ID
+                            let target = obj;
+                            while (!target.userData.id && target.parent) {
+                                target = target.parent;
+                            }
+
+                            if (hoveredObj !== target && target.userData.id) {
+                                if (hoveredObj) {
+                                    // Restore previous
+                                    if (hoveredObj.material && hoveredObj.userData.originalMat) {
+                                        hoveredObj.material = hoveredObj.userData.originalMat;
+                                    }
+                                }
+                                
+                                hoveredObj = target;
+                                // Store original material if not stored
+                                if (target.material && !target.userData.originalMat) {
+                                    target.userData.originalMat = target.material;
+                                }
+                                
+                                // Clone and highlight
+                                if (target.material) {
+                                    const newMat = target.material.clone();
+                                    newMat.emissive.setHex(0x333333);
+                                    target.material = newMat;
+                                }
+                                document.body.style.cursor = 'pointer';
+                            }
+                        } else {
+                            if (hoveredObj) {
+                                if (hoveredObj.material && hoveredObj.userData.originalMat) {
+                                    hoveredObj.material = hoveredObj.userData.originalMat;
+                                }
+                                hoveredObj = null;
+                            }
+                            document.body.style.cursor = 'default';
                         }
-                    } else {
+                    };
+
+                    const onClick = () => {
                         if (hoveredObj) {
-                            hoveredObj.material = hoveredObj.userData.originalMat;
-                            hoveredObj = null;
+                            onSelect(hoveredObj.userData.id);
                         }
-                        document.body.style.cursor = 'default';
-                    }
-                };
+                    };
 
-                const onClick = () => {
-                    if (hoveredObj) {
-                        onSelect(hoveredObj.userData.id);
-                    }
-                };
+                    renderer.domElement.addEventListener('mousemove', onMouseMove);
+                    renderer.domElement.addEventListener('click', onClick);
 
-                renderer.domElement.addEventListener('mousemove', onMouseMove);
-                renderer.domElement.addEventListener('click', onClick);
+                    // Animation Loop
+                    let frameId;
+                    const animate = () => {
+                        frameId = requestAnimationFrame(animate);
+                        controls.update();
+                        renderer.render(scene, camera);
+                    };
+                    animate();
 
-                // Animation Loop
-                let frameId;
-                const animate = () => {
-                    frameId = requestAnimationFrame(animate);
-                    controls.update();
-                    renderer.render(scene, camera);
-                };
-                animate();
+                    // Resize Observer
+                    const resizeObserver = new ResizeObserver(() => {
+                        if (container.clientWidth && container.clientHeight) {
+                            const w = container.clientWidth;
+                            const h = container.clientHeight;
+                            camera.aspect = w / h;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(w, h);
+                        }
+                    });
+                    resizeObserver.observe(container);
 
-                // Cleanup
-                const handleResize = () => {
-                    if (!mountRef.current) return;
-                    const w = mountRef.current.clientWidth;
-                    const h = mountRef.current.clientHeight;
-                    camera.aspect = w / h;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(w, h);
-                };
-                window.addEventListener('resize', handleResize);
-
-                return () => {
-                    cancelAnimationFrame(frameId);
-                    window.removeEventListener('resize', handleResize);
-                    renderer.domElement.removeEventListener('mousemove', onMouseMove);
-                    renderer.domElement.removeEventListener('click', onClick);
-                    if (mountRef.current && renderer.domElement) {
-                        mountRef.current.removeChild(renderer.domElement);
-                    }
-                    renderer.dispose();
-                };
+                    return () => {
+                        cancelAnimationFrame(frameId);
+                        resizeObserver.disconnect();
+                        renderer.domElement.removeEventListener('mousemove', onMouseMove);
+                        renderer.domElement.removeEventListener('click', onClick);
+                        if (container && renderer.domElement) {
+                            container.removeChild(renderer.domElement);
+                        }
+                        renderer.dispose();
+                    };
+                } catch (e) {
+                    console.error("Three.js Error:", e);
+                }
             }, []);
 
             return <div ref={mountRef} className="w-full h-full" />;
