@@ -159,11 +159,10 @@
                     </AnimatePresence>
 
                     {/* 1. Carpel (Center) - The Core */}
-                    {/* If everything else is removed, clicking this might show details instead of removing */}
                     <AnimatePresence>
                         {!isCarpelRemoved && (
                             <motion.g 
-                                onClick={() => isStamenRemoved ? onInspect('carpel') : null} // Only interactable after stamen removed for clarity? Or anytime? Let's say last step.
+                                onClick={() => onInspect('carpel')} // Modified: Always allow click, let handler decide logic
                                 className="hover:brightness-110 transition-all"
                             >
                                 <circle cx="250" cy="250" r="40" fill="#a78bfa" stroke="#7c3aed" strokeWidth="3" /> {/* Ovary view from top */}
@@ -195,9 +194,7 @@
 
             const handleInteraction = (partId) => {
                 if (tool === 'forceps') {
-                    // Logic: Can only remove from outside in? 
-                    // Sepal -> Petal -> Stamen -> Carpel (optional)
-                    // Let's enforce order for educational value
+                    // Logic: Can only remove from outside in
                     const currentLayer = PARTS[partId].layer;
                     // Find max layer remaining
                     let maxRemaining = 0;
