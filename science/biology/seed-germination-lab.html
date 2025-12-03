@@ -110,13 +110,16 @@
             return (
                 <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-4 flex flex-col gap-4 relative overflow-hidden">
                     {/* Config Header */}
-                    <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-3 mb-1">
                         <span className="text-xs font-bold text-slate-400 uppercase">Dish {data.id}</span>
                         {isRunning ? (
-                            <span className="text-xs text-emerald-400 font-mono">Day {days}</span>
+                            <span className="text-xs text-emerald-400 font-mono font-bold">Day {days}</span>
                         ) : (
-                            <button onClick={() => onConfigChange(data.id)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                                <Icon name="settings" size={12}/> Edit
+                            <button 
+                                onClick={() => onConfigChange(data.id)} 
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg transition-all transform hover:scale-105 border border-blue-500"
+                            >
+                                <Icon name="settings" size={12}/> Edit Setup
                             </button>
                         )}
                     </div>
