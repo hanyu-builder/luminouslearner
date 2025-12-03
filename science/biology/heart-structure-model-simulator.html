@@ -99,6 +99,27 @@
                 name: 'Vena Cava (大靜脈)',
                 desc: 'Carries deoxygenated blood from the body.',
                 color: '#93c5fd'
+            },
+            // Valves
+            tricuspid: {
+                name: 'Tricuspid Valve (三尖瓣)',
+                desc: 'Prevents backflow of blood from Right Ventricle to Right Atrium.',
+                color: '#ffffff'
+            },
+            mitral: {
+                name: 'Mitral Valve (二尖瓣)',
+                desc: 'Prevents backflow of blood from Left Ventricle to Left Atrium.',
+                color: '#ffffff'
+            },
+            pulmonary_valve: {
+                name: 'Pulmonary Valve (肺動脈瓣)',
+                desc: 'Prevents backflow from Pulmonary Artery to Right Ventricle.',
+                color: '#ffffff'
+            },
+            aortic_valve: {
+                name: 'Aortic Valve (主動脈瓣)',
+                desc: 'Prevents backflow from Aorta to Left Ventricle.',
+                color: '#ffffff'
             }
         };
 
@@ -139,24 +160,36 @@
                     controls.maxDistance = 50;
 
                     // Lights
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                     scene.add(ambientLight);
                     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
                     dirLight.position.set(10, 10, 10);
                     scene.add(dirLight);
-                    const pointLight = new THREE.PointLight(0xffaa00, 0.3); // Warm glow
+                    const pointLight = new THREE.PointLight(0xffaa00, 0.4); // Warm glow
                     pointLight.position.set(-5, 5, 5);
                     scene.add(pointLight);
+                    const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                    backLight.position.set(0, 5, -20); // Light up the back for valve viewing
+                    scene.add(backLight);
 
                     // --- BUILD HEART (Procedural Geometry) ---
                     const heartGroup = new THREE.Group();
 
+                    // Adjusted opacity to 0.4 for better visibility of internal flow
                     const createMat = (color) => new THREE.MeshStandardMaterial({ 
                         color: color, 
                         roughness: 0.3, 
                         metalness: 0.1,
                         transparent: true,
-                        opacity: 0.9
+                        opacity: 0.4, 
+                        side: THREE.DoubleSide
+                    });
+                    
+                    const valveMat = new THREE.MeshStandardMaterial({ 
+                        color: 0xffffff, 
+                        roughness: 0.4,
+                        emissive: 0xaaaaaa,
+                        emissiveIntensity: 0.2
                     });
 
                     // 1. Ventricles (Cone/Sphere combo)
@@ -174,7 +207,7 @@
                     const lvMesh = new THREE.Mesh(lvGeo, createMat(PARTS.lv.color));
                     lvMesh.position.set(1.5, -2, 0);
                     lvMesh.rotation.z = 0.2;
-                    lvMesh.scale.set(1, 1.6, 1); // Thicker wall implied by size
+                    lvMesh.scale.set(1, 1.6, 1); 
                     lvMesh.userData = { id: 'lv' };
                     heartGroup.add(lvMesh);
 
@@ -233,11 +266,42 @@
                     pvMesh.rotation.z = -0.5;
                     pvMesh.userData = { id: 'pv' };
                     heartGroup.add(pvMesh);
+                    
+                    // --- VALVES (New addition for feedback) ---
+                    // Tricuspid (RA-RV)
+                    const tricuspidGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16);
+                    const tricuspid = new THREE.Mesh(tricuspidGeo, valveMat);
+                    tricuspid.position.set(-1.8, 0.5, 0);
+                    tricuspid.userData = { id: 'tricuspid' };
+                    heartGroup.add(tricuspid);
+
+                    // Mitral (LA-LV)
+                    const mitralGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 16);
+                    const mitral = new THREE.Mesh(mitralGeo, valveMat);
+                    mitral.position.set(1.8, 0.5, 0);
+                    mitral.userData = { id: 'mitral' };
+                    heartGroup.add(mitral);
+
+                    // Pulmonary Valve (RV-PA)
+                    const pulmonaryValGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.2, 16);
+                    const pulmonaryVal = new THREE.Mesh(pulmonaryValGeo, valveMat);
+                    pulmonaryVal.position.set(-1.0, 2.2, 0.5);
+                    pulmonaryVal.rotation.z = -0.5;
+                    pulmonaryVal.rotation.x = 0.5;
+                    pulmonaryVal.userData = { id: 'pulmonary_valve' };
+                    heartGroup.add(pulmonaryVal);
+
+                    // Aortic Valve (LV-Aorta)
+                    const aorticValGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.2, 16);
+                    const aorticVal = new THREE.Mesh(aorticValGeo, valveMat);
+                    aorticVal.position.set(1.0, 2.2, 0);
+                    aorticVal.userData = { id: 'aortic_valve' };
+                    heartGroup.add(aorticVal);
 
                     scene.add(heartGroup);
 
                     // --- BLOOD FLOW PARTICLES ---
-                    const particleCount = 40;
+                    const particleCount = 60; // Increased count
                     const particles = [];
                     const particleGeo = new THREE.SphereGeometry(0.15, 8, 8);
 
@@ -249,21 +313,23 @@
                         // Define Path
                         let path;
                         if (type === 'deox') {
-                            // VC -> RA -> RV -> PA
+                            // VC -> RA -> Tricuspid -> RV -> Pulmonary Valve -> PA
                             path = [
                                 new THREE.Vector3(-3.5, 4.5, 0), // VC In
                                 new THREE.Vector3(-2, 2, 0), // RA
+                                new THREE.Vector3(-1.8, 0.5, 0), // Tricuspid
                                 new THREE.Vector3(-1.5, -2, 0), // RV
-                                new THREE.Vector3(-1.5, 2, 0.5), // PA Start
+                                new THREE.Vector3(-1.0, 2.2, 0.5), // Pulmonary Valve
                                 new THREE.Vector3(2, 5, 0) // PA Out
                             ];
                         } else {
-                            // PV -> LA -> LV -> Aorta
+                            // PV -> LA -> Mitral -> LV -> Aortic Valve -> Aorta
                             path = [
                                 new THREE.Vector3(4, 4, 0), // PV In
                                 new THREE.Vector3(2, 2, 0), // LA
+                                new THREE.Vector3(1.8, 0.5, 0), // Mitral
                                 new THREE.Vector3(1.5, -2, 0), // LV
-                                new THREE.Vector3(1.5, 2, 0), // Aorta Start
+                                new THREE.Vector3(1.0, 2.2, 0), // Aortic Valve
                                 new THREE.Vector3(-1, 6, -1) // Aorta Out
                             ];
                         }
@@ -272,7 +338,7 @@
                         const curve = new THREE.CatmullRomCurve3(path);
                         
                         scene.add(mesh);
-                        return { mesh, curve, progress: Math.random(), speed: 0.005 + Math.random()*0.005 };
+                        return { mesh, curve, progress: Math.random(), speed: 0.003 + Math.random()*0.003 };
                     };
 
                     for(let i=0; i<particleCount; i++) {
@@ -296,14 +362,25 @@
                         if (intersects.length > 0) {
                             const obj = intersects[0].object;
                             if (hoveredObj !== obj) {
-                                if (hoveredObj) hoveredObj.material.emissive = new THREE.Color(0x000000);
+                                if (hoveredObj) {
+                                    // Reset previous emissive
+                                    hoveredObj.material.emissive = hoveredObj.userData.originalEmissive || new THREE.Color(0x000000);
+                                }
                                 hoveredObj = obj;
-                                hoveredObj.material.emissive = new THREE.Color(0x333333);
+                                // Store original emissive
+                                if (!obj.userData.originalEmissive) obj.userData.originalEmissive = obj.material.emissive.clone();
+                                
+                                // Highlighting
+                                if (obj.userData.id.includes('valve')) {
+                                    obj.material.emissive = new THREE.Color(0x444444);
+                                } else {
+                                    obj.material.emissive = new THREE.Color(0x333333);
+                                }
                                 document.body.style.cursor = 'pointer';
                             }
                         } else {
                             if (hoveredObj) {
-                                hoveredObj.material.emissive = new THREE.Color(0x000000);
+                                hoveredObj.material.emissive = hoveredObj.userData.originalEmissive || new THREE.Color(0x000000);
                                 hoveredObj = null;
                             }
                             document.body.style.cursor = 'default';
