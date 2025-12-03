@@ -56,51 +56,46 @@
 
         // --- ANATOMY CANVAS ---
         const BreathingCanvas = ({ state }) => { 
-            // state: 'inhale' (1) or 'exhale' (0) or float in between for manual control
-            // Let's use a normalized value: 0 = Full Exhale, 1 = Full Inhale
+            // state: 0 (Full Exhale) to 1 (Full Inhale)
             
             // Dimensions
             const width = 500;
             const height = 600;
             const cx = width / 2;
 
-            // --- DYNAMIC VALUES ---
-            // Rib Cage Expansion
-            const ribWidth = 250 + (state * 60); // Ribs move out
-            const ribY = 150 - (state * 30); // Ribs move up
+            // --- DYNAMIC VALUES (CORRECTED) ---
+            // Rib Cage Expansion (Up and Out)
+            const ribWidth = 260 + (state * 60); 
+            const ribY = 150 - (state * 40); 
             
-            // Diaphragm Flattening
-            // Curve Control Point Y: High (Arch) -> Low (Flat)
-            const diaArch = 500 - (state * 60); 
-            const diaEdgeY = 450;
+            // Diaphragm Movement (The Fix)
+            // Inhale (state 1): Moves DOWN (High Y value), Flattens
+            // Exhale (state 0): Moves UP (Low Y value), Domes
+            const diaEdgeY = 480; // Fixed anchor points at body wall
+            const diaCenterY = 380 + (state * 100); // 380 (Dome) -> 480 (Flat)
 
             // Lung Volume
-            const lungScale = 0.8 + (state * 0.4); // Expands
-
-            // Air Pressure Visuals (Particles)
-            // Inhale: Particles flow IN (down)
-            // Exhale: Particles flow OUT (up)
-            // We can simulate flow direction
+            // Scale from 0.75 to 1.05
+            const lungScale = 0.75 + (state * 0.3); 
 
             return (
                 <svg viewBox="0 0 500 600" className="w-full h-full drop-shadow-2xl">
                     
-                    {/* Trachea */}
+                    {/* Trachea (Fixed Position) */}
                     <rect x={cx-15} y="20" width="30" height="150" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="2" />
-                    {/* Cartilage Rings */}
                     {[...Array(6)].map((_, i) => (
                         <path key={i} d={`M ${cx-15} ${40+i*20} Q ${cx} ${45+i*20} ${cx+15} ${40+i*20}`} stroke="#cbd5e1" fill="none" />
                     ))}
 
-                    {/* Lungs (Left & Right) */}
-                    <g transform={`translate(${cx}, ${180 + (state * -10)}) scale(${lungScale})`}>
+                    {/* Lungs (Left & Right) - Anchor top to trachea end */}
+                    <g transform={`translate(${cx}, 170) scale(${lungScale})`}>
                         {/* Right Lung */}
                         <path d="M 10 0 C 80 0 100 50 100 150 C 100 220 50 240 10 240 Z" fill="#fca5a5" stroke="#ef4444" strokeWidth="2" />
                         {/* Left Lung */}
                         <path d="M -10 0 C -80 0 -100 50 -100 150 C -100 220 -50 240 -10 240 Z" fill="#fca5a5" stroke="#ef4444" strokeWidth="2" />
                     </g>
 
-                    {/* Rib Cage (Simplified) */}
+                    {/* Rib Cage */}
                     <g transform={`translate(${cx}, ${ribY})`}>
                         {/* Left Ribs */}
                         {[...Array(5)].map((_, i) => (
@@ -118,33 +113,31 @@
                         ))}
                     </g>
 
-                    {/* Diaphragm (Muscle Sheet) */}
+                    {/* Diaphragm (Muscle Sheet) - Now moves correctly */}
                     <path 
-                        d={`M ${cx - ribWidth/2 - 20} ${diaEdgeY} Q ${cx} ${diaArch} ${cx + ribWidth/2 + 20} ${diaEdgeY}`} 
+                        d={`M ${cx - ribWidth/2 - 20} ${diaEdgeY} Q ${cx} ${diaCenterY} ${cx + ribWidth/2 + 20} ${diaEdgeY}`} 
                         fill="none" stroke="#ef4444" strokeWidth="12" strokeLinecap="round"
                     />
+                    {/* Muscle Texture */}
                     <path 
-                        d={`M ${cx - ribWidth/2 - 20} ${diaEdgeY} Q ${cx} ${diaArch} ${cx + ribWidth/2 + 20} ${diaEdgeY}`} 
+                        d={`M ${cx - ribWidth/2 - 20} ${diaEdgeY} Q ${cx} ${diaCenterY} ${cx + ribWidth/2 + 20} ${diaEdgeY}`} 
                         fill="none" stroke="#fca5a5" strokeWidth="6" strokeLinecap="round"
                     />
 
                     {/* Air Flow Particles */}
                     <g className="air-particles">
                         {[...Array(10)].map((_, i) => {
-                            // Animation logic handled by CSS or JS? 
-                            // React render loop is easier for logic
                             const yPos = state > 0.5 
-                                ? (Date.now() / 5 + i * 50) % 300 // Down (Inhale)
-                                : 300 - (Date.now() / 5 + i * 50) % 300; // Up (Exhale)
+                                ? (Date.now() / 5 + i * 50) % 300 // Down
+                                : 300 - (Date.now() / 5 + i * 50) % 300; // Up
                             
-                            // Only show particles in trachea/bronchi area
                             return (
                                 <circle key={i} cx={cx + (i%2===0 ? 5 : -5)} cy={50 + yPos} r="3" fill="#38bdf8" opacity={0.7} />
                             );
                         })}
                     </g>
 
-                    {/* Labels (Dynamic Position) */}
+                    {/* Labels */}
                     <text x={cx + ribWidth/2 + 40} y={ribY + 100} fill="#94a3b8" fontSize="12">Rib Cage</text>
                     <text x={cx + ribWidth/2 + 40} y={diaEdgeY} fill="#ef4444" fontSize="12" fontWeight="bold">Diaphragm</text>
 
