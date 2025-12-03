@@ -93,219 +93,160 @@
             useEffect(() => {
                 if (!mountRef.current) return;
 
-                // 1. Setup
-                const width = mountRef.current.clientWidth;
-                const height = mountRef.current.clientHeight;
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x020617); 
-                scene.fog = new THREE.FogExp2(0x020617, 0.03);
-                sceneRef.current = scene;
+                const container = mountRef.current;
+                // Initial dimensions
+                const width = container.clientWidth || 100;
+                const height = container.clientHeight || 100;
 
-                const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-                camera.position.set(0, 15, 15);
-                camera.lookAt(0, 0, 0);
+                try {
+                    const scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x020617); 
+                    scene.fog = new THREE.FogExp2(0x020617, 0.03);
+                    sceneRef.current = scene;
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true });
-                renderer.setSize(width, height);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                mountRef.current.appendChild(renderer.domElement);
+                    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+                    camera.position.set(0, 15, 15);
+                    camera.lookAt(0, 0, 0);
 
-                const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.autoRotate = true;
-                controls.autoRotateSpeed = 0.5;
-                controls.maxPolarAngle = Math.PI / 2 - 0.1;
-
-                // Lights
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-                scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                dirLight.position.set(5, 10, 7);
-                scene.add(dirLight);
-                const spotLight = new THREE.SpotLight(0xffffff, 0.5);
-                spotLight.position.set(0, 20, 0);
-                scene.add(spotLight);
-
-                // --- BUILD DENTITION (Lower Jaw Layout) ---
-                const jawGroup = new THREE.Group();
-                
-                // Materials (Base)
-                const gumMat = new THREE.MeshStandardMaterial({ color: 0xfca5a5, roughness: 0.4 });
-                const toothBaseMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
-
-                // Store materials for highlighting
-                materialsRef.current = {
-                    base: toothBaseMat,
-                    incisor: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.incisor.color, emissive: 0x1d4ed8, emissiveIntensity: 0.4 }),
-                    canine: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.canine.color, emissive: 0xb91c1c, emissiveIntensity: 0.4 }),
-                    premolar: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.premolar.color, emissive: 0xa16207, emissiveIntensity: 0.4 }),
-                    molar: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.molar.color, emissive: 0x15803d, emissiveIntensity: 0.4 }),
-                    dimmed: new THREE.MeshStandardMaterial({ color: 0x334155, transparent: true, opacity: 0.3 })
-                };
-
-                // Simplified Tooth Geometries
-                const incisorGeo = new THREE.BoxGeometry(0.8, 1.5, 0.5); // Flat
-                const canineGeo = new THREE.ConeGeometry(0.5, 1.8, 8); // Pointy
-                const premolarGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8); // Roundish
-                const molarGeo = new THREE.BoxGeometry(1.2, 1.0, 1.2); // Big block
-
-                // Helper: Add Tooth
-                const addTooth = (type, angle, radius, yOffset=0) => {
-                    let geo;
-                    if (type === 'incisor') geo = incisorGeo;
-                    else if (type === 'canine') geo = canineGeo;
-                    else if (type === 'premolar') geo = premolarGeo;
-                    else geo = molarGeo;
-
-                    const mesh = new THREE.Mesh(geo, toothBaseMat);
+                    const renderer = new THREE.WebGLRenderer({ antialias: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                     
-                    // Position in arc
-                    const x = Math.cos(angle) * radius;
-                    const z = Math.sin(angle) * radius;
-                    mesh.position.set(x, 0.5 + yOffset, z);
-                    
-                    // Rotation to face center
-                    mesh.lookAt(0, 0.5, 0);
-                    // Adjust orientation based on geometry
-                    if(type === 'canine') mesh.rotateX(Math.PI/2); // Cone needs fix
-                    if(type === 'premolar') mesh.rotateX(Math.PI/2);
-                    
-                    mesh.userData = { type: type }; // For raycasting/filtering
-                    teethRef.current.push(mesh);
-                    jawGroup.add(mesh);
-                };
+                    // Clear any existing canvas
+                    while(container.firstChild) container.removeChild(container.firstChild);
+                    container.appendChild(renderer.domElement);
 
-                // Generate Arch (16 teeth for lower jaw)
-                // Start from back left to back right
-                // Molars (3), Premolars (2), Canine (1), Incisors (2) | Incisors (2), Canine (1), Premolars (2), Molars (3)
-                
-                const layout = [
-                    'molar', 'molar', 'molar', 'premolar', 'premolar', 'canine', 'incisor', 'incisor',
-                    'incisor', 'incisor', 'canine', 'premolar', 'premolar', 'molar', 'molar', 'molar'
-                ];
-                
-                // Angles for parabolic arch
-                // x = t, z = a*t^2 (Parabola)
-                // Simplified: Elliptical arch
-                const totalTeeth = 16;
-                for(let i=0; i<totalTeeth; i++) {
-                    // Map index to angle range -2 to 2 (roughly)
-                    const t = (i - 7.5) * 0.4; 
-                    const x = t * 1.5;
-                    const z = Math.pow(Math.abs(t), 2.2) * 0.8; // Curve equation
-                    
-                    // We need to calculate rotation from derivative or lookAt
-                    // Let's use direct positioning then lookAt(0,0,5) fake target
-                    
-                    let geo;
-                    const type = layout[i];
-                    
-                    if (type === 'incisor') geo = incisorGeo;
-                    else if (type === 'canine') geo = new THREE.ConeGeometry(0.4, 1.5, 16);
-                    else if (type === 'premolar') geo = new THREE.CylinderGeometry(0.5, 0.4, 1, 16);
-                    else geo = new THREE.BoxGeometry(1.0, 0.8, 1.0);
+                    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                    controls.enableDamping = true;
+                    controls.autoRotate = true;
+                    controls.autoRotateSpeed = 0.5;
+                    controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-                    const mesh = new THREE.Mesh(geo, toothBaseMat);
-                    mesh.position.set(x, 0.8, z);
-                    
-                    // Rotation fix
-                    // Calculate tangent? Simple lookAt center-ish point for layout
-                    mesh.lookAt(0, 0.8, 10); // Look outwards roughly? No look inwards
-                    // Actually teeth face out. 
-                    // Let's try lookAt a point behind the jaw
-                    mesh.lookAt(x * 2, 0.8, z + 5);
+                    // Lights
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    scene.add(ambientLight);
+                    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    dirLight.position.set(5, 10, 7);
+                    scene.add(dirLight);
+                    const spotLight = new THREE.SpotLight(0xffffff, 0.5);
+                    spotLight.position.set(0, 20, 0);
+                    scene.add(spotLight);
 
-                    mesh.userData = { type: type };
-                    teethRef.current.push(mesh);
-                    jawGroup.add(mesh);
+                    // --- BUILD DENTITION (Lower Jaw Layout) ---
+                    const jawGroup = new THREE.Group();
+                    
+                    // Materials (Base)
+                    const toothBaseMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+
+                    // Store materials for highlighting
+                    materialsRef.current = {
+                        base: toothBaseMat,
+                        incisor: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.incisor.color, emissive: 0x1d4ed8, emissiveIntensity: 0.4 }),
+                        canine: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.canine.color, emissive: 0xb91c1c, emissiveIntensity: 0.4 }),
+                        premolar: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.premolar.color, emissive: 0xa16207, emissiveIntensity: 0.4 }),
+                        molar: new THREE.MeshStandardMaterial({ color: TEETH_TYPES.molar.color, emissive: 0x15803d, emissiveIntensity: 0.4 }),
+                        dimmed: new THREE.MeshStandardMaterial({ color: 0x334155, transparent: true, opacity: 0.3 })
+                    };
+
+                    // Simplified Tooth Geometries
+                    const incisorGeo = new THREE.BoxGeometry(0.8, 1.5, 0.5); // Flat
+                    const canineGeo = new THREE.ConeGeometry(0.5, 1.8, 8); // Pointy
+                    const premolarGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8); // Roundish
+                    const molarGeo = new THREE.BoxGeometry(1.2, 1.0, 1.2); // Big block
+
+                    // Generate Arch (16 teeth for lower jaw)
+                    const layout = [
+                        'molar', 'molar', 'molar', 'premolar', 'premolar', 'canine', 'incisor', 'incisor',
+                        'incisor', 'incisor', 'canine', 'premolar', 'premolar', 'molar', 'molar', 'molar'
+                    ];
+                    
+                    const totalTeeth = 16;
+                    for(let i=0; i<totalTeeth; i++) {
+                        const t = (i - 7.5) * 0.4; 
+                        const x = t * 1.5;
+                        const z = Math.pow(Math.abs(t), 2.2) * 0.8; // Curve equation
+                        
+                        let geo;
+                        const type = layout[i];
+                        
+                        if (type === 'incisor') geo = incisorGeo;
+                        else if (type === 'canine') geo = canineGeo;
+                        else if (type === 'premolar') geo = premolarGeo;
+                        else geo = molarGeo;
+
+                        const mesh = new THREE.Mesh(geo, toothBaseMat);
+                        mesh.position.set(x, 0.8, z);
+                        
+                        // Rotation to face center
+                        // Look at a point behind the jaw to face outwards correctly
+                        mesh.lookAt(x * 2, 0.8, z + 5);
+
+                        // Adjust orientation based on geometry
+                        if(type === 'canine') mesh.rotateX(Math.PI/2); // Cone needs fix
+                        if(type === 'premolar') mesh.rotateX(Math.PI/2); // Cylinder needs fix
+
+                        mesh.userData = { type: type };
+                        teethRef.current.push(mesh);
+                        jawGroup.add(mesh);
+                    }
+
+                    scene.add(jawGroup);
+
+                    // Raycaster
+                    const raycaster = new THREE.Raycaster();
+                    const mouse = new THREE.Vector2();
+
+                    const onMouseClick = (event) => {
+                        const rect = renderer.domElement.getBoundingClientRect();
+                        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                        raycaster.setFromCamera(mouse, camera);
+                        const intersects = raycaster.intersectObjects(teethRef.current);
+
+                        if (intersects.length > 0) {
+                            const type = intersects[0].object.userData.type;
+                            if (type && onSelect) onSelect(type);
+                        }
+                    };
+
+                    renderer.domElement.addEventListener('click', onMouseClick);
+
+                    // Animation
+                    let frameId;
+                    const animate = () => {
+                        frameId = requestAnimationFrame(animate);
+                        controls.update();
+                        renderer.render(scene, camera);
+                    };
+                    animate();
+
+                    // Resize Observer
+                    const resizeObserver = new ResizeObserver(() => {
+                        if (container.clientWidth && container.clientHeight) {
+                            const w = container.clientWidth;
+                            const h = container.clientHeight;
+                            camera.aspect = w / h;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(w, h);
+                        }
+                    });
+                    resizeObserver.observe(container);
+
+                    // Cleanup
+                    return () => {
+                        cancelAnimationFrame(frameId);
+                        resizeObserver.disconnect();
+                        renderer.domElement.removeEventListener('click', onMouseClick);
+                        if (container && renderer.domElement) {
+                            container.removeChild(renderer.domElement);
+                        }
+                        renderer.dispose();
+                        teethRef.current = [];
+                    };
+                } catch (e) {
+                    console.error("Three.js Error:", e);
                 }
-
-                // Gum (U-shape tube or extruded shape)
-                // Simple visual filler
-                const gumCurve = new THREE.CurvePath();
-                // ... complex path. Let's use a Torus segment scaled.
-                const gumGeo = new THREE.TorusGeometry(5, 1.5, 16, 50, Math.PI); 
-                const gum = new THREE.Mesh(gumGeo, gumMat);
-                gum.rotation.x = Math.PI / 2;
-                gum.scale.set(1, 1.5, 1); // Stretch to U shape
-                gum.position.set(0, 0, 4); // Adjust Z
-                // This is a hacky U-shape. Better:
-                // Just a box below for context
-                // jawGroup.add(gum); 
-
-                // Create a custom Gum mesh using points
-                const shape = new THREE.Shape();
-                shape.moveTo(-7, 8);
-                shape.quadraticCurveTo(0, 0, 7, 8);
-                shape.lineTo(6, 9);
-                shape.quadraticCurveTo(0, 2, -6, 9);
-                const gumMesh = new THREE.Mesh(
-                    new THREE.ExtrudeGeometry(shape, { depth: 2, bevelEnabled: true }), 
-                    gumMat
-                );
-                gumMesh.rotation.x = Math.PI / 2;
-                gumMesh.position.y = -0.5;
-                gumMesh.position.z = -4; // Adjust
-                // Position adjustments are tricky without trial.
-                // Let's stick to just teeth floating for clarity or simple base.
-                
-                const basePlate = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.5, 32), gumMat);
-                basePlate.position.y = -0.5;
-                basePlate.scale.z = 0.8;
-                // jawGroup.add(basePlate); // Optional
-
-                scene.add(jawGroup);
-
-                // Raycaster
-                const raycaster = new THREE.Raycaster();
-                const mouse = new THREE.Vector2();
-
-                const onMouseClick = (event) => {
-                    const rect = renderer.domElement.getBoundingClientRect();
-                    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects(teethRef.current);
-
-                    if (intersects.length > 0) {
-                        const type = intersects[0].object.userData.type;
-                        if (type && onSelect) onSelect(type);
-                    }
-                };
-
-                renderer.domElement.addEventListener('click', onMouseClick);
-
-                // Animation
-                let frameId;
-                const animate = () => {
-                    frameId = requestAnimationFrame(animate);
-                    controls.update();
-                    renderer.render(scene, camera);
-                };
-                animate();
-
-                // Resize
-                const handleResize = () => {
-                    if (!mountRef.current) return;
-                    const w = mountRef.current.clientWidth;
-                    const h = mountRef.current.clientHeight;
-                    camera.aspect = w / h;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(w, h);
-                };
-                window.addEventListener('resize', handleResize);
-
-                return () => {
-                    cancelAnimationFrame(frameId);
-                    window.removeEventListener('resize', handleResize);
-                    renderer.domElement.removeEventListener('click', onMouseClick);
-                    if (mountRef.current && renderer.domElement) {
-                        mountRef.current.removeChild(renderer.domElement);
-                    }
-                    renderer.dispose();
-                    teethRef.current = [];
-                };
             }, []); // Init
 
             // Highlight Effect
@@ -328,7 +269,7 @@
                 });
             }, [filter]);
 
-            return <div ref={mountRef} className="w-full h-full cursor-pointer" title="Click teeth to identify" />;
+            return <div ref={mountRef} className="w-full h-full cursor-pointer min-h-[200px]" title="Click teeth to identify" />;
         };
 
         // --- MAIN APP ---
@@ -414,8 +355,11 @@
                     {/* Main Stage */}
                     <div className="flex-1 relative bg-[#020617] flex flex-col overflow-hidden">
                         
-                        <div className="flex-1 relative">
-                            <DentitionScene filter={selectedType} onSelect={handleToggle} />
+                        <div className="flex-1 relative flex flex-col">
+                            {/* 3D Container */}
+                            <div className="flex-1 relative w-full h-full">
+                                <DentitionScene filter={selectedType} onSelect={handleToggle} />
+                            </div>
                             
                             <div className="absolute top-6 left-6 pointer-events-none">
                                 <div className="flex items-center gap-2 bg-black/50 backdrop-blur px-3 py-1.5 rounded-lg border border-white/10">
