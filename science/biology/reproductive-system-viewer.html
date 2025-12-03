@@ -93,9 +93,11 @@
                 if (!mountRef.current) return;
                 const container = mountRef.current;
 
-                // Wait for layout - use ResizeObserver to handle initial 0 size
-                let width = container.clientWidth || 100;
-                let height = container.clientHeight || 100;
+                // Wait for layout
+                if (container.clientWidth === 0) return;
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
 
                 try {
                     const scene = new THREE.Scene();
@@ -171,29 +173,28 @@
                         e2.userData = { id: 'epididymis' };
                         group.add(e2);
 
-                        // 3. Vas Deferens (Using Cylinders for stability)
+                        // 3. Vas Deferens (Tubes - SIMPLIFIED to Cylinders to avoid crash)
+                        // Vertical parts
                         const vdMat = createMat(data.vas_deferens.color);
-                        
-                        // Left side
-                        const vd1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 8), vdMat);
+                        const vd1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 8), vdMat);
                         vd1.position.set(-3.5, 1, 0);
                         vd1.userData = { id: 'vas_deferens' };
                         group.add(vd1);
 
-                        const vdJoin1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4), vdMat);
-                        vdJoin1.position.set(-1.8, 4.5, 0);
-                        vdJoin1.rotation.z = Math.PI / 2.5;
-                        vdJoin1.userData = { id: 'vas_deferens' };
-                        group.add(vdJoin1);
-
-                        // Right side
-                        const vd2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 8), vdMat);
+                        const vd2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 8), vdMat);
                         vd2.position.set(3.5, 1, 0);
                         vd2.userData = { id: 'vas_deferens' };
                         group.add(vd2);
 
-                        const vdJoin2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4), vdMat);
-                        vdJoin2.position.set(1.8, 4.5, 0);
+                        // Horizontal parts (joining to center)
+                        const vdJoin1 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 4), vdMat);
+                        vdJoin1.position.set(-1.8, 4, 0);
+                        vdJoin1.rotation.z = Math.PI / 2.5;
+                        vdJoin1.userData = { id: 'vas_deferens' };
+                        group.add(vdJoin1);
+
+                        const vdJoin2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 4), vdMat);
+                        vdJoin2.position.set(1.8, 4, 0);
                         vdJoin2.rotation.z = -Math.PI / 2.5;
                         vdJoin2.userData = { id: 'vas_deferens' };
                         group.add(vdJoin2);
@@ -215,16 +216,10 @@
                         penis.userData = { id: 'penis' };
                         group.add(penis);
 
-                        // 6. Urethra (Tip)
-                        const urethraTip = new THREE.Mesh(new THREE.SphereGeometry(0.4), createMat(data.urethra.color));
-                        urethraTip.position.set(0, -5.8, 3.6); // Approx tip position based on penis rotation
-                        urethraTip.userData = { id: 'urethra' };
-                        group.add(urethraTip);
-
                     } else { // Female
                         const data = SYSTEMS.female.parts;
 
-                        // 1. Uterus
+                        // 1. Uterus (Inverted Pear)
                         const uterusGeo = new THREE.ConeGeometry(2.5, 5, 32);
                         const uterusMat = createMat(data.uterus.color);
                         const uterus = new THREE.Mesh(uterusGeo, uterusMat);
@@ -248,15 +243,16 @@
                         o2.userData = { id: 'ovary' };
                         group.add(o2);
 
-                        // 3. Oviducts (Simplified Cylinders)
+                        // 3. Oviducts (Tubes)
                         const odMat = createMat(data.oviduct.color);
-                        
+                        // Left tube
                         const od1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4), odMat);
                         od1.position.set(-2.5, 3.5, 0);
                         od1.rotation.z = Math.PI / 3;
                         od1.userData = { id: 'oviduct' };
                         group.add(od1);
                         
+                        // Right tube
                         const od2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4), odMat);
                         od2.position.set(2.5, 3.5, 0);
                         od2.rotation.z = -Math.PI / 3;
@@ -331,7 +327,7 @@
                     };
                     animate();
 
-                    // Resize Observer (Critical Fix)
+                    // Resize Observer
                     const resizeObserver = new ResizeObserver(() => {
                         if (container.clientWidth && container.clientHeight) {
                             const w = container.clientWidth;
@@ -361,41 +357,56 @@
             return <div ref={mountRef} className="w-full h-full" />;
         };
 
-        // --- 2D SVG COMPONENTS ---
+        // --- 2D SVG COMPONENTS (Existing) ---
         const MaleSystemSVG = ({ selected, onSelect }) => (
             <svg viewBox="0 0 400 500" className="w-full h-full drop-shadow-xl">
+                {/* Bladder (Context only) */}
                 <path d="M 150 50 Q 200 20 250 50 L 250 100 Q 200 130 150 100 Z" fill="#e2e8f0" stroke="#cbd5e1" />
+
+                {/* Vas Deferens (Looping) */}
                 <path 
                     d="M 120 350 L 120 100 Q 120 50 200 120 L 200 200" 
                     fill="none" stroke="#2563eb" strokeWidth="6"
                     className={`organ-part ${selected === 'vas_deferens' ? 'active' : ''}`}
                     onClick={() => onSelect('vas_deferens')}
                 />
+                
+                {/* Prostate */}
                 <circle 
                     cx="200" cy="220" r="25" 
                     fill="#d8b4fe" stroke="#a855f7" strokeWidth="2"
                     className={`organ-part ${selected === 'prostate' ? 'active' : ''}`}
                     onClick={() => onSelect('prostate')}
                 />
+
+                {/* Penis */}
                 <path 
                     d="M 170 250 L 170 400 Q 200 430 230 400 L 230 250" 
                     fill="#fecaca" stroke="#fca5a5" strokeWidth="2"
                     className={`organ-part ${selected === 'penis' ? 'active' : ''}`}
                     onClick={() => onSelect('penis')}
                 />
+
+                {/* Urethra (Inside Penis) */}
                 <line 
                     x1="200" y1="245" x2="200" y2="415" 
                     stroke="#ef4444" strokeWidth="4" strokeDasharray="5,5"
                     className={`organ-part ${selected === 'urethra' ? 'active' : ''}`}
                     onClick={() => onSelect('urethra')}
                 />
+
+                {/* Scrotum (Bag) */}
                 <path d="M 100 350 Q 100 450 160 400" fill="#fee2e2" stroke="#fca5a5" strokeWidth="2" />
+
+                {/* Testis */}
                 <ellipse 
                     cx="130" cy="380" rx="20" ry="30" 
                     fill="#93c5fd" stroke="#60a5fa" strokeWidth="2"
                     className={`organ-part ${selected === 'testis' ? 'active' : ''}`}
                     onClick={() => onSelect('testis')}
                 />
+
+                {/* Epididymis (Cap on Testis) */}
                 <path 
                     d="M 110 360 Q 130 340 150 360 C 160 380 150 390 130 380" 
                     fill="#60a5fa" stroke="#3b82f6" strokeWidth="2"
@@ -407,6 +418,7 @@
 
         const FemaleSystemSVG = ({ selected, onSelect }) => (
             <svg viewBox="0 0 400 500" className="w-full h-full drop-shadow-xl">
+                {/* Oviducts (Left & Right) */}
                 <path 
                     d="M 120 150 Q 50 100 50 150 Q 50 200 80 180" 
                     fill="none" stroke="#ec4899" strokeWidth="8"
@@ -419,6 +431,8 @@
                     className={`organ-part ${selected === 'oviduct' ? 'active' : ''}`}
                     onClick={() => onSelect('oviduct')}
                 />
+
+                {/* Ovaries */}
                 <ellipse 
                     cx="60" cy="180" rx="20" ry="15" 
                     fill="#fbcfe8" stroke="#f472b6" strokeWidth="2"
@@ -431,18 +445,24 @@
                     className={`organ-part ${selected === 'ovary' ? 'active' : ''}`}
                     onClick={() => onSelect('ovary')}
                 />
+
+                {/* Uterus (Center) */}
                 <path 
                     d="M 120 150 L 280 150 L 250 300 L 150 300 Z" 
                     fill="#fce7f3" stroke="#db2777" strokeWidth="3"
                     className={`organ-part ${selected === 'uterus' ? 'active' : ''}`}
                     onClick={() => onSelect('uterus')}
                 />
+
+                {/* Cervix */}
                 <rect 
                     x="170" y="300" width="60" height="30" rx="5" 
                     fill="#f9a8d4" stroke="#be185d" strokeWidth="2"
                     className={`organ-part ${selected === 'cervix' ? 'active' : ''}`}
                     onClick={() => onSelect('cervix')}
                 />
+
+                {/* Vagina */}
                 <path 
                     d="M 170 330 L 170 450 L 230 450 L 230 330 Z" 
                     fill="#fbcfe8" stroke="#9d174d" strokeWidth="2"
@@ -454,8 +474,8 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [system, setSystem] = useState('male'); // Default male to check fix
-            const [viewMode, setViewMode] = useState('2d'); 
+            const [system, setSystem] = useState('female'); // male, female
+            const [viewMode, setViewMode] = useState('2d'); // 2d, 3d
             const [selectedPart, setSelectedPart] = useState(null);
 
             const currentData = SYSTEMS[system];
