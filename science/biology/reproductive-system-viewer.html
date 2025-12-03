@@ -93,9 +93,11 @@
                 if (!mountRef.current) return;
                 const container = mountRef.current;
 
-                // Safety check
-                let width = container.clientWidth || 100;
-                let height = container.clientHeight || 100;
+                // Wait for layout
+                if (container.clientWidth === 0) return;
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
 
                 try {
                     const scene = new THREE.Scene();
