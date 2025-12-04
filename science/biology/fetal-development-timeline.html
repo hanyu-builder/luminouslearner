@@ -42,6 +42,14 @@
             45% { transform: scale(1.1); }
             60% { transform: scale(1); }
         }
+
+        /* Pulse for Birth Readiness */
+        .birth-pulse { animation: birth-pulse 2s infinite; }
+        @keyframes birth-pulse {
+            0% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.5; transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -121,31 +129,31 @@
 
         // --- SVG COMPONENT ---
         const FetalSVG = ({ week }) => {
-            // Determine which visual to show based on week
-            // Scale factor for growth animation
             
             return (
-                <svg viewBox="0 0 400 400" className="w-full h-full drop-shadow-2xl">
-                    {/* Uterus Outline (Background) */}
+                <svg viewBox="0 0 400 500" className="w-full h-full drop-shadow-2xl">
+                    {/* Uterus Outline (Background) - ENLARGED to fit full term fetus */}
                     <path 
-                        d="M 50 50 Q 200 -50 350 50 C 400 150 350 350 200 380 C 50 350 0 150 50 50" 
+                        d="M 30 30 Q 200 -80 370 30 C 420 150 380 400 200 420 C 20 400 -20 150 30 30" 
                         fill="#fce7f3" stroke="#db2777" strokeWidth="4" opacity="0.5"
                     />
                     <path 
-                        d="M 60 60 Q 200 -30 340 60 C 380 150 330 330 200 360 C 70 330 20 150 60 60" 
+                        d="M 40 40 Q 200 -60 360 40 C 400 150 360 380 200 400 C 40 380 0 150 40 40" 
                         fill="#be185d" stroke="none" opacity="0.1"
                     />
                     
-                    {/* Umbilical Cord Anchor */}
-                    <path d="M 200 50 Q 200 100 200 120" stroke="#ef4444" strokeWidth="4" fill="none" strokeLinecap="round" />
+                    {/* Placenta (Top) */}
+                    <ellipse cx="200" cy="40" rx="60" ry="15" fill="#ef4444" opacity="0.6" />
 
-                    <g transform="translate(200, 200)">
+                    {/* Removed the static "Umbilical Cord Anchor" to avoid double cord issue */}
+
+                    <g transform="translate(200, 220)">
                         {week <= 4 && (
                             <motion.g initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
                                 {/* Blastocyst */}
                                 <circle r="10" fill="#fef08a" stroke="#ca8a04" strokeWidth="1" />
                                 <circle cx="3" cy="-3" r="3" fill="#ca8a04" />
-                                <text x="0" y="25" textAnchor="middle" fontSize="10" fill="#94a3b8">Zygote/Blastocyst</text>
+                                <text x="0" y="25" textAnchor="middle" fontSize="10" fill="#94a3b8">Zygote</text>
                             </motion.g>
                         )}
 
@@ -153,25 +161,25 @@
                             <motion.g initial={{ scale: 0.5 }} animate={{ scale: 1 }} exit={{ opacity: 0 }}>
                                 {/* Embryo (C-Shape) */}
                                 <path d="M -10 -20 C 20 -20 30 10 10 30 C -10 40 -30 20 -20 0" fill="#fca5a5" stroke="#ef4444" strokeWidth="2" />
-                                <circle cx="0" cy="-10" r="8" fill="#fca5a5" stroke="#ef4444" /> {/* Head */}
-                                <circle cx="5" cy="5" r="2" fill="red" className="heartbeat" /> {/* Heart */}
-                                <path d="M -5 10 Q -15 15 -10 25" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" /> {/* Limb bud */}
-                                <text x="0" y="50" textAnchor="middle" fontSize="10" fill="#94a3b8">Embryo</text>
+                                <circle cx="0" cy="-10" r="8" fill="#fca5a5" stroke="#ef4444" />
+                                <circle cx="5" cy="5" r="2" fill="red" className="heartbeat" />
+                                <path d="M -5 10 Q -15 15 -10 25" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" />
+                                {/* Cord connecting to placenta area (relative coords) */}
+                                <path d="M 0 0 Q 20 -50 0 -160" stroke="#ef4444" strokeWidth="2" fill="none" opacity="0.5" />
                             </motion.g>
                         )}
 
                         {week > 8 && week <= 16 && (
                             <motion.g initial={{ scale: 0.8 }} animate={{ scale: 1.2 }} exit={{ opacity: 0 }}>
                                 {/* Early Fetus */}
-                                <circle cx="0" cy="-20" r="15" fill="#fca5a5" stroke="#ef4444" /> {/* Head */}
-                                <ellipse cx="0" cy="10" rx="12" ry="20" fill="#fca5a5" stroke="#ef4444" /> {/* Body */}
-                                {/* Limbs */}
+                                <circle cx="0" cy="-20" r="15" fill="#fca5a5" stroke="#ef4444" />
+                                <ellipse cx="0" cy="10" rx="12" ry="20" fill="#fca5a5" stroke="#ef4444" />
                                 <path d="M -10 0 L -25 10" stroke="#fca5a5" strokeWidth="4" strokeLinecap="round" />
                                 <path d="M 10 0 L 25 10" stroke="#fca5a5" strokeWidth="4" strokeLinecap="round" />
                                 <path d="M -8 25 L -15 45" stroke="#fca5a5" strokeWidth="4" strokeLinecap="round" />
                                 <path d="M 8 25 L 15 45" stroke="#fca5a5" strokeWidth="4" strokeLinecap="round" />
-                                {/* Umbilical */}
-                                <path d="M 0 10 Q 10 -20 0 -80" stroke="#ef4444" strokeWidth="2" fill="none" />
+                                {/* Single Cord */}
+                                <path d="M 0 10 Q 30 -50 0 -180" stroke="#ef4444" strokeWidth="3" fill="none" />
                             </motion.g>
                         )}
 
@@ -179,42 +187,70 @@
                             <motion.g initial={{ scale: 1 }} animate={{ scale: 1.8, rotate: 10 }} exit={{ opacity: 0 }}>
                                 {/* Growing Fetus */}
                                 <g transform="rotate(10)">
-                                    <circle cx="0" cy="-30" r="25" fill="#fca5a5" stroke="#ef4444" /> {/* Head */}
-                                    <ellipse cx="0" cy="20" rx="22" ry="35" fill="#fca5a5" stroke="#ef4444" /> {/* Body */}
-                                    {/* Arms (Curled) */}
+                                    <circle cx="0" cy="-30" r="25" fill="#fca5a5" stroke="#ef4444" />
+                                    <ellipse cx="0" cy="20" rx="22" ry="35" fill="#fca5a5" stroke="#ef4444" />
                                     <path d="M -15 0 Q -30 10 -15 20" stroke="#fca5a5" strokeWidth="6" strokeLinecap="round" fill="none" />
                                     <path d="M 15 0 Q 30 10 15 20" stroke="#fca5a5" strokeWidth="6" strokeLinecap="round" fill="none" />
-                                    {/* Legs (Curled) */}
                                     <path d="M -10 45 Q -25 60 -10 50" stroke="#fca5a5" strokeWidth="6" strokeLinecap="round" fill="none" />
                                     <path d="M 10 45 Q 25 60 10 50" stroke="#fca5a5" strokeWidth="6" strokeLinecap="round" fill="none" />
-                                    {/* Face */}
-                                    <circle cx="-8" cy="-32" r="2" fill="#be123c" opacity="0.5"/> {/* Eye closed */}
-                                    <path d="M -5 -25 Q 0 -22 5 -25" stroke="#be123c" strokeWidth="1" fill="none" opacity="0.5" />
+                                    <circle cx="-8" cy="-32" r="2" fill="#be123c" opacity="0.5"/>
                                 </g>
-                                {/* Umbilical */}
-                                <path d="M 0 20 Q 30 -20 0 -100" stroke="#ef4444" strokeWidth="3" fill="none" />
+                                {/* Single Cord - Adjusted to look like one unit */}
+                                <path d="M 0 20 Q 40 -50 0 -200" stroke="#ef4444" strokeWidth="4" fill="none" />
                             </motion.g>
                         )}
 
                         {week > 28 && (
-                            <motion.g initial={{ scale: 1.8, rotate: 0 }} animate={{ scale: 2.3, rotate: 180 }} exit={{ opacity: 0 }}>
-                                {/* Full Term (Head Down) */}
-                                {/* Note: Rotate 180 applied in animate to simulate head down */}
+                            <motion.g 
+                                initial={{ scale: 1.8, rotate: 0, y: 0 }} 
+                                animate={{ 
+                                    scale: 2.1, // Reduced max scale slightly to fit better
+                                    rotate: 180, // Head down
+                                    y: week === 40 ? 40 : 0 // Drop down (Engage) at week 40
+                                }} 
+                                exit={{ opacity: 0 }}
+                            >
                                 <g>
-                                    <circle cx="0" cy="-35" r="28" fill="#fca5a5" stroke="#ef4444" /> {/* Head */}
-                                    <ellipse cx="0" cy="25" rx="28" ry="40" fill="#fca5a5" stroke="#ef4444" /> {/* Body (Fatter) */}
-                                    {/* Arms (Tucked) */}
+                                    <circle cx="0" cy="-35" r="28" fill="#fca5a5" stroke="#ef4444" />
+                                    <ellipse cx="0" cy="25" rx="28" ry="40" fill="#fca5a5" stroke="#ef4444" />
                                     <path d="M -15 5 Q -35 20 -15 35" stroke="#fca5a5" strokeWidth="8" strokeLinecap="round" fill="none" />
                                     <path d="M 15 5 Q 35 20 15 35" stroke="#fca5a5" strokeWidth="8" strokeLinecap="round" fill="none" />
-                                    {/* Legs (Tucked) */}
                                     <path d="M -12 55 Q -30 70 -12 40" stroke="#fca5a5" strokeWidth="8" strokeLinecap="round" fill="none" />
                                     <path d="M 12 55 Q 30 70 12 40" stroke="#fca5a5" strokeWidth="8" strokeLinecap="round" fill="none" />
                                 </g>
-                                {/* Umbilical */}
-                                <path d="M 0 25 Q -40 -20 0 -110" stroke="#ef4444" strokeWidth="4" fill="none" />
+                                {/* Cord */}
+                                <path d="M 0 25 Q -60 0 0 -200" stroke="#ef4444" strokeWidth="5" fill="none" />
                             </motion.g>
                         )}
                     </g>
+                    
+                    {/* Week 40 Overlay: Ready for Birth */}
+                    {week === 40 && (
+                        <g>
+                            {/* Cervix Opening Hint */}
+                            <motion.path 
+                                d="M 180 420 L 220 420" 
+                                stroke="#f472b6" strokeWidth="4" 
+                                strokeDasharray="4,4"
+                                className="birth-pulse"
+                            />
+                            
+                            {/* Label */}
+                            <motion.g 
+                                initial={{ opacity: 0, y: 10 }} 
+                                animate={{ opacity: 1, y: 0 }}
+                                className="select-none"
+                            >
+                                <rect x="120" y="380" width="160" height="30" rx="15" fill="rgba(0,0,0,0.7)" />
+                                <text x="200" y="400" textAnchor="middle" fill="#fbbf24" fontSize="12" fontWeight="bold" dominantBaseline="middle">
+                                    ⚠️ READY FOR BIRTH
+                                </text>
+                                <text x="200" y="440" textAnchor="middle" fill="#ec4899" fontSize="10" fontWeight="bold">
+                                    Head Engaged
+                                </text>
+                            </motion.g>
+                        </g>
+                    )}
 
                 </svg>
             );
