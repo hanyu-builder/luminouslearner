@@ -22,24 +22,11 @@
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Energy Pulse */
-        .energy-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
-        
-        /* Heat Wave Animation */
-        .heat-wave {
-            animation: rise 2s linear infinite;
-        }
-        @keyframes rise {
-            0% { transform: translateY(0); opacity: 0; }
-            50% { opacity: 0.5; }
-            100% { transform: translateY(-20px); opacity: 0; }
-        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
 </head>
 <body>
@@ -70,116 +57,111 @@
 
         // --- COMPONENTS ---
         
-        const TrophicLevel = ({ data, nextData, isLast }) => {
-            // data: { name, energy, maxEnergy, color, icon }
-            // nextData: next level data (to calculate loss)
-            
-            // Calculate dimensions based on energy log scale or relative
-            // Visual width: logarithmic to ensure small values are visible but difference is clear
-            // Or simple percentage relative to max input
-            
-            // Let's use a fixed width container, but fill height/intensity based on energy?
-            // Better: Width represents energy.
-            
-            // Max width = 160px (for the box)
-            // We can't scale width linearly because 10000 -> 10 is too big a drop visually (10 becomes invisible).
-            // We'll use text to show numbers, and visual cues for "Loss".
-            
+        const Connector = () => (
+            <svg className="absolute top-full left-20 w-32 h-20 pointer-events-none" style={{ zIndex: 0, overflow: 'visible' }}>
+                {/* L-Shape Connector Path */}
+                <path d="M 0 0 V 40 H 60 V 80" stroke="#334155" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* Animated Energy Particle */}
+                <circle r="3" fill="#10b981">
+                    <animateMotion path="M 0 0 V 40 H 60 V 80" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+                {/* Arrow Head */}
+                <path d="M 55 75 L 60 82 L 65 75" fill="#334155" />
+            </svg>
+        );
+
+        const TrophicLevel = ({ data, index, isLast }) => {
             const lossRespiration = data.energy * 0.6; // 60% Heat
             const lossWaste = data.energy * 0.3; // 30% Waste
             const transfer = data.energy * 0.1; // 10% Transfer
 
             return (
-                <div className="flex flex-col items-center relative group">
-                    
-                    {/* Main Energy Box */}
-                    <motion.div 
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="w-40 h-40 bg-slate-800 rounded-2xl border-2 relative flex flex-col items-center justify-center shadow-xl z-10"
-                        style={{ borderColor: data.color }}
+                <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="relative flex items-start mb-8"
+                    style={{ marginLeft: `${index * 60}px` }} // Staircase effect
+                >
+                    {/* 1. Main Organism Card */}
+                    <div className={`w-40 h-40 bg-slate-800 rounded-2xl border-2 flex flex-col items-center justify-center shadow-xl z-10 shrink-0 relative`}
+                         style={{ borderColor: data.color }}
                     >
-                        {/* Icon */}
                         <div className="mb-2" style={{ color: data.color }}>
                             <Icon name={data.icon} size={40} />
                         </div>
-                        
-                        {/* Name */}
-                        <div className="text-sm font-bold text-white mb-1">{data.name}</div>
-                        
-                        {/* Energy Value */}
-                        <div className="text-xl font-mono font-black" style={{ color: data.color }}>
+                        <div className="text-sm font-bold text-white mb-1 text-center px-2">{data.name}</div>
+                        <div className="text-lg font-mono font-black" style={{ color: data.color }}>
                             {data.energy.toLocaleString()} J
                         </div>
+                        {/* Corner Label */}
+                        <div className="absolute top-2 left-2 text-[10px] text-slate-500 font-bold uppercase">
+                            L{index + 1}
+                        </div>
                         
-                        {/* Fill Animation (Abstract Energy Level) */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-white opacity-5 pointer-events-none" style={{ height: '100%' }}></div>
-                    </motion.div>
-
-                    {/* LOSS ARROWS (Heat) - Upward */}
-                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                        <div className="flex gap-1 mb-1">
-                            {[...Array(3)].map((_, i) => (
-                                <Icon key={i} name="waves" size={16} className="text-red-500 heat-wave" />
-                            ))}
-                        </div>
-                        <div className="text-[10px] text-red-400 font-bold bg-red-900/20 px-2 py-0.5 rounded border border-red-500/30">
-                            Heat Loss (Respiration)
-                        </div>
-                        <div className="text-[10px] text-red-400 font-mono">
-                            -{lossRespiration.toLocaleString()} J
-                        </div>
-                        <div className="h-8 w-0.5 bg-gradient-to-t from-red-500 to-transparent"></div>
+                        {/* Connector to next level */}
+                        {!isLast && <Connector />}
                     </div>
 
-                    {/* LOSS ARROWS (Waste) - Downward */}
-                    <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 flex flex-col items-center">
-                        <div className="h-8 w-0.5 bg-gradient-to-b from-slate-500 to-transparent"></div>
-                        <div className="text-[10px] text-slate-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">
-                            Waste / Uneaten
+                    {/* 2. Data Details Panel (Right Side) */}
+                    <div className="ml-6 mt-4 flex flex-col gap-3 min-w-[240px]">
+                        {/* Heat Loss */}
+                        <div className="flex items-center justify-between bg-red-900/10 border border-red-500/20 p-2 rounded-lg">
+                            <div className="flex items-center gap-2 text-red-400">
+                                <Icon name="flame" size={16}/>
+                                <span className="text-xs font-bold">Heat Loss (60%)</span>
+                            </div>
+                            <span className="text-xs font-mono text-red-300">-{lossRespiration.toLocaleString()} J</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                            -{lossWaste.toLocaleString()} J
+
+                        {/* Waste */}
+                        <div className="flex items-center justify-between bg-slate-700/20 border border-slate-600/30 p-2 rounded-lg">
+                            <div className="flex items-center gap-2 text-slate-400">
+                                <Icon name="trash-2" size={16}/>
+                                <span className="text-xs font-bold">Waste (30%)</span>
+                            </div>
+                            <span className="text-xs font-mono text-slate-400">-{lossWaste.toLocaleString()} J</span>
                         </div>
-                        <div className="mt-1">
-                            <Icon name="trash-2" size={14} className="text-slate-600"/>
-                        </div>
+
+                        {/* Transfer (Next Level) */}
+                        {!isLast && (
+                            <div className="flex items-center justify-between bg-emerald-900/10 border border-emerald-500/20 p-2 rounded-lg mt-1">
+                                <div className="flex items-center gap-2 text-emerald-400">
+                                    <Icon name="arrow-right-circle" size={16}/>
+                                    <span className="text-xs font-bold">Transfer (10%)</span>
+                                </div>
+                                <span className="text-xs font-mono text-emerald-300">{transfer.toLocaleString()} J</span>
+                            </div>
+                        )}
                     </div>
 
-                    {/* TRANSFER ARROW (Right) */}
-                    {!isLast && (
-                        <div className="absolute left-full top-1/2 -translate-y-1/2 w-24 flex flex-col items-center justify-center">
-                            {/* Flow Line */}
-                            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden relative">
-                                <motion.div 
-                                    className="h-full bg-emerald-500"
-                                    initial={{ x: '-100%' }}
-                                    animate={{ x: '100%' }}
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                                />
-                            </div>
-                            {/* 10% Tag */}
-                            <div className="mt-2 bg-emerald-900/50 border border-emerald-500/50 text-emerald-400 text-xs font-bold px-2 py-1 rounded-full shadow-lg backdrop-blur">
-                                10% Transfer
-                            </div>
-                        </div>
-                    )}
-
-                </div>
+                </motion.div>
             );
         };
 
+        const SunNode = () => (
+            <div className="relative flex items-start mb-8">
+                {/* Sun Card */}
+                <div className="w-40 h-40 bg-yellow-900/20 rounded-full border-4 border-yellow-500 flex flex-col items-center justify-center shadow-[0_0_30px_rgba(234,179,8,0.2)] z-10 shrink-0 animate-pulse-slow">
+                    <Icon name="sun" size={48} className="text-yellow-400 mb-2" />
+                    <div className="text-lg font-black text-yellow-400">SUN</div>
+                    <div className="text-[10px] text-yellow-200/70">Ultimate Source</div>
+                    <Connector />
+                </div>
+                
+                {/* Sun Info */}
+                <div className="ml-6 mt-12 text-sm text-slate-400 max-w-xs">
+                    Solar energy enters the ecosystem. Producers capture ~1% for photosynthesis.
+                </div>
+            </div>
+        );
+
         // --- MAIN APP ---
         const App = () => {
-            const [sunEnergy, setSunEnergy] = useState(100000); // Joules
+            const [sunEnergy, setSunEnergy] = useState(100000); // Joules (Input to producers)
 
-            // Calculate Energy at each level
-            // Assuming plant captures ~1% of Sun (simplified for this specific tool context? Usually 10% rule applies between trophic levels. Sun -> Producer is usually ~1%.
-            // Let's stick to the standard "10% Law" between biological levels for simplicity, but note Sun->Plant is low.
-            // For this educational tool, let's let user set "Producer Energy" directly or Sun.
-            // Let's set Producer Energy directly to make the math clean for 10%.
-            
-            const producerEnergy = sunEnergy; // User input effectively sets the base of the pyramid
+            // Calculate Energy at each level (10% Rule)
+            const producerEnergy = sunEnergy; 
             const primaryEnergy = Math.floor(producerEnergy * 0.1);
             const secondaryEnergy = Math.floor(primaryEnergy * 0.1);
             const tertiaryEnergy = Math.floor(secondaryEnergy * 0.1);
@@ -195,7 +177,7 @@
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col overflow-hidden">
                     
                     {/* Header / Controls */}
-                    <div className="h-24 bg-slate-900 border-b border-slate-800 flex items-center px-8 justify-between shrink-0 z-20">
+                    <div className="h-20 bg-slate-900 border-b border-slate-800 flex items-center px-8 justify-between shrink-0 z-30 shadow-md">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
                                 <Icon name="zap" size={24}/>
@@ -206,69 +188,49 @@
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-6 bg-slate-800 p-3 rounded-xl border border-slate-700">
-                            <div className="flex flex-col">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1">Start Energy (Producers)</label>
-                                <div className="flex items-center gap-3">
-                                    <input 
-                                        type="range" 
-                                        min="1000" max="1000000" step="1000"
-                                        value={sunEnergy}
-                                        onChange={(e) => setSunEnergy(parseInt(e.target.value))}
-                                        className="w-48 accent-emerald-500"
-                                    />
-                                    <span className="font-mono font-bold text-emerald-400 w-24 text-right">{sunEnergy.toLocaleString()} J</span>
-                                </div>
+                        <div className="flex items-center gap-4 bg-slate-800 p-2 px-4 rounded-xl border border-slate-700">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">START ENERGY (PRODUCERS)</label>
+                            <div className="flex items-center gap-3 w-64">
+                                <input 
+                                    type="range" 
+                                    min="1000" max="1000000" step="1000"
+                                    value={sunEnergy}
+                                    onChange={(e) => setSunEnergy(parseInt(e.target.value))}
+                                    className="w-full accent-emerald-500 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <span className="font-mono font-bold text-emerald-400 w-24 text-right text-sm">{sunEnergy.toLocaleString()} J</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Stage: Horizontal Flow */}
-                    <div className="flex-1 relative overflow-x-auto overflow-y-hidden p-8">
+                    {/* Main Stage: Staircase Layout */}
+                    <div className="flex-1 overflow-y-auto overflow-x-auto p-12 custom-scrollbar relative">
                         
                         {/* Background Grid */}
-                        <div className="absolute inset-0 opacity-10 pointer-events-none" 
-                            style={{backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '20px 20px'}}>
+                        <div className="absolute inset-0 opacity-5 pointer-events-none" 
+                            style={{backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '30px 30px', height: '200%'}}>
                         </div>
 
-                        <div className="h-full flex items-center justify-center min-w-max gap-24 px-12">
+                        <div className="min-w-max pb-20">
                             
-                            {/* Sun (Source) */}
-                            <div className="flex flex-col items-center mr-8">
-                                <motion.div 
-                                    animate={{ scale: [1, 1.1, 1], rotate: 360 }}
-                                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                                    className="w-24 h-24 rounded-full bg-yellow-400 shadow-[0_0_50px_rgba(250,204,21,0.6)] flex items-center justify-center text-yellow-900 mb-4"
-                                >
-                                    <Icon name="sun" size={48} />
-                                </motion.div>
-                                <span className="font-bold text-yellow-400">Sun Energy</span>
-                                <div className="mt-4 text-xs text-slate-500 w-32 text-center">
-                                    Source of all energy. Only ~1% is captured by plants.
-                                </div>
-                            </div>
+                            {/* 1. Sun */}
+                            <SunNode />
 
-                            {/* Arrow to Producer */}
-                            <div className="text-slate-600">
-                                <Icon name="arrow-right" size={32}/>
-                            </div>
-
-                            {/* Trophic Levels */}
+                            {/* 2. Trophic Levels */}
                             {levels.map((level, i) => (
                                 <TrophicLevel 
                                     key={level.id} 
                                     data={level} 
-                                    nextData={levels[i+1]} 
+                                    index={i + 1} // Offset for sun
                                     isLast={i === levels.length - 1} 
                                 />
                             ))}
 
                         </div>
-
                     </div>
 
-                    {/* Footer Info */}
-                    <div className="bg-slate-900 border-t border-slate-800 p-4 flex justify-center gap-12 text-xs text-slate-400">
+                    {/* Footer Legend */}
+                    <div className="bg-slate-900 border-t border-slate-800 p-3 flex justify-center gap-8 text-xs text-slate-400 shrink-0 z-30">
                         <div className="flex items-center gap-2">
                             <Icon name="flame" size={14} className="text-red-500"/>
                             <span><strong>90% Loss:</strong> Heat (Respiration), Movement, Excretion, Uneaten parts.</span>
