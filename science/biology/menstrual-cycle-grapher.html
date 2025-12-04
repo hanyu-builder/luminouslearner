@@ -207,8 +207,7 @@
         const App = () => {
             const [day, setDay] = useState(1);
             const [isPlaying, setIsPlaying] = useState(false);
-            const [showPituitary, setShowPituitary] = useState(true); // Show FSH/LH
-            const [showOvarian, setShowOvarian] = useState(true); // Show Estrogen/Progesterone
+            // State for toggles removed, defaults to true implicitly in render
 
             // Auto-play loop
             useEffect(() => {
@@ -295,24 +294,7 @@
                                 </button>
                             </div>
 
-                            {/* Legend Toggle */}
-                            <div className="space-y-2 pt-4 border-t border-slate-800">
-                                <label className="text-xs font-bold text-slate-500 uppercase">Toggle Graphs</label>
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => setShowPituitary(!showPituitary)}
-                                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${showPituitary ? 'bg-slate-700 border-slate-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}
-                                    >
-                                        Pituitary (FSH/LH)
-                                    </button>
-                                    <button 
-                                        onClick={() => setShowOvarian(!showOvarian)}
-                                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${showOvarian ? 'bg-slate-700 border-slate-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}
-                                    >
-                                        Ovary (Est/Prog)
-                                    </button>
-                                </div>
-                            </div>
+                            {/* Toggle Section Removed */}
 
                         </div>
                     </div>
@@ -324,56 +306,52 @@
                         <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
                             
                             {/* 1. Pituitary Hormones */}
-                            {showPituitary && (
-                                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 flex-1 min-h-[200px] flex flex-col">
-                                    <div className="text-xs font-bold text-slate-400 mb-2 flex justify-between">
-                                        <span>Pituitary Hormones</span>
-                                        <div className="flex gap-3">
-                                            <span className="text-blue-400">● FSH</span>
-                                            <span className="text-purple-400">● LH</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={CYCLE_DATA}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                                <XAxis dataKey="day" hide />
-                                                <YAxis hide domain={[0, 'auto']} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} />
-                                                <ReferenceLine x={day} stroke="#fbbf24" strokeDasharray="3 3" />
-                                                <Line type="monotone" dataKey="fsh" stroke="#60a5fa" strokeWidth={2} dot={false} animationDuration={0} />
-                                                <Line type="monotone" dataKey="lh" stroke="#c084fc" strokeWidth={2} dot={false} animationDuration={0} />
-                                            </LineChart>
-                                        </ResponsiveContainer>
+                            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 flex-1 min-h-[200px] flex flex-col">
+                                <div className="text-xs font-bold text-slate-400 mb-2 flex justify-between">
+                                    <span>Pituitary Hormones</span>
+                                    <div className="flex gap-3">
+                                        <span className="text-blue-400">● FSH</span>
+                                        <span className="text-purple-400">● LH</span>
                                     </div>
                                 </div>
-                            )}
+                                <div className="flex-1">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={CYCLE_DATA}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                            <XAxis dataKey="day" hide />
+                                            <YAxis hide domain={[0, 'auto']} />
+                                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} />
+                                            <ReferenceLine x={day} stroke="#fbbf24" strokeDasharray="3 3" />
+                                            <Line type="monotone" dataKey="fsh" stroke="#60a5fa" strokeWidth={2} dot={false} animationDuration={0} />
+                                            <Line type="monotone" dataKey="lh" stroke="#c084fc" strokeWidth={2} dot={false} animationDuration={0} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
 
                             {/* 2. Ovarian Hormones */}
-                            {showOvarian && (
-                                <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 flex-1 min-h-[200px] flex flex-col">
-                                    <div className="text-xs font-bold text-slate-400 mb-2 flex justify-between">
-                                        <span>Ovarian Hormones</span>
-                                        <div className="flex gap-3">
-                                            <span className="text-pink-400">● Estrogen</span>
-                                            <span className="text-yellow-400">● Progesterone</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={CYCLE_DATA}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                                <XAxis dataKey="day" hide />
-                                                <YAxis hide domain={[0, 'auto']} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} />
-                                                <ReferenceLine x={day} stroke="#fbbf24" strokeDasharray="3 3" />
-                                                <Line type="monotone" dataKey="estrogen" stroke="#f472b6" strokeWidth={2} dot={false} animationDuration={0} />
-                                                <Line type="monotone" dataKey="progesterone" stroke="#facc15" strokeWidth={2} dot={false} animationDuration={0} />
-                                            </LineChart>
-                                        </ResponsiveContainer>
+                            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-4 flex-1 min-h-[200px] flex flex-col">
+                                <div className="text-xs font-bold text-slate-400 mb-2 flex justify-between">
+                                    <span>Ovarian Hormones</span>
+                                    <div className="flex gap-3">
+                                        <span className="text-pink-400">● Estrogen</span>
+                                        <span className="text-yellow-400">● Progesterone</span>
                                     </div>
                                 </div>
-                            )}
+                                <div className="flex-1">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={CYCLE_DATA}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                            <XAxis dataKey="day" hide />
+                                            <YAxis hide domain={[0, 'auto']} />
+                                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }} />
+                                            <ReferenceLine x={day} stroke="#fbbf24" strokeDasharray="3 3" />
+                                            <Line type="monotone" dataKey="estrogen" stroke="#f472b6" strokeWidth={2} dot={false} animationDuration={0} />
+                                            <Line type="monotone" dataKey="progesterone" stroke="#facc15" strokeWidth={2} dot={false} animationDuration={0} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
 
                             {/* 3. Visualizations Row */}
                             <div className="flex gap-4 h-48 shrink-0">
