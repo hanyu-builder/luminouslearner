@@ -243,6 +243,39 @@
                     ctx.fillStyle = "white";
                     ctx.fillText("OCEAN", 620, 350);
 
+                    // --- Draw Info Box (Legend) ---
+                    const legendX = width - 160;
+                    const legendY = 20;
+                    const legendW = 140;
+                    const legendH = 100;
+
+                    // Box background
+                    ctx.fillStyle = "rgba(15, 23, 42, 0.8)"; // Semi-transparent dark blue
+                    ctx.fillRect(legendX, legendY, legendW, legendH);
+                    ctx.strokeStyle = "#334155";
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(legendX, legendY, legendW, legendH);
+
+                    // Title
+                    ctx.fillStyle = "#e2e8f0";
+                    ctx.font = "bold 12px sans-serif";
+                    ctx.fillText("Particle Key (粒子圖例)", legendX + 10, legendY + 20);
+
+                    // Legend Items
+                    const drawLegendItem = (color, label, yOffset) => {
+                        ctx.beginPath();
+                        ctx.arc(legendX + 20, legendY + yOffset, 5, 0, Math.PI * 2);
+                        ctx.fillStyle = color;
+                        ctx.fill();
+                        ctx.fillStyle = "#cbd5e1";
+                        ctx.font = "10px sans-serif";
+                        ctx.fillText(label, legendX + 35, legendY + yOffset + 4);
+                    };
+
+                    drawLegendItem(PROCESSES.photosynthesis.color, "光合作用 (吸收)", 45);
+                    drawLegendItem(PROCESSES.respiration.color, "呼吸/釋放", 65);
+                    drawLegendItem(PROCESSES.combustion.color, "燃燒 (排放)", 85);
+
                     animationId = requestAnimationFrame(render);
                 };
                 render();
