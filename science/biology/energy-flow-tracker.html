@@ -80,7 +80,7 @@
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="relative flex items-start mb-8"
+                    className={`relative flex items-start ${isLast ? 'mb-0' : 'mb-8'}`}
                     style={{ marginLeft: `${index * 60}px` }} // Staircase effect
                 >
                     {/* 1. Main Organism Card */}
@@ -208,10 +208,10 @@
                         
                         {/* Background Grid */}
                         <div className="absolute inset-0 opacity-5 pointer-events-none" 
-                            style={{backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '30px 30px', height: '200%'}}>
+                            style={{backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '30px 30px'}}>
                         </div>
 
-                        <div className="min-w-max pb-20">
+                        <div className="min-w-max pb-10">
                             
                             {/* 1. Sun */}
                             <SunNode />
