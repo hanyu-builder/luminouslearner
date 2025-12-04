@@ -32,7 +32,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
         const { motion, AnimatePresence } = window.Motion;
 
         const Icon = ({ name, className = "", size = 20 }) => {
@@ -91,8 +91,28 @@
         
         // Animated Path Component
         const NervePath = ({ scenario, isPlaying, onComplete }) => {
+            // Prepare Path Data for SVG Line
             const pathPoints = scenario.path.map(p => `${p.pos.x},${p.pos.y}`).join(' L ');
             const pathD = `M ${pathPoints}`;
+
+            // Prepare Keyframes for Animation (Fixing the offset-path issue)
+            // We calculate exact coordinates for the animation
+            const xKeyframes = scenario.path.map(p => p.pos.x);
+            const yKeyframes = scenario.path.map(p => p.pos.y);
+
+            // Calculate timing based on distance to ensure constant speed
+            const times = useMemo(() => {
+                let totalDist = 0;
+                const dists = [0];
+                for(let i=0; i<scenario.path.length-1; i++) {
+                    const p1 = scenario.path[i].pos;
+                    const p2 = scenario.path[i+1].pos;
+                    const d = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+                    totalDist += d;
+                    dists.push(totalDist);
+                }
+                return dists.map(d => d / totalDist);
+            }, [scenario]);
 
             return (
                 <svg viewBox="0 0 600 500" className="w-full h-full drop-shadow-2xl overflow-visible">
@@ -114,19 +134,19 @@
                         </g>
                     ))}
 
-                    {/* Animated Impulse */}
+                    {/* Animated Impulse - Using CX/CY Keyframes instead of offsetPath for better compatibility */}
                     {isPlaying && (
                         <motion.circle 
                             r="8" 
                             fill="#fbbf24" 
                             className="impulse"
-                            initial={{ offsetDistance: "0%" }}
-                            animate={{ offsetDistance: "100%" }}
+                            initial={{ cx: xKeyframes[0], cy: yKeyframes[0] }}
+                            animate={{ cx: xKeyframes, cy: yKeyframes }}
                             transition={{ 
-                                duration: scenario.id === 'reflex' ? 1.5 : 3, // Reflex is faster
-                                ease: "linear" 
+                                duration: scenario.id === 'reflex' ? 1.5 : 3, 
+                                ease: "linear",
+                                times: times
                             }}
-                            style={{ offsetPath: `path('${pathD}')` }}
                             onAnimationComplete={onComplete}
                         />
                     )}
