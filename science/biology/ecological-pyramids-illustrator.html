@@ -97,17 +97,30 @@
                 value: mode === 'number' ? level.count : (level.count * level.mass)
             }));
 
-            // Use Sqrt Scale for visualization to handle large disparities (e.g. 1 vs 1000)
-            // This ensures small values are still visible and differences are perceptible
+            // Use Sqrt Scale for visualization
             const maxValue = Math.max(...plotData.map(d => d.value));
             const getVisualWidth = (val) => {
                 const percentage = (Math.sqrt(val) / Math.sqrt(maxValue)) * 100;
-                return Math.max(5, percentage); // Minimum 5% width for visibility
+                return Math.max(8, percentage); // Minimum width for visibility
             };
             
             return (
-                <div className="w-full max-w-3xl mx-auto flex flex-col justify-end h-full py-8 px-4">
-                    <div className="w-full flex flex-col gap-4">
+                <div className="w-full max-w-3xl mx-auto flex flex-col h-full py-4 px-4">
+                    
+                    {/* Species Legend Box */}
+                    <div className="mb-6 flex flex-wrap justify-center gap-3 bg-slate-800/60 p-3 rounded-xl border border-slate-700/50 shadow-inner">
+                        <div className="w-full text-center text-[10px] text-slate-500 uppercase font-bold mb-1">Species Key</div>
+                        {plotData.slice().reverse().map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-lg border border-slate-700">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></div>
+                                <Icon name={item.icon} size={14} className="text-slate-400"/>
+                                <span className="text-xs text-slate-300 font-bold">{item.name}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Chart Area */}
+                    <div className="flex-1 flex flex-col justify-end gap-4">
                         {plotData.map((level, i) => {
                             const widthPercent = getVisualWidth(level.value);
                             const levelNum = plotData.length - i;
@@ -115,12 +128,17 @@
                             return (
                                 <div key={i} className="flex items-center w-full h-16">
                                     
-                                    {/* Level Label (Aligned Left) */}
-                                    <div className="w-24 text-[10px] text-slate-500 font-bold uppercase text-right pr-6 shrink-0 border-r border-slate-700/50 h-full flex items-center justify-end">
-                                        Level {levelNum}
+                                    {/* Left Column: Level & Species Label (Separated from Bar) */}
+                                    <div className="w-40 text-right pr-6 shrink-0 border-r border-slate-700/50 h-full flex flex-col justify-center gap-1">
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase">Level {levelNum}</div>
+                                        <div className="text-sm font-bold text-white truncate" style={{color: level.color}}>
+                                            {level.name.split(' ')[0]} 
+                                            <span className="text-xs opacity-70 ml-1">{level.name.split(' ')[1]}</span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">{level.role}</div>
                                     </div>
 
-                                    {/* Bar Container (Centered relative to remaining space) */}
+                                    {/* Center: Bar Container */}
                                     <div className="flex-1 flex justify-center relative h-full items-center px-4">
                                         
                                         {/* The Bar */}
@@ -131,25 +149,14 @@
                                                 backgroundColor: level.color,
                                             }}
                                         >
-                                            <div className="flex items-center gap-2 text-white drop-shadow-md px-2 overflow-hidden">
-                                                <Icon name={level.icon} size={20}/>
-                                                <span className="font-bold whitespace-nowrap">{level.name}</span>
+                                            {/* Icon Only inside Bar */}
+                                            <div className="text-white/90 drop-shadow-md">
+                                                <Icon name={level.icon} size={24}/>
                                             </div>
 
                                             {/* Value Label (Below Bar) */}
-                                            <div className="absolute -bottom-5 text-[10px] text-slate-400 font-mono bg-black/40 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                {mode === 'number' ? level.count.toLocaleString() : `${(level.value/1000).toFixed(2)} kg`}
-                                            </div>
-
-                                            {/* Detailed Info Tooltip (Right Side) */}
-                                            <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 w-48 text-left opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
-                                                <div className="bg-slate-800/95 backdrop-blur p-3 rounded-xl border border-slate-600 text-xs shadow-xl">
-                                                    <div className="font-bold text-white mb-1">{level.role}</div>
-                                                    <div className="grid grid-cols-2 gap-x-2 text-slate-400">
-                                                        <span>Count:</span> <span className="text-right text-slate-200">{level.count.toLocaleString()}</span>
-                                                        <span>Biomass:</span> <span className="text-right text-slate-200">{(level.count * level.mass).toLocaleString()} g</span>
-                                                    </div>
-                                                </div>
+                                            <div className="absolute -bottom-6 text-[10px] text-slate-400 font-mono bg-black/40 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 border border-white/10">
+                                                {mode === 'number' ? `Count: ${level.count.toLocaleString()}` : `Mass: ${(level.value/1000).toFixed(2)} kg`}
                                             </div>
                                         </div>
                                         
@@ -267,7 +274,7 @@
                     <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden">
                         
                         {/* View Toggle Header */}
-                        <div className="flex justify-center mb-8 z-10">
+                        <div className="flex justify-center mb-4 z-10">
                             <div className="bg-slate-800 p-1 rounded-xl flex border border-slate-700 shadow-lg">
                                 <button 
                                     onClick={() => setViewMode('number')}
