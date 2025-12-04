@@ -71,15 +71,66 @@
             { id: 'fungi', name: 'Fungi (真菌)', type: 'Decomposer', trophic: 0, icon: 'sprout', color: '#a8a29e', diet: ['all_dead'] }
         ];
 
+        // --- PRESETS ---
+        const PRESETS = {
+            empty: {
+                nodes: [],
+                connections: []
+            },
+            chain: {
+                nodes: [
+                    { id: 'p1', orgId: 'grass', x: 400, y: 450 },
+                    { id: 'c1', orgId: 'rabbit', x: 400, y: 300 },
+                    { id: 'c2', orgId: 'hawk', x: 400, y: 150 }
+                ],
+                connections: [
+                    { from: 'p1', to: 'c1' },
+                    { from: 'c1', to: 'c2' }
+                ]
+            },
+            web: {
+                nodes: [
+                    { id: 'p1', orgId: 'grass', x: 200, y: 450 },
+                    { id: 'p2', orgId: 'tree', x: 600, y: 450 },
+                    { id: 'c1', orgId: 'insect', x: 400, y: 350 },
+                    { id: 'c2', orgId: 'rabbit', x: 200, y: 300 },
+                    { id: 'c3', orgId: 'frog', x: 400, y: 250 },
+                    { id: 'c4', orgId: 'snake', x: 600, y: 200 },
+                    { id: 'c5', orgId: 'hawk', x: 300, y: 100 }
+                ],
+                connections: [
+                    { from: 'p1', to: 'c1' }, // Grass -> Insect
+                    { from: 'p2', to: 'c1' }, // Tree -> Insect
+                    { from: 'p1', to: 'c2' }, // Grass -> Rabbit
+                    { from: 'c1', to: 'c3' }, // Insect -> Frog
+                    { from: 'c2', to: 'c4' }, // Rabbit -> Snake
+                    { from: 'c3', to: 'c4' }, // Frog -> Snake
+                    { from: 'c2', to: 'c5' }, // Rabbit -> Hawk
+                    { from: 'c4', to: 'c5' }, // Snake -> Hawk
+                    { from: 'c3', to: 'c5' }  // Frog -> Hawk
+                ]
+            }
+        };
+
         // --- MAIN APP ---
         const App = () => {
-            const [nodes, setNodes] = useState([]); // { id, orgId, x, y }
-            const [connections, setConnections] = useState([]); // { from: nodeId, to: nodeId }
+            const [nodes, setNodes] = useState(PRESETS.chain.nodes); // Default to simple chain
+            const [connections, setConnections] = useState(PRESETS.chain.connections);
             const [draggedOrg, setDraggedOrg] = useState(null);
             const [connectingNode, setConnectingNode] = useState(null);
             const [errorMsg, setErrorMsg] = useState(null);
 
             const canvasRef = useRef(null);
+
+            // --- Preset Loader ---
+            const loadPreset = (type) => {
+                const preset = PRESETS[type];
+                // Deep copy to avoid mutating original preset if user edits
+                setNodes(JSON.parse(JSON.stringify(preset.nodes)));
+                setConnections(JSON.parse(JSON.stringify(preset.connections)));
+                setErrorMsg(null);
+                setConnectingNode(null);
+            };
 
             // --- Drag & Drop Logic ---
             const handleDragStart = (e, orgId) => {
@@ -127,12 +178,18 @@
                     // Rule: Arrow points from Eaten to Eater (Energy Flow)
                     // Check if target eats source
                     if (targetOrg.diet.includes(sourceOrg.id)) {
-                        // Valid
-                        setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
+                        // Check duplicates
+                        const exists = connections.some(c => c.from === connectingNode && c.to === nodeId);
+                        if (!exists) {
+                            setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
+                        }
                         setErrorMsg(null);
                     } else if (targetOrg.diet.includes('all_dead') && sourceOrg.type !== 'Decomposer') {
                         // Decomposer eats anything living (simplified)
-                        setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
+                        const exists = connections.some(c => c.from === connectingNode && c.to === nodeId);
+                        if (!exists) {
+                            setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
+                        }
                          setErrorMsg(null);
                     } else {
                         // Invalid
@@ -185,6 +242,17 @@
                         </div>
 
                         <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Preset Controls */}
+                            <div className="mb-8">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-3">Load Preset Example</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={() => loadPreset('empty')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-slate-300">Empty</button>
+                                    <button onClick={() => loadPreset('chain')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-blue-400">Chain</button>
+                                    <button onClick={() => loadPreset('web')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-emerald-400">Full Web</button>
+                                </div>
+                            </div>
+
                             <div className="space-y-6">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-3">Producers</label>
