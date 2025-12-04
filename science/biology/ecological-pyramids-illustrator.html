@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecological Pyramids</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Pyramid Bar Transition */
+        .pyramid-bar { transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const SCENARIOS = {
+            grassland: {
+                id: 'grassland',
+                name: 'Grassland (草原)',
+                desc: 'Standard pyramid. Large number of small producers.',
+                levels: [
+                    { role: 'Tertiary Consumer', name: 'Hawk (鷹)', count: 1, mass: 2000, color: '#ef4444', icon: 'bird' },
+                    { role: 'Secondary Consumer', name: 'Snake (蛇)', count: 10, mass: 500, color: '#f97316', icon: 'worm' },
+                    { role: 'Primary Consumer', name: 'Rabbit (兔)', count: 50, mass: 2000, color: '#eab308', icon: 'rabbit' },
+                    { role: 'Producer', name: 'Grass (草)', count: 1000, mass: 2, color: '#22c55e', icon: 'leaf' }
+                ]
+            },
+            forest: {
+                id: 'forest',
+                name: 'Forest (森林)',
+                desc: 'Inverted Number Pyramid. One large tree supports many consumers.',
+                levels: [
+                    { role: 'Secondary Consumer', name: 'Small Bird (小鳥)', count: 20, mass: 50, color: '#3b82f6', icon: 'feather' },
+                    { role: 'Primary Consumer', name: 'Caterpillar (毛蟲)', count: 500, mass: 2, color: '#eab308', icon: 'bug' },
+                    { role: 'Producer', name: 'Oak Tree (橡樹)', count: 1, mass: 500000, color: '#15803d', icon: 'tree-deciduous' }
+                ]
+            },
+            parasitic: {
+                id: 'parasitic',
+                name: 'Parasitic (寄生)',
+                desc: 'Inverted top (Numbers). Large host supports many small parasites.',
+                levels: [
+                    { role: 'Secondary Consumer', name: 'Fleas (跳蚤)', count: 1000, mass: 0.01, color: '#a855f7', icon: 'bug-off' },
+                    { role: 'Primary Consumer', name: 'Cow (牛)', count: 1, mass: 600000, color: '#eab308', icon: 'beef' },
+                    { role: 'Producer', name: 'Grass (草)', count: 10000, mass: 2, color: '#22c55e', icon: 'leaf' }
+                ]
+            }
+        };
+
+        // --- COMPONENTS ---
+        
+        const PyramidChart = ({ data, mode }) => { // mode: 'number' or 'biomass'
+            // Calculate values
+            const plotData = data.map(level => ({
+                ...level,
+                value: mode === 'number' ? level.count : (level.count * level.mass)
+            }));
+
+            // Normalize for display width (max width = 100%)
+            // Use Log scale for numbers if extreme difference? No, linear shows the inversion better, but need capping.
+            // Let's use a smart scale: linear but max value sets the 100% mark.
+            // Exception: Tree (1) vs Caterpillar (500) -> 1px vs 500px. 
+            // To make it visible, we might need a min-width or log scale.
+            // Actually, standard textbook diagrams use relative width to show the concept, not precise math graph.
+            // Let's use a linear scale relative to the largest value in the set.
+            
+            const maxValue = Math.max(...plotData.map(d => d.value));
+            
+            return (
+                <div className="w-full max-w-2xl mx-auto flex flex-col gap-2 items-center justify-end h-full py-8">
+                    <div className="w-full flex flex-col gap-1">
+                        {plotData.map((level, i) => {
+                            // Calculate width percentage
+                            // Ensure min width for visibility
+                            let widthPercent = (level.value / maxValue) * 100;
+                            // Cap min width for visibility of "1 tree"
+                            if (widthPercent < 2) widthPercent = 2; 
+
+                            return (
+                                <div key={i} className="flex flex-col items-center group relative">
+                                    
+                                    {/* The Bar */}
+                                    <div 
+                                        className="h-16 rounded-lg flex items-center justify-center relative pyramid-bar shadow-lg border border-white/10 hover:border-white/50 cursor-pointer"
+                                        style={{ 
+                                            width: `${widthPercent}%`, 
+                                            backgroundColor: level.color,
+                                            minWidth: '60px'
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-2 text-white drop-shadow-md px-2">
+                                            <Icon name={level.icon} size={20}/>
+                                            <span className="font-bold whitespace-nowrap hidden md:inline">{level.name}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Info Label (Hover or Side) */}
+                                    <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 w-48 text-left opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                        <div className="bg-slate-800 p-2 rounded border border-slate-600 text-xs">
+                                            <div className="font-bold text-white">{level.role}</div>
+                                            <div className="text-slate-400">Count: {level.count.toLocaleString()}</div>
+                                            <div className="text-slate-400">Biomass: {(level.count * level.mass).toLocaleString()} g</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Value Label on bar */}
+                                    <div className="absolute top-full mt-1 text-[10px] text-slate-400 font-mono bg-black/50 px-1 rounded">
+                                        {mode === 'number' ? level.count.toLocaleString() : `${(level.value/1000).toFixed(1)} kg`}
+                                    </div>
+
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                    {/* Trophic Level Labels */}
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-12 text-[10px] text-slate-600 font-bold uppercase text-right pointer-events-none hidden lg:flex">
+                        {plotData.map((l, i) => (
+                            <div key={i} className="h-16 flex items-center justify-end pr-4 border-r border-slate-700">
+                                Level {plotData.length - i}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [scenarioKey, setScenarioKey] = useState('grassland');
+            const [viewMode, setViewMode] = useState('number'); // 'number', 'biomass'
+            const [customData, setCustomData] = useState(null); // To allow modifying counts
+
+            // Load Scenario
+            useEffect(() => {
+                // Deep copy to allow editing
+                setCustomData(JSON.parse(JSON.stringify(SCENARIOS[scenarioKey].levels)));
+            }, [scenarioKey]);
+
+            const handleCountChange = (index, newCount) => {
+                const newData = [...customData];
+                newData[index].count = parseInt(newCount) || 0;
+                setCustomData(newData);
+            };
+
+            if (!customData) return <div>Loading...</div>;
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="pyramid" className="text-emerald-400" /> Eco Pyramids
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Number vs Biomass</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Scenarios */}
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Select Ecosystem</label>
+                                <div className="flex flex-col gap-2">
+                                    {Object.values(SCENARIOS).map(s => (
+                                        <button 
+                                            key={s.id}
+                                            onClick={() => setScenarioKey(s.id)}
+                                            className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between group
+                                                ${scenarioKey === s.id 
+                                                    ? 'bg-slate-800 border-emerald-500 text-white shadow-lg' 
+                                                    : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                            `}
+                                        >
+                                            <div>
+                                                <div className="text-sm font-bold">{s.name}</div>
+                                                <div className="text-[10px] opacity-70 mt-1">{s.desc}</div>
+                                            </div>
+                                            {scenarioKey === s.id && <Icon name="check-circle" size={16} className="text-emerald-400"/>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Controls */}
+                            <div className="space-y-4">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Adjust Population</label>
+                                <div className="space-y-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                    {customData.map((level, i) => (
+                                        <div key={i} className="flex flex-col gap-1">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-300 flex items-center gap-1">
+                                                    <Icon name={level.icon} size={12}/> {level.name.split(' ')[0]}
+                                                </span>
+                                                <span className="font-mono text-emerald-400">{level.count}</span>
+                                            </div>
+                                            <input 
+                                                type="range" 
+                                                min="1" 
+                                                max={level.role === 'Producer' ? 10000 : 1000}
+                                                step={level.role === 'Producer' ? 100 : 1}
+                                                value={level.count}
+                                                onChange={(e) => handleCountChange(i, e.target.value)}
+                                                className="w-full accent-emerald-500 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Concept Info */}
+                            <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-xs text-slate-300">
+                                <div className="font-bold text-blue-400 uppercase mb-2 flex items-center gap-2"><Icon name="info" size={14}/> Key Concept</div>
+                                {viewMode === 'number' ? (
+                                    <p>
+                                        <strong>Pyramid of Numbers:</strong> Represents the number of organisms at each trophic level. It can be inverted (e.g., one tree supports many insects).
+                                    </p>
+                                ) : (
+                                    <p>
+                                        <strong>Pyramid of Biomass:</strong> Represents the dry mass of organisms. It is almost always upright (pyramid shape) because energy is lost at each level.
+                                    </p>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden">
+                        
+                        {/* View Toggle Header */}
+                        <div className="flex justify-center mb-8 z-10">
+                            <div className="bg-slate-800 p-1 rounded-xl flex border border-slate-700 shadow-lg">
+                                <button 
+                                    onClick={() => setViewMode('number')}
+                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2
+                                        ${viewMode === 'number' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}
+                                    `}
+                                >
+                                    <Icon name="list-ordered" size={16}/> Number Pyramid
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('biomass')}
+                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2
+                                        ${viewMode === 'biomass' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'}
+                                    `}
+                                >
+                                    <Icon name="scale" size={16}/> Biomass Pyramid
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Visualizer */}
+                        <div className="flex-1 bg-slate-900/50 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col items-center justify-center p-8">
+                            <div className="absolute inset-0 flex items-center justify-center opacity-5 text-[10rem] font-black text-slate-500 pointer-events-none">
+                                {viewMode === 'number' ? '#' : 'kg'}
+                            </div>
+                            
+                            <PyramidChart data={customData} mode={viewMode} />
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
