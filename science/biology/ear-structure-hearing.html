@@ -147,7 +147,6 @@
                                 animate={{ pathLength: 1, offsetDistance: "100%" }}
                                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                             >
-                                {/* Complex path animation would need offset-path support, simulating via multiple dots */}
                             </motion.circle>
                         )}
                         {isPlaying && (
@@ -158,12 +157,20 @@
                         )}
                     </g>
 
-                    {/* Auditory Nerve */}
+                    {/* Auditory Nerve (Yellow dashed line) */}
                     <path 
                         d="M 420 220 L 600 220" 
                         stroke="#fef08a" strokeWidth="8" strokeDasharray="10,5"
                         onClick={() => onSelect('nerve')} className="cursor-pointer hover:stroke-yellow-200"
                     />
+                    
+                    {/* ADDED: Nerve Label */}
+                    <text x="510" y="200" textAnchor="middle" fill="#fef08a" fontSize="12" fontWeight="bold" className="pointer-events-none">
+                        Auditory Nerve (Signal to Brain)
+                    </text>
+                    <text x="510" y="215" textAnchor="middle" fill="#fef08a" fontSize="14" className="pointer-events-none">⬇</text>
+
+                    {/* Nerve Impulse Animation */}
                     {isPlaying && (
                         <circle cx="450" cy="220" r="4" fill="#fbbf24">
                             <animate attributeName="cx" from="420" to="600" dur="0.5s" repeatCount="indefinite" />
