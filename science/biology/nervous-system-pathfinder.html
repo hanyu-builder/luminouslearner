@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nervous System Pathfinder</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Nerve Impulse Glow */
+        .impulse {
+            filter: drop-shadow(0 0 8px #fbbf24);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const SCENARIOS = {
+            reflex: {
+                id: 'reflex',
+                name: 'Reflex Arc (反射弧)',
+                stimulus: 'Touch Hot Object (觸碰熱物)',
+                path: [
+                    { id: 'receptor', name: 'Receptor (Skin)', pos: {x: 100, y: 400} },
+                    { id: 'sensory', name: 'Sensory Neuron', pos: {x: 200, y: 300} },
+                    { id: 'spinal', name: 'Spinal Cord (CNS)', pos: {x: 300, y: 200} }, // Interneuron here
+                    { id: 'motor', name: 'Motor Neuron', pos: {x: 400, y: 300} },
+                    { id: 'effector', name: 'Effector (Muscle)', pos: {x: 500, y: 400} }
+                ],
+                desc: 'Rapid, involuntary response. Signal bypasses the brain for speed.',
+                time: 'Fast (~0.1s)'
+            },
+            voluntary: {
+                id: 'voluntary',
+                name: 'Voluntary Action (隨意動作)',
+                stimulus: 'See & Grab (看見並抓取)',
+                path: [
+                    { id: 'receptor_eye', name: 'Receptor (Eye)', pos: {x: 100, y: 100} },
+                    { id: 'sensory_optic', name: 'Optic Nerve', pos: {x: 200, y: 100} },
+                    { id: 'brain', name: 'Brain (Processing)', pos: {x: 300, y: 100} },
+                    { id: 'spinal_cord', name: 'Spinal Cord', pos: {x: 300, y: 200} },
+                    { id: 'motor', name: 'Motor Neuron', pos: {x: 400, y: 300} },
+                    { id: 'effector', name: 'Effector (Muscle)', pos: {x: 500, y: 400} }
+                ],
+                desc: 'Conscious decision involving the brain. Slower than reflexes.',
+                time: 'Variable (~0.3s+)'
+            }
+        };
+
+        // --- COMPONENTS ---
+        
+        // Animated Path Component
+        const NervePath = ({ scenario, isPlaying, onComplete }) => {
+            const pathPoints = scenario.path.map(p => `${p.pos.x},${p.pos.y}`).join(' L ');
+            const pathD = `M ${pathPoints}`;
+
+            return (
+                <svg viewBox="0 0 600 500" className="w-full h-full drop-shadow-2xl overflow-visible">
+                    
+                    {/* Background Connections */}
+                    <path d={pathD} stroke="#334155" strokeWidth="4" fill="none" strokeDasharray="5,5" />
+
+                    {/* Nodes */}
+                    {scenario.path.map((node, i) => (
+                        <g key={node.id} transform={`translate(${node.pos.x}, ${node.pos.y})`}>
+                            <circle r="15" fill="#1e293b" stroke="#64748b" strokeWidth="2" />
+                            <text y="30" textAnchor="middle" fontSize="10" fill="#94a3b8" className="font-bold">{node.name}</text>
+                            
+                            {/* Icons for key parts */}
+                            {node.id.includes('receptor') && <circle r="8" fill="#ef4444" />}
+                            {node.id.includes('brain') && <circle r="12" fill="#8b5cf6" opacity="0.5"/>}
+                            {node.id.includes('spinal') && <rect x="-10" y="-10" width="20" height="20" fill="#3b82f6" opacity="0.5" rx="4"/>}
+                            {node.id.includes('effector') && <rect x="-10" y="-10" width="20" height="20" fill="#10b981" opacity="0.5" rx="4"/>}
+                        </g>
+                    ))}
+
+                    {/* Animated Impulse */}
+                    {isPlaying && (
+                        <motion.circle 
+                            r="8" 
+                            fill="#fbbf24" 
+                            className="impulse"
+                            initial={{ offsetDistance: "0%" }}
+                            animate={{ offsetDistance: "100%" }}
+                            transition={{ 
+                                duration: scenario.id === 'reflex' ? 1.5 : 3, // Reflex is faster
+                                ease: "linear" 
+                            }}
+                            style={{ offsetPath: `path('${pathD}')` }}
+                            onAnimationComplete={onComplete}
+                        />
+                    )}
+
+                    {/* Synapse Zoom Hint (Static for now, could be interactive) */}
+                    <g transform="translate(50, 50)">
+                         {/* Legend or extra info if needed */}
+                    </g>
+                </svg>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [mode, setMode] = useState('reflex');
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [status, setStatus] = useState('Ready');
+            
+            const currentScenario = SCENARIOS[mode];
+
+            const handleStart = () => {
+                if (isPlaying) return;
+                setIsPlaying(true);
+                setStatus('Signal Transmitting...');
+            };
+
+            const handleComplete = () => {
+                setIsPlaying(false);
+                setStatus('Response Complete!');
+                // Auto reset status after delay
+                setTimeout(() => setStatus('Ready'), 2000);
+            };
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="zap" className="text-yellow-400" /> Nerve Path
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Reflex vs Voluntary Actions</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                            
+                            {/* Mode Selection */}
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Select Action Type</label>
+                                <div className="flex flex-col gap-2">
+                                    {Object.values(SCENARIOS).map(s => (
+                                        <button 
+                                            key={s.id}
+                                            onClick={() => { setMode(s.id); setIsPlaying(false); setStatus('Ready'); }}
+                                            className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between group
+                                                ${mode === s.id 
+                                                    ? 'bg-slate-800 border-blue-500 text-white shadow-lg' 
+                                                    : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                            `}
+                                        >
+                                            <span className="text-sm font-bold">{s.name.split(' (')[0]}</span>
+                                            {mode === s.id && <Icon name="check-circle" size={16} className="text-blue-400"/>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Info Card */}
+                            <AnimatePresence mode='wait'>
+                                <motion.div 
+                                    key={mode}
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                                    className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg"
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className="text-xs font-bold text-yellow-400 uppercase">Stimulus</span>
+                                    </div>
+                                    <h2 className="text-lg font-bold text-white mb-2">{currentScenario.stimulus}</h2>
+                                    <p className="text-xs text-slate-300 leading-relaxed mb-4">
+                                        {currentScenario.desc}
+                                    </p>
+                                    
+                                    <div className="flex items-center justify-between pt-3 border-t border-slate-700">
+                                        <span className="text-xs text-slate-500 font-bold uppercase">Reaction Time</span>
+                                        <span className="text-sm font-mono font-bold text-emerald-400">{currentScenario.time}</span>
+                                    </div>
+                                </motion.div>
+                            </AnimatePresence>
+                            
+                            <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-xs text-slate-300">
+                                <div className="font-bold text-blue-400 uppercase mb-1 flex items-center gap-2"><Icon name="info" size={14}/> Concept</div>
+                                <p>Reflex arcs are faster because they involve fewer synapses and often bypass the brain's conscious processing centers.</p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden">
+                        
+                        <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col items-center justify-center p-8">
+                            
+                            <div className="w-full h-full max-w-3xl relative">
+                                <NervePath scenario={currentScenario} isPlaying={isPlaying} onComplete={handleComplete} />
+                                
+                                {/* Brain/Spinal Cord Background Hints */}
+                                {mode === 'voluntary' && (
+                                    <div className="absolute top-[15%] left-[50%] -translate-x-1/2 text-slate-700 font-black text-6xl opacity-10 pointer-events-none">BRAIN</div>
+                                )}
+                                <div className="absolute top-[35%] left-[50%] -translate-x-1/2 text-slate-700 font-black text-6xl opacity-10 pointer-events-none">SPINAL CORD</div>
+                            </div>
+
+                            {/* Control Bar */}
+                            <div className="absolute bottom-8 flex flex-col items-center gap-4">
+                                <div className={`text-sm font-mono font-bold px-4 py-1 rounded-full border transition-colors
+                                    ${status === 'Ready' ? 'text-slate-400 border-slate-600 bg-slate-800' : 
+                                      status.includes('Transmitting') ? 'text-yellow-400 border-yellow-500 bg-yellow-900/30 animate-pulse' :
+                                      'text-emerald-400 border-emerald-500 bg-emerald-900/30'}
+                                `}>
+                                    {status}
+                                </div>
+                                
+                                <button 
+                                    onClick={handleStart}
+                                    disabled={isPlaying}
+                                    className={`px-8 py-3 rounded-full font-bold shadow-lg transition-transform active:scale-95 flex items-center gap-2
+                                        ${isPlaying ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}
+                                    `}
+                                >
+                                    <Icon name="zap" size={18} fill="currentColor"/> Stimulate
+                                </button>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
