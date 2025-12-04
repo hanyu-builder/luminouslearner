@@ -61,13 +61,26 @@
 
         // --- DATA ---
         const ORGANISMS = [
+            // Producers
             { id: 'grass', name: 'Grass (草)', type: 'Producer', trophic: 1, icon: 'leaf', color: '#22c55e', diet: [] },
             { id: 'tree', name: 'Tree (樹)', type: 'Producer', trophic: 1, icon: 'tree-deciduous', color: '#16a34a', diet: [] },
+            
+            // Primary Consumers
             { id: 'rabbit', name: 'Rabbit (兔)', type: 'Primary Consumer', trophic: 2, icon: 'rabbit', color: '#fbbf24', diet: ['grass'] },
             { id: 'insect', name: 'Insect (昆蟲)', type: 'Primary Consumer', trophic: 2, icon: 'bug', color: '#f59e0b', diet: ['grass', 'tree'] },
-            { id: 'frog', name: 'Frog (青蛙)', type: 'Secondary Consumer', trophic: 3, icon: 'snail', color: '#60a5fa', diet: ['insect'] }, // using snail as frog proxy if needed
-            { id: 'snake', name: 'Snake (蛇)', type: 'Secondary Consumer', trophic: 3, icon: 'worm', color: '#8b5cf6', diet: ['rabbit', 'frog'] }, // worm as snake proxy
-            { id: 'hawk', name: 'Hawk (鷹)', type: 'Tertiary Consumer', trophic: 4, icon: 'bird', color: '#ef4444', diet: ['rabbit', 'snake', 'frog'] },
+            { id: 'mouse', name: 'Mouse (鼠)', type: 'Primary Consumer', trophic: 2, icon: 'rat', color: '#a3a3a3', diet: ['grass', 'tree'] }, // Added Mouse
+            
+            // Secondary/Tertiary Consumers
+            { id: 'frog', name: 'Frog (青蛙)', type: 'Secondary Consumer', trophic: 3, icon: 'snail', color: '#60a5fa', diet: ['insect'] },
+            { id: 'bird', name: 'Bird (小鳥)', type: 'Secondary Consumer', trophic: 3, icon: 'feather', color: '#38bdf8', diet: ['insect'] }, // Added Bird
+            { id: 'snake', name: 'Snake (蛇)', type: 'Secondary Consumer', trophic: 3, icon: 'worm', color: '#8b5cf6', diet: ['rabbit', 'frog', 'mouse', 'bird'] },
+            { id: 'fox', name: 'Fox (狐狸)', type: 'Secondary Consumer', trophic: 3, icon: 'dog', color: '#d97706', diet: ['rabbit', 'mouse', 'bird'] }, // Added Fox
+            
+            // Top Predators
+            { id: 'hawk', name: 'Hawk (鷹)', type: 'Tertiary Consumer', trophic: 4, icon: 'bird', color: '#ef4444', diet: ['rabbit', 'snake', 'frog', 'mouse', 'bird'] },
+            { id: 'owl', name: 'Owl (貓頭鷹)', type: 'Tertiary Consumer', trophic: 4, icon: 'eye', color: '#7c2d12', diet: ['mouse', 'frog', 'snake', 'bird'] }, // Added Owl (using eye icon as abstract)
+            
+            // Decomposers
             { id: 'fungi', name: 'Fungi (真菌)', type: 'Decomposer', trophic: 0, icon: 'sprout', color: '#a8a29e', diet: ['all_dead'] }
         ];
 
@@ -88,6 +101,30 @@
                     { from: 'c1', to: 'c2' }
                 ]
             },
+            textbook: { // New Textbook Example
+                nodes: [
+                    { id: 'p1', orgId: 'grass', x: 400, y: 500 },
+                    { id: 'c1', orgId: 'insect', x: 250, y: 380 },
+                    { id: 'c2', orgId: 'mouse', x: 400, y: 380 },
+                    { id: 'c3', orgId: 'rabbit', x: 550, y: 380 },
+                    { id: 'c4', orgId: 'frog', x: 150, y: 250 },
+                    { id: 'c5', orgId: 'bird', x: 300, y: 250 },
+                    { id: 'c6', orgId: 'snake', x: 250, y: 120 },
+                    { id: 'c7', orgId: 'hawk', x: 500, y: 80 },
+                    { id: 'c8', orgId: 'fox', x: 600, y: 200 }
+                ],
+                connections: [
+                    { from: 'p1', to: 'c1' }, { from: 'p1', to: 'c2' }, { from: 'p1', to: 'c3' }, // Primary consumers
+                    { from: 'c1', to: 'c4' }, { from: 'c1', to: 'c5' }, // Insect eaters
+                    { from: 'c4', to: 'c6' }, // Frog to Snake
+                    { from: 'c5', to: 'c6' }, // Bird to Snake
+                    { from: 'c6', to: 'c7' }, // Snake to Hawk
+                    { from: 'c2', to: 'c7' }, // Mouse to Hawk
+                    { from: 'c2', to: 'c8' }, // Mouse to Fox
+                    { from: 'c3', to: 'c8' }, // Rabbit to Fox
+                    { from: 'c3', to: 'c7' }  // Rabbit to Hawk
+                ]
+            },
             web: {
                 nodes: [
                     { id: 'p1', orgId: 'grass', x: 200, y: 450 },
@@ -99,22 +136,22 @@
                     { id: 'c5', orgId: 'hawk', x: 300, y: 100 }
                 ],
                 connections: [
-                    { from: 'p1', to: 'c1' }, // Grass -> Insect
-                    { from: 'p2', to: 'c1' }, // Tree -> Insect
-                    { from: 'p1', to: 'c2' }, // Grass -> Rabbit
-                    { from: 'c1', to: 'c3' }, // Insect -> Frog
-                    { from: 'c2', to: 'c4' }, // Rabbit -> Snake
-                    { from: 'c3', to: 'c4' }, // Frog -> Snake
-                    { from: 'c2', to: 'c5' }, // Rabbit -> Hawk
-                    { from: 'c4', to: 'c5' }, // Snake -> Hawk
-                    { from: 'c3', to: 'c5' }  // Frog -> Hawk
+                    { from: 'p1', to: 'c1' }, 
+                    { from: 'p2', to: 'c1' }, 
+                    { from: 'p1', to: 'c2' }, 
+                    { from: 'c1', to: 'c3' }, 
+                    { from: 'c2', to: 'c4' }, 
+                    { from: 'c3', to: 'c4' }, 
+                    { from: 'c2', to: 'c5' }, 
+                    { from: 'c4', to: 'c5' }, 
+                    { from: 'c3', to: 'c5' }  
                 ]
             }
         };
 
         // --- MAIN APP ---
         const App = () => {
-            const [nodes, setNodes] = useState(PRESETS.chain.nodes); // Default to simple chain
+            const [nodes, setNodes] = useState(PRESETS.chain.nodes); 
             const [connections, setConnections] = useState(PRESETS.chain.connections);
             const [draggedOrg, setDraggedOrg] = useState(null);
             const [connectingNode, setConnectingNode] = useState(null);
@@ -125,7 +162,6 @@
             // --- Preset Loader ---
             const loadPreset = (type) => {
                 const preset = PRESETS[type];
-                // Deep copy to avoid mutating original preset if user edits
                 setNodes(JSON.parse(JSON.stringify(preset.nodes)));
                 setConnections(JSON.parse(JSON.stringify(preset.connections)));
                 setErrorMsg(null);
@@ -165,34 +201,28 @@
                     setErrorMsg(null);
                 } else {
                     if (connectingNode === nodeId) {
-                        setConnectingNode(null); // Cancel
+                        setConnectingNode(null); 
                         return;
                     }
                     
-                    // Validate Connection
                     const sourceNode = nodes.find(n => n.id === connectingNode);
                     const targetNode = nodes.find(n => n.id === nodeId);
                     const sourceOrg = ORGANISMS.find(o => o.id === sourceNode.orgId);
                     const targetOrg = ORGANISMS.find(o => o.id === targetNode.orgId);
 
-                    // Rule: Arrow points from Eaten to Eater (Energy Flow)
-                    // Check if target eats source
                     if (targetOrg.diet.includes(sourceOrg.id)) {
-                        // Check duplicates
                         const exists = connections.some(c => c.from === connectingNode && c.to === nodeId);
                         if (!exists) {
                             setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
                         }
                         setErrorMsg(null);
                     } else if (targetOrg.diet.includes('all_dead') && sourceOrg.type !== 'Decomposer') {
-                        // Decomposer eats anything living (simplified)
                         const exists = connections.some(c => c.from === connectingNode && c.to === nodeId);
                         if (!exists) {
                             setConnections(prev => [...prev, { from: connectingNode, to: nodeId }]);
                         }
                          setErrorMsg(null);
                     } else {
-                        // Invalid
                         setErrorMsg(`Oops! ${targetOrg.name.split('(')[0]} does not eat ${sourceOrg.name.split('(')[0]}.`);
                     }
                     setConnectingNode(null);
@@ -205,7 +235,7 @@
                 setConnections(prev => prev.filter(c => c.from !== nodeId && c.to !== nodeId));
             };
 
-            // --- Canvas Rendering (SVG Lines) ---
+            // --- Canvas Rendering ---
             const renderConnections = () => {
                 return connections.map((conn, i) => {
                     const fromNode = nodes.find(n => n.id === conn.from);
@@ -220,7 +250,6 @@
                                 stroke="#64748b" strokeWidth="2" 
                                 markerEnd="url(#arrowhead)"
                             />
-                            {/* Animated energy flow */}
                             <circle r="3" fill="#fbbf24">
                                 <animateMotion dur="1.5s" repeatCount="indefinite" path={`M ${fromNode.x} ${fromNode.y} L ${toNode.x} ${toNode.y}`} />
                             </circle>
@@ -246,10 +275,10 @@
                             {/* Preset Controls */}
                             <div className="mb-8">
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-3">Load Preset Example</label>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 gap-2">
                                     <button onClick={() => loadPreset('empty')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-slate-300">Empty</button>
-                                    <button onClick={() => loadPreset('chain')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-blue-400">Chain</button>
-                                    <button onClick={() => loadPreset('web')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-emerald-400">Full Web</button>
+                                    <button onClick={() => loadPreset('chain')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-blue-400">Simple Chain</button>
+                                    <button onClick={() => loadPreset('textbook')} className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold text-emerald-400 col-span-2">Textbook Web (Complex)</button>
                                 </div>
                             </div>
 
@@ -329,12 +358,6 @@
                                     </marker>
                                 </defs>
                                 {renderConnections()}
-                                
-                                {/* Connection Preview Line */}
-                                {connectingNode && (
-                                    // Ideally would track mouse for dynamic line, simplified here
-                                    null 
-                                )}
                             </svg>
 
                             {/* Nodes Layer */}
