@@ -80,7 +80,8 @@
                 name: 'Parasitic (寄生)',
                 desc: 'Inverted top (Numbers). Large host supports many small parasites.',
                 levels: [
-                    { role: 'Secondary Consumer', name: 'Fleas (跳蚤)', count: 1000, mass: 0.01, color: '#a855f7', icon: 'bug-off' },
+                    // Increased Fleas count to make the difference more obvious
+                    { role: 'Secondary Consumer', name: 'Fleas (跳蚤)', count: 20000, mass: 0.01, color: '#a855f7', icon: 'bug-off' },
                     { role: 'Primary Consumer', name: 'Cow (牛)', count: 1, mass: 600000, color: '#eab308', icon: 'beef' },
                     { role: 'Producer', name: 'Grass (草)', count: 10000, mass: 2, color: '#22c55e', icon: 'leaf' }
                 ]
@@ -96,70 +97,66 @@
                 value: mode === 'number' ? level.count : (level.count * level.mass)
             }));
 
-            // Normalize for display width (max width = 100%)
-            // Use Log scale for numbers if extreme difference? No, linear shows the inversion better, but need capping.
-            // Let's use a smart scale: linear but max value sets the 100% mark.
-            // Exception: Tree (1) vs Caterpillar (500) -> 1px vs 500px. 
-            // To make it visible, we might need a min-width or log scale.
-            // Actually, standard textbook diagrams use relative width to show the concept, not precise math graph.
-            // Let's use a linear scale relative to the largest value in the set.
-            
+            // Use Sqrt Scale for visualization to handle large disparities (e.g. 1 vs 1000)
+            // This ensures small values are still visible and differences are perceptible
             const maxValue = Math.max(...plotData.map(d => d.value));
+            const getVisualWidth = (val) => {
+                const percentage = (Math.sqrt(val) / Math.sqrt(maxValue)) * 100;
+                return Math.max(5, percentage); // Minimum 5% width for visibility
+            };
             
             return (
-                <div className="w-full max-w-2xl mx-auto flex flex-col gap-2 items-center justify-end h-full py-8">
-                    <div className="w-full flex flex-col gap-1">
+                <div className="w-full max-w-3xl mx-auto flex flex-col justify-end h-full py-8 px-4">
+                    <div className="w-full flex flex-col gap-4">
                         {plotData.map((level, i) => {
-                            // Calculate width percentage
-                            // Ensure min width for visibility
-                            let widthPercent = (level.value / maxValue) * 100;
-                            // Cap min width for visibility of "1 tree"
-                            if (widthPercent < 2) widthPercent = 2; 
+                            const widthPercent = getVisualWidth(level.value);
+                            const levelNum = plotData.length - i;
 
                             return (
-                                <div key={i} className="flex flex-col items-center group relative">
+                                <div key={i} className="flex items-center w-full h-16">
                                     
-                                    {/* The Bar */}
-                                    <div 
-                                        className="h-16 rounded-lg flex items-center justify-center relative pyramid-bar shadow-lg border border-white/10 hover:border-white/50 cursor-pointer"
-                                        style={{ 
-                                            width: `${widthPercent}%`, 
-                                            backgroundColor: level.color,
-                                            minWidth: '60px'
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-2 text-white drop-shadow-md px-2">
-                                            <Icon name={level.icon} size={20}/>
-                                            <span className="font-bold whitespace-nowrap hidden md:inline">{level.name}</span>
-                                        </div>
+                                    {/* Level Label (Aligned Left) */}
+                                    <div className="w-24 text-[10px] text-slate-500 font-bold uppercase text-right pr-6 shrink-0 border-r border-slate-700/50 h-full flex items-center justify-end">
+                                        Level {levelNum}
                                     </div>
 
-                                    {/* Info Label (Hover or Side) */}
-                                    <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 w-48 text-left opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                        <div className="bg-slate-800 p-2 rounded border border-slate-600 text-xs">
-                                            <div className="font-bold text-white">{level.role}</div>
-                                            <div className="text-slate-400">Count: {level.count.toLocaleString()}</div>
-                                            <div className="text-slate-400">Biomass: {(level.count * level.mass).toLocaleString()} g</div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Value Label on bar */}
-                                    <div className="absolute top-full mt-1 text-[10px] text-slate-400 font-mono bg-black/50 px-1 rounded">
-                                        {mode === 'number' ? level.count.toLocaleString() : `${(level.value/1000).toFixed(1)} kg`}
-                                    </div>
+                                    {/* Bar Container (Centered relative to remaining space) */}
+                                    <div className="flex-1 flex justify-center relative h-full items-center px-4">
+                                        
+                                        {/* The Bar */}
+                                        <div 
+                                            className="h-12 rounded-lg flex items-center justify-center relative pyramid-bar shadow-lg border border-white/10 hover:border-white/50 cursor-pointer group transition-all"
+                                            style={{ 
+                                                width: `${widthPercent}%`, 
+                                                backgroundColor: level.color,
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 text-white drop-shadow-md px-2 overflow-hidden">
+                                                <Icon name={level.icon} size={20}/>
+                                                <span className="font-bold whitespace-nowrap">{level.name}</span>
+                                            </div>
 
+                                            {/* Value Label (Below Bar) */}
+                                            <div className="absolute -bottom-5 text-[10px] text-slate-400 font-mono bg-black/40 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                {mode === 'number' ? level.count.toLocaleString() : `${(level.value/1000).toFixed(2)} kg`}
+                                            </div>
+
+                                            {/* Detailed Info Tooltip (Right Side) */}
+                                            <div className="absolute left-full ml-4 top-1/2 -translate-y-1/2 w-48 text-left opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
+                                                <div className="bg-slate-800/95 backdrop-blur p-3 rounded-xl border border-slate-600 text-xs shadow-xl">
+                                                    <div className="font-bold text-white mb-1">{level.role}</div>
+                                                    <div className="grid grid-cols-2 gap-x-2 text-slate-400">
+                                                        <span>Count:</span> <span className="text-right text-slate-200">{level.count.toLocaleString()}</span>
+                                                        <span>Biomass:</span> <span className="text-right text-slate-200">{(level.count * level.mass).toLocaleString()} g</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                    </div>
                                 </div>
                             );
                         })}
-                    </div>
-                    
-                    {/* Trophic Level Labels */}
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-12 text-[10px] text-slate-600 font-bold uppercase text-right pointer-events-none hidden lg:flex">
-                        {plotData.map((l, i) => (
-                            <div key={i} className="h-16 flex items-center justify-end pr-4 border-r border-slate-700">
-                                Level {plotData.length - i}
-                            </div>
-                        ))}
                     </div>
                 </div>
             );
@@ -238,7 +235,7 @@
                                             <input 
                                                 type="range" 
                                                 min="1" 
-                                                max={level.role === 'Producer' ? 10000 : 1000}
+                                                max={level.role === 'Producer' ? 20000 : level.role === 'Secondary Consumer' && scenarioKey === 'parasitic' ? 30000 : 2000}
                                                 step={level.role === 'Producer' ? 100 : 1}
                                                 value={level.count}
                                                 onChange={(e) => handleCountChange(i, e.target.value)}
@@ -254,11 +251,11 @@
                                 <div className="font-bold text-blue-400 uppercase mb-2 flex items-center gap-2"><Icon name="info" size={14}/> Key Concept</div>
                                 {viewMode === 'number' ? (
                                     <p>
-                                        <strong>Pyramid of Numbers:</strong> Represents the number of organisms at each trophic level. It can be inverted (e.g., one tree supports many insects).
+                                        <strong>Pyramid of Numbers:</strong> Represents the number of organisms at each trophic level. It can be inverted (e.g., one tree supports many insects, or one host supports many parasites).
                                     </p>
                                 ) : (
                                     <p>
-                                        <strong>Pyramid of Biomass:</strong> Represents the dry mass of organisms. It is almost always upright (pyramid shape) because energy is lost at each level.
+                                        <strong>Pyramid of Biomass:</strong> Represents the dry mass of organisms. It is almost always upright (pyramid shape) because energy is lost at each level (approx 90% loss).
                                     </p>
                                 )}
                             </div>
