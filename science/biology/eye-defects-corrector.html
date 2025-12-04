@@ -55,8 +55,8 @@
         // --- CONSTANTS ---
         const DEFECTS = {
             normal: { name: 'Normal Vision (正常視力)', desc: 'Light focuses directly on the retina.', eyeballScale: 1.0 },
-            myopia: { name: 'Short-sightedness (近視)', desc: 'Eyeball too long. Light focuses IN FRONT of retina.', eyeballScale: 1.15 },
-            hypermetropia: { name: 'Long-sightedness (遠視)', desc: 'Eyeball too short. Light focuses BEHIND retina.', eyeballScale: 0.85 }
+            myopia: { name: 'Short-sightedness (近視)', desc: 'Eyeball too long. Light focuses IN FRONT of retina.', eyeballScale: 1.25 }, // Adjusted Scale
+            hypermetropia: { name: 'Long-sightedness (遠視)', desc: 'Eyeball too short. Light focuses BEHIND retina.', eyeballScale: 0.75 } // Adjusted Scale
         };
 
         const LENSES = {
@@ -81,30 +81,22 @@
             const retinaX = cx + baseRadius * eyeScaleX; 
 
             // Focal Point Calculation
-            // Base focal length of eye lens
-            const eyePower = 150; // Distance from lens center to focus
+            // Adjusted Base focal length to perfectly match normal eye (cx - 60 + 140 = cx + 80)
+            const eyePower = 140; 
             
-            // Lens Correction Factor
-            // Concave (-) pushes focus back, Convex (+) pulls focus forward
+            // Lens Correction Factor (Calibrated)
+            // Concave (+) pushes focus back, Convex (-) pulls focus forward
             let correction = 0;
-            if (lens === 'concave') correction = 40; // Pushes focus further
-            if (lens === 'convex') correction = -30; // Pulls focus closer
+            if (lens === 'concave') correction = 20; // Matches the +20px shift of Myopia (1.25x)
+            if (lens === 'convex') correction = -20; // Matches the -20px shift of Hypermetropia (0.75x)
 
             // Current Focus Position
-            // Normal eye focuses at Normal Retina X (cx + 80)
-            // Myopia (eye longer), focus stays at same absolute position, so it lands in front of new retina
-            // But let's simulate physics: 
-            // Lens power is constant. Focus distance is constant relative to lens.
-            // Defect changes retina position.
-            
-            // Let's simplify:
-            // Focal point X = lensX + eyePower + correction
             const lensX = cx - 60; // Position of eye lens
             const focalX = lensX + eyePower + correction;
             
             // Determine Status (Blurry vs Sharp)
-            // If focalX is close to retinaX (+/- 10px)
-            const isFocused = Math.abs(focalX - retinaX) < 15;
+            // Stricter tolerance
+            const isFocused = Math.abs(focalX - retinaX) < 10;
 
             // Ray Paths
             const objectX = 20;
@@ -182,18 +174,12 @@
                             // All rays meet at focalX, cy
                             const pFocus = { x: focalX, y: cy };
                             
-                            // Step 4: Extend to Retina (if focus is before retina)
-                            // Or stop at Retina (if focus is behind)
-                            // Simple visual: Draw line to focus, then extend if needed to hit back of eye visual
+                            // Step 4: Extend to Retina logic
                             // Calculate slope to extend
                             const slope = (pFocus.y - p3.y) / (pFocus.x - p3.x);
                             
                             // Where does it hit the retina X line?
                             const yAtRetina = p3.y + slope * (retinaX - p3.x);
-                            
-                            // Visual End Point (clamped to back of eye or focus point)
-                            // If focus is way behind, we draw to retina. 
-                            // If focus is in front, we draw to focus, then cross over.
                             
                             const pathD = lens === 'none' 
                                 ? `M ${p1.x} ${p1.y} L ${p3.x} ${p3.y} L ${retinaX} ${yAtRetina}`
