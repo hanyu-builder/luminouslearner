@@ -174,16 +174,35 @@
             const [scenarioKey, setScenarioKey] = useState('grassland');
             const [viewMode, setViewMode] = useState('number'); // 'number', 'biomass'
             const [customData, setCustomData] = useState(null); // To allow modifying counts
+            const [autoBalance, setAutoBalance] = useState(false); // NEW: Toggle for energy flow simulation
 
             // Load Scenario
             useEffect(() => {
                 // Deep copy to allow editing
                 setCustomData(JSON.parse(JSON.stringify(SCENARIOS[scenarioKey].levels)));
+                // Reset autoBalance when scenario changes to avoid confusion, or keep it user choice
+                // setAutoBalance(false); 
             }, [scenarioKey]);
 
             const handleCountChange = (index, newCount) => {
+                const val = parseInt(newCount) || 1; // Minimum 1 to avoid errors
+                const oldVal = customData[index].count;
+                
                 const newData = [...customData];
-                newData[index].count = parseInt(newCount) || 0;
+                newData[index].count = val;
+
+                // Auto Balance Logic (Bottom-up Control)
+                if (autoBalance) {
+                    const ratio = val / oldVal;
+                    // In array, index 0 is Top Level (Hawk), last index is Bottom Level (Grass)
+                    // We want to update everything *above* the current level (lower index in array)
+                    // e.g. if Rabbit (index 2) changes, update Snake (1) and Hawk (0)
+                    
+                    for (let i = index - 1; i >= 0; i--) {
+                        newData[i].count = Math.max(1, Math.round(newData[i].count * ratio));
+                    }
+                }
+
                 setCustomData(newData);
             };
 
@@ -229,7 +248,21 @@
 
                             {/* Controls */}
                             <div className="space-y-4">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Adjust Population</label>
+                                <div className="flex justify-between items-center px-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Adjust Population</label>
+                                    
+                                    {/* Auto Balance Toggle */}
+                                    <button 
+                                        onClick={() => setAutoBalance(!autoBalance)}
+                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-bold border transition-all
+                                            ${autoBalance ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}
+                                        `}
+                                        title="Automatically adjust higher trophic levels based on energy flow"
+                                    >
+                                        <Icon name="link" size={12}/> Link Populations
+                                    </button>
+                                </div>
+
                                 <div className="space-y-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
                                     {customData.map((level, i) => (
                                         <div key={i} className="flex flex-col gap-1">
@@ -263,6 +296,11 @@
                                 ) : (
                                     <p>
                                         <strong>Pyramid of Biomass:</strong> Represents the dry mass of organisms. It is almost always upright (pyramid shape) because energy is lost at each level (approx 90% loss).
+                                    </p>
+                                )}
+                                {autoBalance && (
+                                    <p className="mt-2 pt-2 border-t border-blue-500/20 text-emerald-300">
+                                        <strong>Energy Flow Active:</strong> Increasing lower trophic levels now supports more organisms at higher levels (Bottom-up control).
                                     </p>
                                 )}
                             </div>
