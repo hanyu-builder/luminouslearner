@@ -72,8 +72,8 @@
 
         // --- ASSETS: SVG COMPONENTS ---
 
-        // Pathogen with Surface Antigens
-        const Pathogen = ({ type, x, y, size = 50 }) => {
+        // Pathogen with Surface Antigens (Fixed: Returns SVG now)
+        const Pathogen = ({ type, size = 50 }) => {
             // type: 'square', 'circle', 'triangle'
             let antigenShape;
             let color;
@@ -90,26 +90,23 @@
             }
 
             return (
-                <motion.g 
-                    initial={{ y: -50, opacity: 0 }}
-                    animate={{ y: y, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    style={{ transform: `translateX(${x}px)` }}
-                >
-                    {/* Bacterium Body */}
-                    <ellipse cx="0" cy="0" rx={size/2} ry={size/1.5} fill={color} stroke="white" strokeWidth="2" />
-                    {/* Surface Antigens */}
-                    <g transform={`translate(0, ${-size/1.5})`}>{antigenShape}</g>
-                    <g transform={`translate(${size/2}, 0) rotate(90)`}>{antigenShape}</g>
-                    <g transform={`translate(${-size/2}, 0) rotate(-90)`}>{antigenShape}</g>
-                    <g transform={`translate(0, ${size/1.5}) rotate(180)`}>{antigenShape}</g>
-                    
-                    {/* Angry Face */}
-                    <path d="M -10 -5 L -5 -2 M 10 -5 L 5 -2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    <circle cx="-8" cy="5" r="2" fill="white"/>
-                    <circle cx="8" cy="5" r="2" fill="white"/>
-                    <path d="M -5 15 Q 0 10 5 15" stroke="white" strokeWidth="2" fill="none"/>
-                </motion.g>
+                <svg width={size} height={size} viewBox={`-${size/2} -${size/1.5} ${size} ${size*1.5}`} className="overflow-visible">
+                    <g>
+                        {/* Bacterium Body */}
+                        <ellipse cx="0" cy="0" rx={size/2} ry={size/1.5} fill={color} stroke="white" strokeWidth="2" />
+                        {/* Surface Antigens */}
+                        <g transform={`translate(0, ${-size/1.5})`}>{antigenShape}</g>
+                        <g transform={`translate(${size/2}, 0) rotate(90)`}>{antigenShape}</g>
+                        <g transform={`translate(${-size/2}, 0) rotate(-90)`}>{antigenShape}</g>
+                        <g transform={`translate(0, ${size/1.5}) rotate(180)`}>{antigenShape}</g>
+                        
+                        {/* Angry Face */}
+                        <path d="M -10 -5 L -5 -2 M 10 -5 L 5 -2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                        <circle cx="-8" cy="5" r="2" fill="white"/>
+                        <circle cx="8" cy="5" r="2" fill="white"/>
+                        <path d="M -5 15 Q 0 10 5 15" stroke="white" strokeWidth="2" fill="none"/>
+                    </g>
+                </svg>
             );
         };
 
@@ -279,12 +276,24 @@
                         className="flex-1 relative bloodstream-bg cursor-crosshair overflow-hidden border-b-4 border-slate-700"
                         onClick={handleAreaClick}
                     >
-                        {/* Enemies */}
+                        {/* Enemies - Fixed Rendering */}
                         <AnimatePresence>
                             {enemies.map(e => (
-                                <div key={e.id} className="absolute" style={{ left: 0, top: 0 }}>
-                                    <Pathogen type={e.type} x={e.x} y={e.y} />
-                                </div>
+                                <motion.div 
+                                    key={e.id} 
+                                    className="absolute" 
+                                    initial={{ opacity: 0, y: -50 }}
+                                    animate={{ opacity: 1, y: e.y, x: e.x }} 
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ duration: 0 }} // Immediate update from state
+                                    style={{ 
+                                        left: 0, top: 0, // Reset pos for transform
+                                        marginLeft: -25, marginTop: -25, // Center anchor
+                                        transform: `translate(${e.x}px, ${e.y}px)` // Manual transform for performance if not using motion props fully
+                                    }}
+                                >
+                                    <Pathogen type={e.type} />
+                                </motion.div>
                             ))}
                         </AnimatePresence>
 
