@@ -218,8 +218,8 @@
                 siteGroupR.rotation.z = -Math.PI / 4;
                 abGroup.add(siteGroupR);
 
-                // Position Antibody initial
-                abGroup.position.set(0, 10, 10);
+                // Position Antibody initial (UPDATED)
+                abGroup.position.set(0, 8.5, 0); // Closer to antigen (was 0, 10, 10)
                 abGroup.lookAt(0, 5, 0); // Look roughly at pathogen top
                 
                 scene.add(abGroup);
@@ -241,8 +241,8 @@
                     const time = Date.now() * 0.001;
                     
                     if (!isBinding) {
-                        // Float around if not binding
-                        abGroup.position.y = 10 + Math.sin(time) * 1;
+                        // Float around if not binding (UPDATED)
+                        abGroup.position.y = 8.5 + Math.sin(time) * 0.5; // Float near 8.5
                         abGroup.rotation.y = Math.sin(time * 0.5) * 0.5;
                     } else {
                         // Binding Animation
