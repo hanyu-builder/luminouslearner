@@ -65,6 +65,15 @@
                 icon: 'virus'
             },
             {
+                id: 'adeno',
+                name: 'Adenovirus (腺病毒)',
+                type: 'Virus',
+                desc: 'Non-enveloped virus with an icosahedral shape and fibers at vertices. Causes respiratory illnesses.',
+                size: '~90 nm',
+                color: '#14b8a6',
+                icon: 'hexagon'
+            },
+            {
                 id: 'phage',
                 name: 'Bacteriophage (噬菌體)',
                 type: 'Virus',
@@ -90,6 +99,15 @@
                 size: '~2 µm',
                 color: '#22c55e',
                 icon: 'align-justify'
+            },
+            {
+                id: 'vibrio',
+                name: 'Vibrio cholerae (霍亂弧菌)',
+                type: 'Bacteria',
+                desc: 'Comma-shaped bacterium with a single polar flagellum. Causes cholera.',
+                size: '~1.5 µm',
+                color: '#06b6d4',
+                icon: 'corner-down-right'
             },
             {
                 id: 'yeast',
@@ -181,15 +199,64 @@
                             
                             const vec = new THREE.Vector3();
                             vec.setFromSphericalCoords(1, phi, theta);
-                            spikeGroup.position.copy(vec.clone().multiplyScalar(1)); // Center is 0, spikes are children with y offset
-                            // Wait, simpler logic:
-                            // SpikeGroup is at 0,0,0. Children are at y=4.5
-                            // We just rotate the SpikeGroup
                             spikeGroup.position.set(0,0,0);
                             spikeGroup.lookAt(vec);
                             
                             group.add(spikeGroup);
                         }
+                    } else if (pathogenId === 'adeno') {
+                        // Adenovirus - Icosahedron with fibers
+                        const bodyGeo = new THREE.IcosahedronGeometry(4, 0);
+                        const body = new THREE.Mesh(bodyGeo, matBase(0x14b8a6));
+                        group.add(body);
+                        
+                        // Fibers at vertices
+                        // Icosahedron vertices (approx locations or iterate geometry)
+                        // Simple approach: manual placement for a few or loop vertices
+                        const positions = bodyGeo.getAttribute('position');
+                        const vertex = new THREE.Vector3();
+                        
+                        const fiberMat = matBase(0x99f6e4);
+                        const fiberGeo = new THREE.CylinderGeometry(0.1, 0.1, 2, 8);
+                        const knobGeo = new THREE.SphereGeometry(0.3, 8, 8);
+
+                        // Icosahedron (detail 0) has 12 vertices.
+                        // But buffer geometry vertices are repeated. We need unique vertices.
+                        // Let's just use math to generate 12 vertices of icosahedron.
+                        const t = (1 + Math.sqrt(5)) / 2;
+                        const verts = [
+                            [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+                            [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+                            [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+                        ];
+
+                        verts.forEach(v => {
+                            const vec = new THREE.Vector3(v[0], v[1], v[2]).normalize().multiplyScalar(4);
+                            
+                            const fiberGroup = new THREE.Group();
+                            const fiber = new THREE.Mesh(fiberGeo, fiberMat);
+                            fiber.position.y = 1; // stick out
+                            fiber.rotation.x = Math.PI/2; // Align with lookAt Z? No, Cylinder is Y up.
+                            // We want cylinder to point along normal.
+                            // Cylinder is Y-axis.
+                            // We will rotate fiberGroup to lookAt normal.
+                            
+                            // Actually easier:
+                            const stick = new THREE.Mesh(fiberGeo, fiberMat);
+                            stick.position.y = 1;
+                            const knob = new THREE.Mesh(knobGeo, fiberMat);
+                            knob.position.y = 2;
+                            
+                            fiberGroup.add(stick);
+                            fiberGroup.add(knob);
+                            
+                            fiberGroup.position.copy(vec);
+                            fiberGroup.lookAt(vec.clone().multiplyScalar(2));
+                            fiberGroup.rotateX(Math.PI/2); 
+                            
+                            group.add(fiberGroup);
+                        });
+
                     } else if (pathogenId === 'phage') {
                         // Head (Icosahedron)
                         const headGeo = new THREE.IcosahedronGeometry(3, 0);
@@ -242,27 +309,20 @@
                             group.add(sphere);
                         });
                     } else if (pathogenId === 'ecoli') {
-                        // Rod shape - Manually built for r128 compatibility
+                        // Rod shape
                         const rodLength = 5;
                         const rodRadius = 1.5;
-                        
-                        // Center cylinder
                         const cylGeo = new THREE.CylinderGeometry(rodRadius, rodRadius, rodLength, 32);
                         const body = new THREE.Mesh(cylGeo, matBase(0x22c55e));
-                        
-                        // End Caps (Hemispheres)
                         const capGeo = new THREE.SphereGeometry(rodRadius, 32, 16, 0, Math.PI*2, 0, Math.PI/2);
-                        
                         const topCap = new THREE.Mesh(capGeo, matBase(0x22c55e));
                         topCap.position.y = rodLength / 2;
                         body.add(topCap);
-
                         const bottomCap = new THREE.Mesh(capGeo, matBase(0x22c55e));
                         bottomCap.position.y = -rodLength / 2;
                         bottomCap.rotation.x = Math.PI;
                         body.add(bottomCap);
-
-                        body.rotation.z = Math.PI / 2; // Lay flat
+                        body.rotation.z = Math.PI / 2; 
                         group.add(body);
                         
                         // Flagella
@@ -291,6 +351,38 @@
                             pili.rotateX(Math.PI/2);
                             group.add(pili);
                         }
+
+                    } else if (pathogenId === 'vibrio') {
+                        // Vibrio cholerae - Curved rod (Comma)
+                        const path = new THREE.QuadraticBezierCurve3(
+                            new THREE.Vector3(-2, 0, 0),
+                            new THREE.Vector3(0, 1.5, 0),
+                            new THREE.Vector3(2, 0, 0)
+                        );
+                        const tubeGeo = new THREE.TubeGeometry(path, 20, 1.2, 16, false);
+                        const body = new THREE.Mesh(tubeGeo, matBase(0x06b6d4));
+                        
+                        // Cap ends manually with spheres? Tube ends are open.
+                        // Just stick spheres at ends
+                        const capGeo = new THREE.SphereGeometry(1.2, 16, 16);
+                        const cap1 = new THREE.Mesh(capGeo, matBase(0x06b6d4));
+                        cap1.position.set(-2, 0, 0);
+                        const cap2 = new THREE.Mesh(capGeo, matBase(0x06b6d4));
+                        cap2.position.set(2, 0, 0);
+                        
+                        group.add(body);
+                        group.add(cap1);
+                        group.add(cap2);
+
+                        // Single Flagellum
+                        const flagPath = new THREE.CatmullRomCurve3([
+                            new THREE.Vector3(2, 0, 0),
+                            new THREE.Vector3(4, 1, 0),
+                            new THREE.Vector3(6, -1, 0),
+                            new THREE.Vector3(8, 1, 0)
+                        ]);
+                        const flagMesh = new THREE.Mesh(new THREE.TubeGeometry(flagPath, 20, 0.15, 8, false), matBase(0xa5f3fc));
+                        group.add(flagMesh);
 
                     } else if (pathogenId === 'yeast') {
                         // Mother cell
@@ -327,7 +419,7 @@
                     
                     if (group) {
                         group.position.y = Math.sin(timeRef.current) * 0.5;
-                        if (pathogenId === 'ecoli') {
+                        if (pathogenId === 'ecoli' || pathogenId === 'vibrio') {
                             group.rotation.x = Math.sin(timeRef.current * 2) * 0.1;
                         }
                     }
