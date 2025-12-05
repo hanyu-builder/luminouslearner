@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Three.js -->
+    <!-- Three.js (r128) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -111,221 +111,243 @@
             useEffect(() => {
                 if (!mountRef.current) return;
                 const container = mountRef.current;
+                
+                // Initial check
                 let width = container.clientWidth || 100;
                 let height = container.clientHeight || 100;
 
-                // Scene Setup
-                const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x0f172a);
-                scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
+                let scene, camera, renderer, controls, group;
 
-                const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-                camera.position.set(0, 0, 20);
+                try {
+                    // Scene Setup
+                    scene = new THREE.Scene();
+                    scene.background = new THREE.Color(0x0f172a);
+                    scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                renderer.setSize(width, height);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                
-                while(container.firstChild) container.removeChild(container.firstChild);
-                container.appendChild(renderer.domElement);
+                    camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+                    camera.position.set(0, 0, 20);
 
-                const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.autoRotate = true;
-                controls.autoRotateSpeed = 0.8;
+                    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                    renderer.setSize(width, height);
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                    
+                    while(container.firstChild) container.removeChild(container.firstChild);
+                    container.appendChild(renderer.domElement);
 
-                // Lighting
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-                scene.add(ambientLight);
-                const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-                dirLight.position.set(10, 10, 10);
-                scene.add(dirLight);
-                const pointLight = new THREE.PointLight(0x60a5fa, 0.8);
-                pointLight.position.set(-10, -10, 5);
-                scene.add(pointLight);
+                    controls = new THREE.OrbitControls(camera, renderer.domElement);
+                    controls.enableDamping = true;
+                    controls.autoRotate = true;
+                    controls.autoRotateSpeed = 0.8;
 
-                // --- MODEL BUILDER ---
-                const group = new THREE.Group();
-                
-                const matBase = (color) => new THREE.MeshStandardMaterial({ 
-                    color: color, roughness: 0.4, metalness: 0.2 
-                });
+                    // Lighting
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+                    scene.add(ambientLight);
+                    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+                    dirLight.position.set(10, 10, 10);
+                    scene.add(dirLight);
+                    const pointLight = new THREE.PointLight(0x60a5fa, 0.8);
+                    pointLight.position.set(-10, -10, 5);
+                    scene.add(pointLight);
 
-                if (pathogenId === 'flu') {
-                    // Virus Body
-                    const bodyGeo = new THREE.SphereGeometry(4, 32, 32);
-                    const body = new THREE.Mesh(bodyGeo, matBase(0xef4444));
-                    group.add(body);
+                    // --- MODEL BUILDER ---
+                    group = new THREE.Group();
                     
-                    // Spikes
-                    const spikeGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
-                    const spikeHeadGeo = new THREE.SphereGeometry(0.5, 8, 8);
-                    const spikeMat = matBase(0xffaaaa);
-                    
-                    for(let i=0; i<60; i++) {
-                        const spikeGroup = new THREE.Group();
-                        const stalk = new THREE.Mesh(spikeGeo, spikeMat);
-                        stalk.position.y = 4.5;
-                        const head = new THREE.Mesh(spikeHeadGeo, spikeMat);
-                        head.position.y = 5.2;
-                        spikeGroup.add(stalk);
-                        spikeGroup.add(head);
-                        
-                        // Random rotation on sphere surface
-                        const phi = Math.acos(-1 + (2 * i) / 60);
-                        const theta = Math.sqrt(60 * Math.PI) * phi;
-                        
-                        spikeGroup.position.setFromSphericalCoords(0, phi, theta); // Center at 0
-                        spikeGroup.lookAt(0,0,0); // Point inwards
-                        spikeGroup.rotateX(Math.PI); // Point outwards
-                        // Actually easier: set rotation from spherical coords?
-                        // Let's use simple vector math
-                        const vec = new THREE.Vector3();
-                        vec.setFromSphericalCoords(1, phi, theta);
-                        spikeGroup.lookAt(vec.multiplyScalar(10));
-                        
-                        group.add(spikeGroup);
-                    }
-                } else if (pathogenId === 'phage') {
-                    // Head (Icosahedron)
-                    const headGeo = new THREE.IcosahedronGeometry(3, 0);
-                    const head = new THREE.Mesh(headGeo, matBase(0x3b82f6));
-                    head.position.y = 3;
-                    group.add(head);
-                    
-                    // Neck
-                    const neckGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 8);
-                    const neck = new THREE.Mesh(neckGeo, matBase(0x60a5fa));
-                    group.add(neck);
-                    
-                    // Base Plate
-                    const plateGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.5, 6);
-                    const plate = new THREE.Mesh(plateGeo, matBase(0x2563eb));
-                    plate.position.y = -2;
-                    group.add(plate);
-                    
-                    // Legs (Spider legs)
-                    for(let i=0; i<6; i++) {
-                        const angle = (i/6) * Math.PI * 2;
-                        const legGroup = new THREE.Group();
-                        const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), matBase(0x93c5fd));
-                        leg1.position.set(0, -1.5, 0);
-                        leg1.rotation.z = Math.PI/4;
-                        const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), matBase(0x93c5fd));
-                        leg2.position.set(1.8, -2.5, 0); // Approx
-                        leg2.rotation.z = -Math.PI/4;
-                        
-                        legGroup.add(leg1);
-                        legGroup.add(leg2);
-                        
-                        legGroup.position.set(Math.cos(angle)*1.2, -2, Math.sin(angle)*1.2);
-                        legGroup.rotation.y = -angle; // Face outward
-                        group.add(legGroup);
-                    }
-                } else if (pathogenId === 'staph') {
-                    // Cluster of spheres
-                    const sphereGeo = new THREE.SphereGeometry(1.5, 16, 16);
-                    const mat = matBase(0xa855f7); // Purple (Gram +)
-                    
-                    // Create a grape-like cluster
-                    const positions = [
-                        [0,0,0], [2,0,0], [-1,1.5,0], [0,-1.8,1], [1,1.5,1.5], [-1.5,-1,-1], [1.5, -1, -1.5],
-                        [0, 2.5, -1], [0, -2.5, 0], [-2, 0, 1.5], [2, 1, -1]
-                    ];
-                    
-                    positions.forEach(pos => {
-                        const sphere = new THREE.Mesh(sphereGeo, mat);
-                        sphere.position.set(...pos);
-                        group.add(sphere);
+                    const matBase = (color) => new THREE.MeshStandardMaterial({ 
+                        color: color, roughness: 0.4, metalness: 0.2 
                     });
-                } else if (pathogenId === 'ecoli') {
-                    // Rod shape (Capsule)
-                    const bodyGeo = new THREE.CapsuleGeometry(1.5, 5, 4, 16);
-                    const body = new THREE.Mesh(bodyGeo, matBase(0x22c55e)); // Greenish
-                    body.rotation.z = Math.PI / 2;
-                    group.add(body);
-                    
-                    // Flagella (Trails)
-                    const flagellaCount = 8;
-                    for(let i=0; i<flagellaCount; i++) {
-                        const curve = new THREE.CatmullRomCurve3([
-                            new THREE.Vector3(3.5, 0, 0),
-                            new THREE.Vector3(5, 1, 0),
-                            new THREE.Vector3(6.5, -1, 0),
-                            new THREE.Vector3(8, 0.5, 0)
-                        ]);
-                        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.1, 8, false), matBase(0x86efac));
-                        tube.position.x = 0;
-                        tube.rotation.x = (i/flagellaCount) * Math.PI * 2;
-                        group.add(tube);
-                    }
-                    // Pili (Small hairs)
-                    const piliGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.8);
-                    for(let i=0; i<50; i++) {
-                        const pili = new THREE.Mesh(piliGeo, matBase(0x166534));
-                        // Random point on capsule surface approximation
-                        const angle = Math.random() * Math.PI * 2;
-                        const z = (Math.random() - 0.5) * 6;
-                        const r = 1.5;
-                        pili.position.set(z, Math.sin(angle)*r, Math.cos(angle)*r);
-                        pili.lookAt(z*2, Math.sin(angle)*r*2, Math.cos(angle)*r*2); // Point out
-                        pili.rotateX(Math.PI/2);
-                        group.add(pili);
+
+                    if (pathogenId === 'flu') {
+                        // Virus Body
+                        const bodyGeo = new THREE.SphereGeometry(4, 32, 32);
+                        const body = new THREE.Mesh(bodyGeo, matBase(0xef4444));
+                        group.add(body);
+                        
+                        // Spikes
+                        const spikeGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
+                        const spikeHeadGeo = new THREE.SphereGeometry(0.5, 8, 8);
+                        const spikeMat = matBase(0xffaaaa);
+                        
+                        for(let i=0; i<60; i++) {
+                            const spikeGroup = new THREE.Group();
+                            const stalk = new THREE.Mesh(spikeGeo, spikeMat);
+                            stalk.position.y = 4.5;
+                            const head = new THREE.Mesh(spikeHeadGeo, spikeMat);
+                            head.position.y = 5.2;
+                            spikeGroup.add(stalk);
+                            spikeGroup.add(head);
+                            
+                            const phi = Math.acos(-1 + (2 * i) / 60);
+                            const theta = Math.sqrt(60 * Math.PI) * phi;
+                            
+                            const vec = new THREE.Vector3();
+                            vec.setFromSphericalCoords(1, phi, theta);
+                            spikeGroup.position.copy(vec.clone().multiplyScalar(1)); // Center is 0, spikes are children with y offset
+                            // Wait, simpler logic:
+                            // SpikeGroup is at 0,0,0. Children are at y=4.5
+                            // We just rotate the SpikeGroup
+                            spikeGroup.position.set(0,0,0);
+                            spikeGroup.lookAt(vec);
+                            
+                            group.add(spikeGroup);
+                        }
+                    } else if (pathogenId === 'phage') {
+                        // Head (Icosahedron)
+                        const headGeo = new THREE.IcosahedronGeometry(3, 0);
+                        const head = new THREE.Mesh(headGeo, matBase(0x3b82f6));
+                        head.position.y = 3;
+                        group.add(head);
+                        
+                        // Neck
+                        const neckGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 8);
+                        const neck = new THREE.Mesh(neckGeo, matBase(0x60a5fa));
+                        group.add(neck);
+                        
+                        // Base Plate
+                        const plateGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.5, 6);
+                        const plate = new THREE.Mesh(plateGeo, matBase(0x2563eb));
+                        plate.position.y = -2;
+                        group.add(plate);
+                        
+                        // Legs
+                        for(let i=0; i<6; i++) {
+                            const angle = (i/6) * Math.PI * 2;
+                            const legGroup = new THREE.Group();
+                            const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), matBase(0x93c5fd));
+                            leg1.position.set(0, -1.5, 0);
+                            leg1.rotation.z = Math.PI/4;
+                            const leg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), matBase(0x93c5fd));
+                            leg2.position.set(1.8, -2.5, 0);
+                            leg2.rotation.z = -Math.PI/4;
+                            
+                            legGroup.add(leg1);
+                            legGroup.add(leg2);
+                            
+                            legGroup.position.set(Math.cos(angle)*1.2, -2, Math.sin(angle)*1.2);
+                            legGroup.rotation.y = -angle;
+                            group.add(legGroup);
+                        }
+                    } else if (pathogenId === 'staph') {
+                        // Cluster of spheres
+                        const sphereGeo = new THREE.SphereGeometry(1.5, 16, 16);
+                        const mat = matBase(0xa855f7);
+                        
+                        const positions = [
+                            [0,0,0], [2,0,0], [-1,1.5,0], [0,-1.8,1], [1,1.5,1.5], [-1.5,-1,-1], [1.5, -1, -1.5],
+                            [0, 2.5, -1], [0, -2.5, 0], [-2, 0, 1.5], [2, 1, -1]
+                        ];
+                        
+                        positions.forEach(pos => {
+                            const sphere = new THREE.Mesh(sphereGeo, mat);
+                            sphere.position.set(...pos);
+                            group.add(sphere);
+                        });
+                    } else if (pathogenId === 'ecoli') {
+                        // Rod shape - Manually built for r128 compatibility
+                        const rodLength = 5;
+                        const rodRadius = 1.5;
+                        
+                        // Center cylinder
+                        const cylGeo = new THREE.CylinderGeometry(rodRadius, rodRadius, rodLength, 32);
+                        const body = new THREE.Mesh(cylGeo, matBase(0x22c55e));
+                        
+                        // End Caps (Hemispheres)
+                        const capGeo = new THREE.SphereGeometry(rodRadius, 32, 16, 0, Math.PI*2, 0, Math.PI/2);
+                        
+                        const topCap = new THREE.Mesh(capGeo, matBase(0x22c55e));
+                        topCap.position.y = rodLength / 2;
+                        body.add(topCap);
+
+                        const bottomCap = new THREE.Mesh(capGeo, matBase(0x22c55e));
+                        bottomCap.position.y = -rodLength / 2;
+                        bottomCap.rotation.x = Math.PI;
+                        body.add(bottomCap);
+
+                        body.rotation.z = Math.PI / 2; // Lay flat
+                        group.add(body);
+                        
+                        // Flagella
+                        const flagellaCount = 8;
+                        for(let i=0; i<flagellaCount; i++) {
+                            const curve = new THREE.CatmullRomCurve3([
+                                new THREE.Vector3(3.5, 0, 0),
+                                new THREE.Vector3(5, 1, 0),
+                                new THREE.Vector3(6.5, -1, 0),
+                                new THREE.Vector3(8, 0.5, 0)
+                            ]);
+                            const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.1, 8, false), matBase(0x86efac));
+                            tube.position.x = 0;
+                            tube.rotation.x = (i/flagellaCount) * Math.PI * 2;
+                            group.add(tube);
+                        }
+                        // Pili
+                        const piliGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.8);
+                        for(let i=0; i<50; i++) {
+                            const pili = new THREE.Mesh(piliGeo, matBase(0x166534));
+                            const angle = Math.random() * Math.PI * 2;
+                            const z = (Math.random() - 0.5) * 6;
+                            const r = 1.5;
+                            pili.position.set(z, Math.sin(angle)*r, Math.cos(angle)*r);
+                            pili.lookAt(z*2, Math.sin(angle)*r*2, Math.cos(angle)*r*2);
+                            pili.rotateX(Math.PI/2);
+                            group.add(pili);
+                        }
+
+                    } else if (pathogenId === 'yeast') {
+                        // Mother cell
+                        const motherGeo = new THREE.SphereGeometry(3, 32, 32);
+                        const mat = matBase(0xeab308);
+                        const mother = new THREE.Mesh(motherGeo, mat);
+                        mother.scale.set(1, 1.2, 1);
+                        group.add(mother);
+                        
+                        // Bud
+                        const budGeo = new THREE.SphereGeometry(1.5, 32, 32);
+                        const bud = new THREE.Mesh(budGeo, mat);
+                        bud.position.set(2, 2.5, 0);
+                        bud.scale.set(1, 1.2, 1);
+                        bud.rotation.z = -0.5;
+                        group.add(bud);
+                        
+                        // Scars
+                        const scarGeo = new THREE.CircleGeometry(0.5, 16);
+                        const scar = new THREE.Mesh(scarGeo, new THREE.MeshStandardMaterial({color: 0xca8a04, side: THREE.DoubleSide}));
+                        scar.position.set(-2.5, 1, 1.5);
+                        scar.lookAt(0,0,0);
+                        group.add(scar);
                     }
 
-                } else if (pathogenId === 'yeast') {
-                    // Mother cell
-                    const motherGeo = new THREE.SphereGeometry(3, 32, 32);
-                    const mat = matBase(0xeab308); // Tan/Yellow
-                    const mother = new THREE.Mesh(motherGeo, mat);
-                    mother.scale.set(1, 1.2, 1); // Oval
-                    group.add(mother);
-                    
-                    // Bud (Daughter cell)
-                    const budGeo = new THREE.SphereGeometry(1.5, 32, 32);
-                    const bud = new THREE.Mesh(budGeo, mat);
-                    bud.position.set(2, 2.5, 0);
-                    bud.scale.set(1, 1.2, 1);
-                    bud.rotation.z = -0.5;
-                    group.add(bud);
-                    
-                    // Scars
-                    const scarGeo = new THREE.CircleGeometry(0.5, 16);
-                    const scar = new THREE.Mesh(scarGeo, new THREE.MeshStandardMaterial({color: 0xca8a04, side: THREE.DoubleSide}));
-                    scar.position.set(-2.5, 1, 1.5);
-                    scar.lookAt(0,0,0);
-                    group.add(scar);
+                    scene.add(group);
+                } catch (err) {
+                    console.error("Three.js init error:", err);
                 }
-
-                scene.add(group);
 
                 // Animation
                 const animate = () => {
                     timeRef.current += 0.01;
                     
-                    // Subtle floating
-                    group.position.y = Math.sin(timeRef.current) * 0.5;
-                    
-                    // Flagella wave for E. coli (Simulated by rotation or shader - simplified here)
-                    if (pathogenId === 'ecoli') {
-                        // Simple wiggle
-                        group.rotation.x = Math.sin(timeRef.current * 2) * 0.1;
+                    if (group) {
+                        group.position.y = Math.sin(timeRef.current) * 0.5;
+                        if (pathogenId === 'ecoli') {
+                            group.rotation.x = Math.sin(timeRef.current * 2) * 0.1;
+                        }
                     }
 
-                    controls.update();
-                    renderer.render(scene, camera);
+                    if (controls) controls.update();
+                    if (renderer && scene && camera) renderer.render(scene, camera);
                     frameIdRef.current = requestAnimationFrame(animate);
                 };
                 animate();
 
-                // Resize
+                // Resize Observer
                 const resizeObserver = new ResizeObserver(() => {
                     if (container.clientWidth && container.clientHeight) {
                         const w = container.clientWidth;
                         const h = container.clientHeight;
-                        camera.aspect = w / h;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(w, h);
+                        if (camera) {
+                            camera.aspect = w / h;
+                            camera.updateProjectionMatrix();
+                        }
+                        if (renderer) renderer.setSize(w, h);
                     }
                 });
                 resizeObserver.observe(container);
@@ -333,10 +355,10 @@
                 return () => {
                     cancelAnimationFrame(frameIdRef.current);
                     resizeObserver.disconnect();
-                    if (container && renderer.domElement) {
+                    if (container && renderer && renderer.domElement) {
                         container.removeChild(renderer.domElement);
                     }
-                    renderer.dispose();
+                    if (renderer) renderer.dispose();
                 };
             }, [pathogenId]);
 
