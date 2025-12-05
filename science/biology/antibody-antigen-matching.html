@@ -87,6 +87,7 @@
             const mountRef = useRef(null);
             const sceneRef = useRef(null);
             const antibodyRef = useRef(null);
+            const frameIdRef = useRef(null); // Track animation frame
             
             useEffect(() => {
                 if (!mountRef.current) return;
@@ -181,7 +182,6 @@
                 abGroup.add(rightArm);
 
                 // Binding Sites (The "Key")
-                // These need to be complementary to the antigen
                 const siteGroupL = new THREE.Group();
                 const siteGroupR = new THREE.Group();
 
@@ -195,7 +195,6 @@
                     siteGroupR.add(wall1.clone(), wall2.clone(), base.clone());
                 } else if (type === 'circle') {
                     // Cup shape for sphere
-                    // Use a tube or open sphere segment
                     const cupGeo = new THREE.TorusGeometry(0.6, 0.2, 8, 16, Math.PI);
                     const cup = new THREE.Mesh(cupGeo, antibodyMat);
                     cup.rotation.z = Math.PI/2;
@@ -225,7 +224,7 @@
                 
                 scene.add(abGroup);
 
-                // Resize
+                // Resize Observer (FIXED: Now properly defined)
                 const resizeObserver = new ResizeObserver(() => {
                     if (container.clientWidth && container.clientHeight) {
                         const w = container.clientWidth;
@@ -247,14 +246,9 @@
                         abGroup.rotation.y = Math.sin(time * 0.5) * 0.5;
                     } else {
                         // Binding Animation
-                        // Target position: One of the antigens. 
-                        // For simplicity, let's target the top-most hypothetical antigen position (0, 4.5, 0)
-                        // We move the Antibody down to fit onto it.
-                        
-                        // Smooth lerp to target
                         abGroup.position.lerp(new THREE.Vector3(0, 6.5, 0), 0.05); // Just above
+                        
                         // Rotate to align
-                        // Target quaternion is facing down (roughly)
                         const targetQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0));
                         abGroup.quaternion.slerp(targetQ, 0.05);
                     }
@@ -266,7 +260,7 @@
                 animate();
 
                 return () => {
-                    cancelAnimationFrame(frameIdRef.current);
+                    if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current);
                     resizeObserver.disconnect();
                     if (container && renderer.domElement) {
                         container.removeChild(renderer.domElement);
