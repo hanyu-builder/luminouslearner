@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antibody-Antigen Matcher</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Game Canvas Background */
+        .bloodstream-bg {
+            background-image: radial-gradient(#1e293b 2px, transparent 2px), radial-gradient(#1e293b 2px, transparent 2px);
+            background-size: 32px 32px;
+            background-position: 0 0, 16px 16px;
+            background-color: #0f172a;
+            animation: flowBackground 20s linear infinite;
+        }
+        @keyframes flowBackground {
+            from { background-position: 0 0, 16px 16px; }
+            to { background-position: 0 64px, 16px 80px; }
+        }
+
+        /* Antibody Float */
+        .float { animation: float 3s ease-in-out infinite; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- ASSETS: SVG COMPONENTS ---
+
+        // Pathogen with Surface Antigens (Fixed: Returns SVG now)
+        const Pathogen = ({ type, size = 50 }) => {
+            // type: 'square', 'circle', 'triangle'
+            let antigenShape;
+            let color;
+
+            if (type === 'square') {
+                antigenShape = <rect x="-5" y="-8" width="10" height="10" fill="#facc15" />; // Yellow Square
+                color = "#854d0e";
+            } else if (type === 'circle') {
+                antigenShape = <circle cx="0" cy="-5" r="5" fill="#38bdf8" />; // Blue Circle
+                color = "#1e3a8a";
+            } else {
+                antigenShape = <path d="M 0 -10 L 5 0 L -5 0 Z" fill="#ef4444" />; // Red Triangle
+                color = "#7f1d1d";
+            }
+
+            return (
+                <svg width={size} height={size} viewBox={`-${size/2} -${size/1.5} ${size} ${size*1.5}`} className="overflow-visible">
+                    <g>
+                        {/* Bacterium Body */}
+                        <ellipse cx="0" cy="0" rx={size/2} ry={size/1.5} fill={color} stroke="white" strokeWidth="2" />
+                        {/* Surface Antigens */}
+                        <g transform={`translate(0, ${-size/1.5})`}>{antigenShape}</g>
+                        <g transform={`translate(${size/2}, 0) rotate(90)`}>{antigenShape}</g>
+                        <g transform={`translate(${-size/2}, 0) rotate(-90)`}>{antigenShape}</g>
+                        <g transform={`translate(0, ${size/1.5}) rotate(180)`}>{antigenShape}</g>
+                        
+                        {/* Angry Face */}
+                        <path d="M -10 -5 L -5 -2 M 10 -5 L 5 -2" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                        <circle cx="-8" cy="5" r="2" fill="white"/>
+                        <circle cx="8" cy="5" r="2" fill="white"/>
+                        <path d="M -5 15 Q 0 10 5 15" stroke="white" strokeWidth="2" fill="none"/>
+                    </g>
+                </svg>
+            );
+        };
+
+        // Antibody Y-Shape
+        const Antibody = ({ type, size = 40, className="" }) => {
+            // Receptor shape matches antigen
+            let receptorPath;
+            let color;
+
+            if (type === 'square') { // Anti-A
+                receptorPath = "M -10 -15 H 10 V -5 H -10 Z"; // Square notch
+                color = "#facc15";
+            } else if (type === 'circle') { // Anti-B
+                receptorPath = "M -10 -15 A 10 10 0 0 1 10 -15"; // Round notch (visual simplified)
+                // Actually draw the antibody arm tips
+                color = "#38bdf8";
+            } else { // Anti-C
+                receptorPath = "M -10 -15 L 0 -5 L 10 -15"; // Triangle notch
+                color = "#ef4444";
+            }
+
+            return (
+                <svg viewBox="-25 -25 50 50" width={size} height={size} className={`overflow-visible ${className}`}>
+                    {/* Y Shape Base */}
+                    <path d="M 0 20 L 0 5 L -15 -15 M 0 5 L 15 -15" stroke={color} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    
+                    {/* Binding Sites (Visual hint of shape) */}
+                    {type === 'square' && (
+                        <g>
+                            <rect x="-20" y="-20" width="10" height="10" fill="none" stroke={color} strokeWidth="2" />
+                            <rect x="10" y="-20" width="10" height="10" fill="none" stroke={color} strokeWidth="2" />
+                        </g>
+                    )}
+                    {type === 'circle' && (
+                        <g>
+                            <circle cx="-15" cy="-15" r="5" fill="none" stroke={color} strokeWidth="2" />
+                            <circle cx="15" cy="-15" r="5" fill="none" stroke={color} strokeWidth="2" />
+                        </g>
+                    )}
+                    {type === 'triangle' && (
+                        <g>
+                            <path d="M -20 -20 L -15 -10 L -10 -20" fill="none" stroke={color} strokeWidth="2" />
+                            <path d="M 10 -20 L 15 -10 L 20 -20" fill="none" stroke={color} strokeWidth="2" />
+                        </g>
+                    )}
+                </svg>
+            );
+        };
+
+        // --- GAME ENGINE ---
+        const GameArea = ({ isPlaying, onScore, onGameOver }) => {
+            const [enemies, setEnemies] = useState([]);
+            const [projectiles, setProjectiles] = useState([]); // Antibodies fired
+            const [selectedType, setSelectedType] = useState('square'); // Current antibody type
+            const containerRef = useRef(null);
+            const requestRef = useRef();
+            const lastSpawnTime = useRef(0);
+            
+            // Spawn Logic
+            const spawnEnemy = (timestamp) => {
+                if (timestamp - lastSpawnTime.current > 2000) { // Spawn every 2s
+                    const types = ['square', 'circle', 'triangle'];
+                    const type = types[Math.floor(Math.random() * types.length)];
+                    const x = Math.random() * (containerRef.current.clientWidth - 60) + 30;
+                    
+                    setEnemies(prev => [...prev, {
+                        id: Date.now(),
+                        type,
+                        x,
+                        y: -50,
+                        speed: 0.5 + Math.random() * 0.5
+                    }]);
+                    lastSpawnTime.current = timestamp;
+                }
+            };
+
+            // Game Loop
+            const update = (timestamp) => {
+                if (!isPlaying) return;
+
+                spawnEnemy(timestamp);
+
+                // Update Enemies
+                setEnemies(prev => {
+                    const next = prev.map(e => ({ ...e, y: e.y + e.speed })).filter(e => e.y < 600);
+                    // Check Game Over (Enemy reached bottom)
+                    if (next.some(e => e.y > 550)) {
+                        onGameOver();
+                        return [];
+                    }
+                    return next;
+                });
+
+                // Update Projectiles & Collision
+                setProjectiles(prevProj => {
+                    let nextProj = prevProj.map(p => ({ ...p, y: p.y - 4 })).filter(p => p.y > -50);
+                    
+                    // Collision Detection
+                    setEnemies(prevEnemies => {
+                        const nextEnemies = [...prevEnemies];
+                        
+                        // Iterate projectiles backwards to remove on hit
+                        for (let i = nextProj.length - 1; i >= 0; i--) {
+                            const p = nextProj[i];
+                            let hit = false;
+                            
+                            for (let j = nextEnemies.length - 1; j >= 0; j--) {
+                                const e = nextEnemies[j];
+                                // Simple distance check
+                                const dx = p.x - e.x;
+                                const dy = p.y - e.y;
+                                if (Math.sqrt(dx*dx + dy*dy) < 40) {
+                                    // Hit! Check Type
+                                    if (p.type === e.type) {
+                                        // Match! Destroy enemy
+                                        nextEnemies.splice(j, 1);
+                                        onScore(10);
+                                        hit = true;
+                                        break; // One antibody kills one antigen
+                                    } else {
+                                        // Mismatch! Bounce off (Visual only, logic: antibody wasted)
+                                        hit = true; 
+                                        break;
+                                    }
+                                }
+                            }
+                            if (hit) nextProj.splice(i, 1);
+                        }
+                        return nextEnemies;
+                    });
+                    
+                    return nextProj;
+                });
+
+                requestRef.current = requestAnimationFrame(update);
+            };
+
+            useEffect(() => {
+                if (isPlaying) {
+                    requestRef.current = requestAnimationFrame(update);
+                } else {
+                    cancelAnimationFrame(requestRef.current);
+                }
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [isPlaying]);
+
+            // Input Handler
+            const handleAreaClick = (e) => {
+                if (!isPlaying) return;
+                const rect = containerRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                
+                // Spawn Antibody at bottom
+                setProjectiles(prev => [...prev, {
+                    id: Date.now(),
+                    type: selectedType,
+                    x: x,
+                    y: 500
+                }]);
+            };
+
+            return (
+                <div className="flex flex-col h-full w-full relative">
+                    {/* Game Canvas */}
+                    <div 
+                        ref={containerRef}
+                        className="flex-1 relative bloodstream-bg cursor-crosshair overflow-hidden border-b-4 border-slate-700"
+                        onClick={handleAreaClick}
+                    >
+                        {/* Enemies - Fixed Rendering */}
+                        <AnimatePresence>
+                            {enemies.map(e => (
+                                <motion.div 
+                                    key={e.id} 
+                                    className="absolute" 
+                                    initial={{ opacity: 0, y: -50 }}
+                                    animate={{ opacity: 1, y: e.y, x: e.x }} 
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ duration: 0 }} // Immediate update from state
+                                    style={{ 
+                                        left: 0, top: 0, // Reset pos for transform
+                                        marginLeft: -25, marginTop: -25, // Center anchor
+                                        transform: `translate(${e.x}px, ${e.y}px)` // Manual transform for performance if not using motion props fully
+                                    }}
+                                >
+                                    <Pathogen type={e.type} />
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+
+                        {/* Projectiles */}
+                        {projectiles.map(p => (
+                            <div key={p.id} className="absolute" style={{ left: p.x - 20, top: p.y }}>
+                                <Antibody type={p.type} />
+                            </div>
+                        ))}
+                        
+                        {!isPlaying && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10">
+                                <div className="text-center text-white">
+                                    <h2 className="text-3xl font-black mb-2">Ready?</h2>
+                                    <p>Select correct antibody & click to shoot!</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Control Deck */}
+                    <div className="h-24 bg-slate-900 flex items-center justify-center gap-8 p-4 shrink-0">
+                        <button 
+                            onClick={() => setSelectedType('square')}
+                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 w-24
+                                ${selectedType === 'square' ? 'bg-slate-800 border-yellow-500 scale-110 shadow-lg' : 'bg-slate-900 border-slate-700 opacity-60 hover:opacity-100'}
+                            `}
+                        >
+                            <Antibody type="square" size={24} />
+                            <span className="text-[10px] font-bold text-yellow-400">Anti-A</span>
+                        </button>
+                        <button 
+                            onClick={() => setSelectedType('circle')}
+                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 w-24
+                                ${selectedType === 'circle' ? 'bg-slate-800 border-sky-500 scale-110 shadow-lg' : 'bg-slate-900 border-slate-700 opacity-60 hover:opacity-100'}
+                            `}
+                        >
+                            <Antibody type="circle" size={24} />
+                            <span className="text-[10px] font-bold text-sky-400">Anti-B</span>
+                        </button>
+                        <button 
+                            onClick={() => setSelectedType('triangle')}
+                            className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 w-24
+                                ${selectedType === 'triangle' ? 'bg-slate-800 border-red-500 scale-110 shadow-lg' : 'bg-slate-900 border-slate-700 opacity-60 hover:opacity-100'}
+                            `}
+                        >
+                            <Antibody type="triangle" size={24} />
+                            <span className="text-[10px] font-bold text-red-400">Anti-C</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [score, setScore] = useState(0);
+            const [gameOver, setGameOver] = useState(false);
+
+            const handleStart = () => {
+                setScore(0);
+                setGameOver(false);
+                setIsPlaying(true);
+            };
+
+            const handleGameOver = () => {
+                setIsPlaying(false);
+                setGameOver(true);
+            };
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="shield" className="text-emerald-400" /> Immunology
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Antibody-Antigen Matcher</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Score Card */}
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 text-center">
+                                <div className="text-xs font-bold text-slate-500 uppercase mb-1">Defenders Score</div>
+                                <div className="text-4xl font-mono font-black text-white">{score}</div>
+                            </div>
+
+                            {/* Controls */}
+                            <div className="space-y-4">
+                                {!isPlaying ? (
+                                    <button 
+                                        onClick={handleStart}
+                                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2 text-lg"
+                                    >
+                                        <Icon name="play" size={24}/> {gameOver ? 'Try Again' : 'Start Defense'}
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => setIsPlaying(false)}
+                                        className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-bold border border-slate-600"
+                                    >
+                                        Pause
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Concept Info */}
+                            <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-xs text-slate-300 space-y-3">
+                                <div className="font-bold text-blue-400 uppercase mb-2 flex items-center gap-2"><Icon name="book-open" size={14}/> Key Concepts</div>
+                                <p>
+                                    <strong>Antigen (抗原):</strong> A marker molecule on the pathogen surface that triggers an immune response.
+                                </p>
+                                <p>
+                                    <strong>Antibody (抗體):</strong> Y-shaped protein produced by B-cells. It has a <em>specific</em> binding site.
+                                </p>
+                                <p>
+                                    <strong>Specificity (特異性):</strong> An antibody can only bind to an antigen if their shapes are complementary (like a lock and key).
+                                </p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 relative flex flex-col overflow-hidden">
+                        
+                        <GameArea 
+                            isPlaying={isPlaying} 
+                            onScore={(pts) => setScore(s => s + pts)} 
+                            onGameOver={handleGameOver}
+                        />
+
+                        {/* Game Over Overlay */}
+                        {gameOver && (
+                            <div className="absolute inset-0 bg-red-900/90 backdrop-blur-md flex items-center justify-center z-50 animate-in zoom-in">
+                                <div className="text-center p-8 bg-slate-900 rounded-3xl border-2 border-red-500 shadow-2xl max-w-md">
+                                    <Icon name="alert-triangle" size={48} className="text-red-500 mx-auto mb-4"/>
+                                    <h2 className="text-3xl font-black text-white mb-2">Infection Spread!</h2>
+                                    <p className="text-slate-400 mb-6">The pathogens overwhelmed your immune system.</p>
+                                    <div className="text-2xl font-mono font-bold text-white mb-8">Final Score: {score}</div>
+                                    <button 
+                                        onClick={handleStart}
+                                        className="px-8 py-3 bg-white text-slate-900 rounded-full font-bold hover:bg-slate-200 transition-colors"
+                                    >
+                                        Restart Immune Response
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
