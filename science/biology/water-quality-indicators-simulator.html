@@ -309,21 +309,25 @@
                                 </p>
                             </div>
                             
-                            {/* Current Point Stats */}
+                            {/* Current Point Stats - SAFEGUARDED */}
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
                                 <div className="text-xs font-bold text-slate-500 uppercase">Sample at {selectedPoint} km</div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-blue-300">Dissolved Oxygen</span>
-                                    <span className="font-mono font-bold text-white">{currentDataPoint?.do.toFixed(1)}%</span>
+                                    <span className="font-mono font-bold text-white">
+                                        {currentDataPoint ? currentDataPoint.do.toFixed(1) : '0.0'}%
+                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-yellow-300">BOD</span>
-                                    <span className="font-mono font-bold text-white">{currentDataPoint?.bod.toFixed(1)}</span>
+                                    <span className="font-mono font-bold text-white">
+                                        {currentDataPoint ? currentDataPoint.bod.toFixed(1) : '0.0'}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-slate-700">
                                     <span className="text-xs text-slate-400">Indicator Species:</span>
                                     <div className="flex gap-1">
-                                        {currentDataPoint?.organisms.map(o => (
+                                        {currentDataPoint?.organisms?.map(o => (
                                             <span key={o} className="text-[10px] bg-slate-900 px-1 rounded border border-slate-600 text-slate-300 capitalize">{o}</span>
                                         ))}
                                     </div>
