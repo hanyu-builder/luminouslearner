@@ -13,7 +13,7 @@
     
     <!-- Recharts -->
     <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/recharts.js"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -80,10 +80,16 @@
 
         // --- COMPONENTS ---
 
-        // River Cross-section Visualizer (Moved outside App to prevent re-definition issues)
+        // River Cross-section Visualizer (Moved OUTSIDE App to prevent crash and re-renders)
         const RiverVisual = ({ point }) => {
-            // Safety check: if data isn't ready yet, render a placeholder or return null
-            if (!point) return <div className="relative w-full h-64 rounded-xl bg-[#334155] animate-pulse border-2 border-slate-600"></div>;
+            // CRITICAL FIX: Handle undefined/null point during initial render
+            if (!point) {
+                return (
+                    <div className="relative w-full h-64 rounded-xl bg-[#334155] border-2 border-slate-600 flex items-center justify-center">
+                        <span className="text-slate-400 text-sm animate-pulse">Loading Ecosystem...</span>
+                    </div>
+                );
+            }
 
             // Water Color based on pollution/DO
             let waterColor = "#0ea5e9"; // Clean
@@ -131,12 +137,12 @@
                                 {/* Fish (High DO) */}
                                 {point.organisms.includes('trout') && (
                                     <>
-                                        <div className="absolute top-[50%] left-[20%] drop-shadow-md"><Icon name="fish" className="text-white" size={32}/></div>
-                                        <div className="absolute top-[60%] left-[60%] drop-shadow-md"><Icon name="fish" className="text-white" size={24}/></div>
+                                        <div className="absolute top-[50%] left-[20%] drop-shadow-md text-white"><Icon name="fish" size={32}/></div>
+                                        <div className="absolute top-[60%] left-[60%] drop-shadow-md text-white"><Icon name="fish" size={24}/></div>
                                     </>
                                 )}
                                 {point.organisms.includes('carp') && (
-                                    <div className="absolute top-[55%] left-[40%] drop-shadow-md"><Icon name="fish-off" className="text-yellow-200" size={32}/></div>
+                                    <div className="absolute top-[55%] left-[40%] drop-shadow-md text-yellow-200"><Icon name="fish-off" size={32}/></div>
                                 )}
                                 
                                 {/* Waste/Bacteria (High BOD) */}
@@ -206,15 +212,14 @@
                     }
 
                     if (x > 10) {
-                        // BOD Decay (Organic matter consumed)
+                        // BOD Decay
                         const bodConsumed = bodLevel * deoxygenationRate;
                         bodLevel -= bodConsumed;
                         
-                        // DO Deficit Calculation
+                        // DO Deficit
                         const deficit = 100 - doLevel;
                         const reaeration = deficit * reaerationRate;
                         
-                        // Scale factor to make visual nice
                         const consumptionEffect = bodConsumed * 2.5; 
                         
                         doLevel = doLevel - consumptionEffect + reaeration;
@@ -248,7 +253,7 @@
                 setData(newData);
             }, [pollutionLoad, flowRate]);
 
-            // Safety check: ensure data exists before accessing
+            // Safe Access to Current Point
             const currentDataPoint = data.length > 0 ? (data[selectedPoint] || data[0]) : null;
 
             return (
@@ -309,19 +314,19 @@
                                 </p>
                             </div>
                             
-                            {/* Current Point Stats - SAFEGUARDED */}
+                            {/* Current Point Stats */}
                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
                                 <div className="text-xs font-bold text-slate-500 uppercase">Sample at {selectedPoint} km</div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-blue-300">Dissolved Oxygen</span>
                                     <span className="font-mono font-bold text-white">
-                                        {currentDataPoint ? currentDataPoint.do.toFixed(1) : '0.0'}%
+                                        {currentDataPoint ? currentDataPoint.do.toFixed(1) : '--'}%
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-yellow-300">BOD</span>
                                     <span className="font-mono font-bold text-white">
-                                        {currentDataPoint ? currentDataPoint.bod.toFixed(1) : '0.0'}
+                                        {currentDataPoint ? currentDataPoint.bod.toFixed(1) : '--'}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-slate-700">
