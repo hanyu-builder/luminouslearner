@@ -72,7 +72,7 @@
 
         // --- ASSETS: SVG COMPONENTS ---
 
-        // Pathogen with Surface Antigens (Fixed: Returns SVG now)
+        // Pathogen with Surface Antigens
         const Pathogen = ({ type, size = 50 }) => {
             // type: 'square', 'circle', 'triangle'
             let antigenShape;
@@ -276,20 +276,19 @@
                         className="flex-1 relative bloodstream-bg cursor-crosshair overflow-hidden border-b-4 border-slate-700"
                         onClick={handleAreaClick}
                     >
-                        {/* Enemies - Fixed Rendering */}
+                        {/* Enemies - Fixed Positioning logic */}
                         <AnimatePresence>
                             {enemies.map(e => (
                                 <motion.div 
                                     key={e.id} 
                                     className="absolute" 
-                                    initial={{ opacity: 0, y: -50 }}
-                                    animate={{ opacity: 1, y: e.y, x: e.x }} 
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
                                     exit={{ scale: 0, opacity: 0 }}
-                                    transition={{ duration: 0 }} // Immediate update from state
                                     style={{ 
-                                        left: 0, top: 0, // Reset pos for transform
-                                        marginLeft: -25, marginTop: -25, // Center anchor
-                                        transform: `translate(${e.x}px, ${e.y}px)` // Manual transform for performance if not using motion props fully
+                                        left: e.x, 
+                                        top: e.y, 
+                                        transform: 'translate(-50%, -50%)' // Center anchor
                                     }}
                                 >
                                     <Pathogen type={e.type} />
@@ -297,9 +296,9 @@
                             ))}
                         </AnimatePresence>
 
-                        {/* Projectiles */}
+                        {/* Projectiles - Fixed Positioning logic */}
                         {projectiles.map(p => (
-                            <div key={p.id} className="absolute" style={{ left: p.x - 20, top: p.y }}>
+                            <div key={p.id} className="absolute" style={{ left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}>
                                 <Antibody type={p.type} />
                             </div>
                         ))}
