@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kidney Nephron Function</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Fluid Flow Animation */
+        .flow-dash {
+            stroke-dasharray: 10;
+            animation: flow 1s linear infinite;
+        }
+        @keyframes flow {
+            to { stroke-dashoffset: -20; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const PARTICLES = {
+            water: { id: 'water', name: 'Water (水)', color: '#60a5fa', size: 3 },
+            glucose: { id: 'glucose', name: 'Glucose (葡萄糖)', color: '#facc15', size: 5 },
+            urea: { id: 'urea', name: 'Urea (尿素)', color: '#fb923c', size: 4 },
+            salt: { id: 'salt', name: 'Salt (鹽)', color: '#a78bfa', size: 3 },
+            protein: { id: 'protein', name: 'Protein (蛋白質)', color: '#ef4444', size: 8 }, // Too big to filter
+            rbc: { id: 'rbc', name: 'Red Blood Cell', color: '#b91c1c', size: 10 } // Too big
+        };
+
+        const PARTS = [
+            { id: 'glomerulus', name: 'Glomerulus (腎小球)', desc: 'High pressure knot of capillaries. Ultrafiltration happens here.', func: 'Ultrafiltration' },
+            { id: 'bowman', name: 'Bowman\'s Capsule (鮑氏囊)', desc: 'Cup-shaped structure collecting the filtrate.', func: 'Collection' },
+            { id: 'pct', name: 'Proximal Convoluted Tubule (近曲小管)', desc: 'Selective reabsorption of glucose, amino acids, salts and water.', func: 'Reabsorption (100% Glucose)' },
+            { id: 'loop', name: 'Loop of Henle (亨利氏套)', desc: 'Creates salt gradient in medulla to aid water reabsorption.', func: 'Concentration' },
+            { id: 'dct', name: 'Distal Convoluted Tubule (遠曲小管)', desc: 'Fine-tuning of salt and pH balance.', func: 'Secretion & Reabsorption' },
+            { id: 'collecting', name: 'Collecting Duct (收集管)', desc: 'Final water reabsorption controlled by ADH. Urine flows to ureter.', func: 'Water Regulation (ADH)' }
+        ];
+
+        // --- VISUAL COMPONENT ---
+        const NephronCanvas = ({ pressure, adhLevel, glucoseLevel, isRunning, onPartClick }) => {
+            const canvasRef = useRef(null);
+            const particlesRef = useRef([]);
+            
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationId;
+
+                const width = 800;
+                const height = 600;
+
+                // Particle Logic Helpers
+                const spawnParticles = () => {
+                    // Incoming Blood (Afferent Arteriole)
+                    // Mix of all particles
+                    const count = Math.floor(pressure * 1); // Pressure affects flow rate
+                    
+                    for(let i=0; i<count; i++) {
+                        const r = Math.random();
+                        let type;
+                        if (r < 0.4) type = 'water';
+                        else if (r < 0.5) type = 'urea';
+                        else if (r < 0.6) type = 'salt';
+                        else if (r < 0.7) type = 'rbc'; // Big
+                        else if (r < 0.8) type = 'protein'; // Big
+                        else type = 'glucose'; // Glucose amount depends on level
+                        
+                        // Adjust glucose probability
+                        if (type === 'glucose' && Math.random() > (glucoseLevel/200)) {
+                             // If level low, spawn less glucose visuals, just keep random mix
+                             // Actually simpler: just spawn glucose if it is chosen
+                        }
+
+                        particlesRef.current.push({
+                            id: Math.random(),
+                            type: type,
+                            x: 50, y: 100 + Math.random()*20, // Start at Afferent
+                            vx: 2 + pressure*0.5, vy: 0,
+                            path: 'arteriole', // arteriole, glomerulus, tubule, efferent, blood_return
+                            progress: 0
+                        });
+                    }
+                };
+
+                const updateParticles = () => {
+                    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+                        const p = particlesRef.current[i];
+                        const info = PARTICLES[p.type];
+                        
+                        // Movement Logic based on Path state
+                        // 1. Arteriole -> Glomerulus (x: 50->150)
+                        if (p.path === 'arteriole') {
+                            p.x += p.vx;
+                            if (p.x > 150) {
+                                p.path = 'glomerulus';
+                                // Filtration Check
+                                // Big things stay in blood (Efferent)
+                                if (p.type === 'rbc' || p.type === 'protein') {
+                                    p.path = 'efferent_start';
+                                } else {
+                                    // Small things filter into Bowman's (Tubule)
+                                    // Filter rate depends on Pressure
+                                    if (pressure > 0.5) {
+                                        p.path = 'tubule_bowman';
+                                        p.vy = 2; // Drop down
+                                    } else {
+                                        p.path = 'efferent_start'; // Too low pressure, no filtration
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 2. Glomerulus (Spin/Filter)
+                        else if (p.path === 'efferent_start') {
+                            // Move out via Efferent (Top loop)
+                            p.x += p.vx;
+                            p.y -= 0.5;
+                            if (p.x > 250) {
+                                p.path = 'capillary_network'; // Go to blood network around tubule
+                            }
+                        }
+                        
+                        // 3. Tubule Path (The Nephron Journey)
+                        else if (p.path.startsWith('tubule')) {
+                            // Simplified Path coordinates
+                            // Bowman (150, 150) -> PCT (250, 200) -> Loop Down (300, 400) -> Loop Up (350, 200) -> DCT (450, 200) -> CD (550, 500)
+                            
+                            // PCT Reabsorption
+                            if (p.path === 'tubule_bowman') {
+                                p.x += 1; p.y += 1; // Diag down right
+                                if (p.x > 220) p.path = 'tubule_pct';
+                            }
+                            else if (p.path === 'tubule_pct') {
+                                p.x += 1;
+                                // Glucose Reabsorption (100% if normal level)
+                                if (p.type === 'glucose') {
+                                    // Threshold check
+                                    const threshold = 180; // renal threshold
+                                    const reabsorbChance = glucoseLevel > threshold ? 0.8 : 1.0; 
+                                    
+                                    if (Math.random() < reabsorbChance * 0.1) { // Gradual reabsorption
+                                        p.path = 'reabsorbed'; // Go back to blood
+                                        p.vy = -1;
+                                    }
+                                }
+                                // Water/Salt Reabsorption (High)
+                                if ((p.type === 'water' || p.type === 'salt') && Math.random() < 0.05) {
+                                    p.path = 'reabsorbed';
+                                    p.vy = -1;
+                                }
+
+                                if (p.x > 300) p.path = 'tubule_loop_desc';
+                            }
+                            else if (p.path === 'tubule_loop_desc') {
+                                p.y += 1.5; // Down
+                                // Water reabsorption
+                                if (p.type === 'water' && Math.random() < 0.02) {
+                                     p.path = 'reabsorbed'; p.vx = -1;
+                                }
+                                if (p.y > 450) p.path = 'tubule_loop_asc';
+                            }
+                            else if (p.path === 'tubule_loop_asc') {
+                                p.y -= 1.5; p.x += 0.5; // Up Right
+                                // Salt pumping
+                                if (p.type === 'salt' && Math.random() < 0.05) {
+                                     p.path = 'reabsorbed'; p.vx = 1;
+                                }
+                                if (p.y < 200) p.path = 'tubule_dct';
+                            }
+                            else if (p.path === 'tubule_dct') {
+                                p.x += 1;
+                                // Fine tuning
+                                if (p.x > 500) p.path = 'tubule_cd';
+                            }
+                            else if (p.path === 'tubule_cd') {
+                                p.y += 1.5; // Down
+                                // ADH Effect on Water
+                                if (p.type === 'water') {
+                                    // High ADH = High Reabsorption
+                                    // Low ADH = Low Reabsorption
+                                    const perm = adhLevel === 'high' ? 0.08 : 0.01;
+                                    if (Math.random() < perm) {
+                                        p.path = 'reabsorbed'; p.vx = 1;
+                                    }
+                                }
+                                if (p.y > 550) {
+                                    p.path = 'urine'; // Excreted
+                                }
+                            }
+                        }
+                        
+                        // 4. Reabsorbed -> Blood
+                        else if (p.path === 'reabsorbed') {
+                            // Fade out or move to vein
+                            p.y += p.vy; p.x += p.vx;
+                            if (Math.random() < 0.1) particlesRef.current.splice(i, 1); // Clean up visual
+                        }
+                        
+                        // 5. Urine
+                        else if (p.path === 'urine') {
+                             p.y += 2;
+                             if (p.y > height) particlesRef.current.splice(i, 1);
+                        }
+                        
+                        // 6. Capillary Network (Just flow through)
+                        else if (p.path === 'capillary_network') {
+                            p.x += 2;
+                            if (p.x > width) particlesRef.current.splice(i, 1);
+                        }
+
+                    }
+                };
+
+                const render = () => {
+                    ctx.clearRect(0, 0, width, height);
+
+                    // --- DRAW NEPHRON STRUCTURE (Schematic) ---
+                    
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+
+                    // 1. Glomerulus & Bowman's
+                    ctx.strokeStyle = "#fca5a5"; // Tubule Color
+                    ctx.lineWidth = 40;
+                    ctx.beginPath();
+                    // Bowman's Cup
+                    ctx.arc(150, 150, 40, 0.8, 2*Math.PI - 0.8, true); 
+                    ctx.stroke();
+                    
+                    // Tubule Path
+                    ctx.beginPath();
+                    ctx.moveTo(185, 170); // Start PCT
+                    ctx.bezierCurveTo(220, 250, 280, 150, 300, 200); // PCT coil
+                    ctx.lineTo(300, 450); // Loop Desc
+                    ctx.bezierCurveTo(300, 500, 350, 500, 350, 450); // Loop Turn
+                    ctx.lineTo(350, 200); // Loop Asc
+                    ctx.bezierCurveTo(380, 100, 450, 150, 500, 200); // DCT
+                    ctx.lineTo(550, 200); // To CD
+                    ctx.lineTo(550, 600); // Collecting Duct
+                    
+                    ctx.strokeStyle = "#fefce8"; // Inside color
+                    ctx.lineWidth = 30;
+                    ctx.stroke();
+                    ctx.strokeStyle = "#fcd34d"; // Border
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+
+                    // 2. Blood Vessels (Overlay)
+                    // Glomerulus Knot
+                    ctx.fillStyle = "rgba(239, 68, 68, 0.5)";
+                    ctx.beginPath(); ctx.arc(150, 150, 25, 0, Math.PI*2); ctx.fill();
+                    
+                    // Afferent
+                    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 10;
+                    ctx.beginPath(); ctx.moveTo(0, 120); ctx.lineTo(130, 140); ctx.stroke();
+                    
+                    // Efferent -> Capillary Net (Simplified mesh behind/over tubule)
+                    ctx.strokeStyle = "rgba(239, 68, 68, 0.2)"; ctx.lineWidth = 40;
+                    ctx.beginPath(); ctx.moveTo(160, 130); ctx.bezierCurveTo(300, 50, 400, 300, 600, 300); ctx.stroke();
+
+
+                    // --- DRAW PARTICLES ---
+                    particlesRef.current.forEach(p => {
+                        const info = PARTICLES[p.type];
+                        ctx.fillStyle = info.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, info.size, 0, Math.PI*2);
+                        ctx.fill();
+                    });
+
+                    // --- CLICK ZONES (Debug or Visual) ---
+                    // We can use invisible rects for click detection if needed, but sidebar buttons are safer.
+
+                    if (isRunning) {
+                        spawnParticles();
+                        updateParticles();
+                    }
+
+                    animationId = requestAnimationFrame(render);
+                };
+                render();
+                return () => cancelAnimationFrame(animationId);
+            }, [pressure, adhLevel, glucoseLevel, isRunning]);
+
+            return <canvas ref={canvasRef} width={800} height={600} className="w-full h-full object-contain bg-slate-900 rounded-xl border border-slate-700" />;
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [pressure, setPressure] = useState(1.0); // 0.5 - 1.5
+            const [adh, setADH] = useState('normal'); // low, normal, high
+            const [glucose, setGlucose] = useState(90); // mg/dL
+            const [isRunning, setIsRunning] = useState(true);
+            const [selectedPart, setSelectedPart] = useState(null);
+
+            // Urine Analysis (Simulated)
+            const urineStatus = useMemo(() => {
+                let vol = adh === 'high' ? 'Low (Concentrated)' : adh === 'low' ? 'High (Dilute)' : 'Normal';
+                let sugar = glucose > 180 ? 'Detected (Glycosuria)' : 'None';
+                let color = adh === 'high' ? 'Dark Yellow' : adh === 'low' ? 'Pale Yellow' : 'Yellow';
+                return { vol, sugar, color };
+            }, [adh, glucose]);
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="activity" className="text-yellow-400" /> Nephron Sim
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Kidney Function & Urine Formation</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Physiology Controls */}
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-bold text-slate-400">Blood Pressure</span>
+                                        <span className="font-mono text-red-400">{(pressure*100).toFixed(0)}%</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0.5" max="1.5" step="0.1"
+                                        value={pressure} 
+                                        onChange={(e) => setPressure(parseFloat(e.target.value))}
+                                        className="w-full accent-red-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-bold text-slate-400">Blood Glucose</span>
+                                        <span className={`font-mono ${glucose > 180 ? 'text-red-400 animate-pulse' : 'text-blue-400'}`}>{glucose} mg/dL</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="70" max="300" step="10"
+                                        value={glucose} 
+                                        onChange={(e) => setGlucose(parseInt(e.target.value))}
+                                        className="w-full accent-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-bold text-slate-400">ADH Level (Hydration)</span>
+                                        <span className="font-mono text-yellow-400 uppercase">{adh}</span>
+                                    </div>
+                                    <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                        {['low', 'normal', 'high'].map(level => (
+                                            <button 
+                                                key={level}
+                                                onClick={() => setADH(level)}
+                                                className={`flex-1 py-1 text-[10px] font-bold rounded uppercase transition-all ${adh === level ? 'bg-yellow-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                            >
+                                                {level}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Urine Report */}
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-lg">
+                                <div className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                                    <Icon name="flask-conical" size={14}/> Urinalysis Result
+                                </div>
+                                <div className="space-y-2 text-xs text-slate-300">
+                                    <div className="flex justify-between border-b border-slate-700 pb-1">
+                                        <span>Volume:</span>
+                                        <span className="font-bold text-white">{urineStatus.vol}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-slate-700 pb-1">
+                                        <span>Color:</span>
+                                        <span className="font-bold" style={{color: urineStatus.color === 'Dark Yellow' ? '#fbbf24' : '#fef08a'}}>{urineStatus.color}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Glucose:</span>
+                                        <span className={`font-bold ${urineStatus.sugar !== 'None' ? 'text-red-400' : 'text-emerald-400'}`}>{urineStatus.sugar}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Structure Navigation */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase px-1">Anatomy Guide</label>
+                                {PARTS.map(part => (
+                                    <button 
+                                        key={part.id}
+                                        onClick={() => setSelectedPart(part)}
+                                        className={`w-full text-left p-2 rounded border transition-all text-xs
+                                            ${selectedPart?.id === part.id ? 'bg-slate-700 border-blue-500 text-white' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800'}
+                                        `}
+                                    >
+                                        {part.name.split(' (')[0]}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <AnimatePresence>
+                                {selectedPart && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+                                        className="bg-blue-900/20 p-3 rounded-xl border border-blue-500/30 text-xs"
+                                    >
+                                        <div className="font-bold text-blue-400 mb-1">{selectedPart.func}</div>
+                                        <p className="text-slate-300">{selectedPart.desc}</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden">
+                        
+                        <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col items-center justify-center p-4">
+                            <NephronCanvas 
+                                pressure={pressure} 
+                                adhLevel={adh} 
+                                glucoseLevel={glucose} 
+                                isRunning={isRunning}
+                                onPartClick={setSelectedPart}
+                            />
+
+                            {/* Particle Legend */}
+                            <div className="absolute top-4 right-4 bg-black/60 backdrop-blur px-3 py-2 rounded-lg border border-white/10 text-[10px] text-slate-300 space-y-1 pointer-events-none">
+                                {Object.values(PARTICLES).map(p => (
+                                    <div key={p.id} className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: p.color}}></div>
+                                        <span>{p.name.split(' (')[0]}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button 
+                                onClick={() => setIsRunning(!isRunning)}
+                                className="absolute bottom-6 right-6 p-3 rounded-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 shadow-lg transition-all"
+                            >
+                                <Icon name={isRunning ? "pause" : "play"} size={20} fill="currentColor"/>
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
