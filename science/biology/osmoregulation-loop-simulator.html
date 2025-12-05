@@ -33,16 +33,6 @@
         input[type=range]::-webkit-slider-runnable-track {
             width: 100%; height: 6px; cursor: pointer; background: #334155; border-radius: 3px;
         }
-
-        /* Signal Pulse */
-        .signal-pulse {
-            animation: signalMove 2s linear infinite;
-        }
-        @keyframes signalMove {
-            0% { stroke-dashoffset: 20; opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { stroke-dashoffset: 0; opacity: 0.5; }
-        }
     </style>
 </head>
 <body>
@@ -71,23 +61,14 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- CONSTANTS ---
-        // Hydration Level: 0 (Severe Dehydration) -> 100 (Over-hydration)
-        // Normal set point around 50
-
         // --- COMPONENT: MACRO LOOP DIAGRAM ---
         const MacroLoop = ({ hydration }) => {
-            // Logic:
-            // Low Hydration -> High ADH -> Signal Active
-            // High Hydration -> Low ADH -> Signal Inactive
-            
             const adhLevel = 100 - hydration; // Inverse relationship
             const isADHHigh = adhLevel > 60;
             const isADHLow = adhLevel < 40;
             
-            const signalColor = isADHHigh ? "#facc15" : "#94a3b8"; // Yellow if active, Grey if inactive
+            const signalColor = isADHHigh ? "#facc15" : "#94a3b8";
             const signalOpacity = isADHHigh ? 1 : 0.2;
-            const signalSpeed = isADHHigh ? "1s" : "0s";
 
             return (
                 <svg viewBox="0 0 400 300" className="w-full h-full">
@@ -107,8 +88,7 @@
                         <text x="0" y="5" textAnchor="middle" fontSize="10" fill="#7f1d1d" fontWeight="bold">Kidney</text>
                     </g>
 
-                    {/* Arrows / ADH Path */}
-                    {/* Brain to Kidney (ADH in Blood) */}
+                    {/* ADH Path */}
                     <path 
                         d="M 200 70 L 200 220" 
                         stroke={signalColor} strokeWidth="4" strokeDasharray="10,5" 
@@ -120,13 +100,12 @@
                     </path>
                     
                     <text x="210" y="150" fontSize="10" fill={signalColor} opacity={signalOpacity} fontWeight="bold">
-                        {isADHHigh ? "ADH Released" : (isADHLow ? "Less ADH" : "Normal ADH")}
+                        {isADHHigh ? "High ADH" : (isADHLow ? "Low ADH" : "Normal ADH")}
                     </text>
 
-                    {/* Feedback Loop Lines (Schematic) */}
-                    {/* Stimulus: Water Potential */}
+                    {/* Feedback Loop Lines */}
                     <path d="M 100 250 Q 50 150 150 50" stroke="#3b82f6" strokeWidth="2" fill="none" markerEnd="url(#arrow)" opacity="0.5" />
-                    <text x="60" y="150" fontSize="10" fill="#60a5fa" transform="rotate(-70 60 150)">Blood Water Potential</text>
+                    <text x="55" y="150" fontSize="10" fill="#60a5fa" transform="rotate(-75 55 150)">Blood Water Potential</text>
 
                     <defs>
                         <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
@@ -145,27 +124,29 @@
             useEffect(() => {
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
-                let animationId;
-
+                
                 const width = 300;
                 const height = 400;
                 
-                // Logic:
-                // Low Hydration -> High ADH -> High Permeability -> Water leaves duct (Reabsorbed)
-                // High Hydration -> Low ADH -> Low Permeability -> Water stays in duct (Urine)
-                
+                // Calculate Reabsorption Probability based on ADH
+                // Low Hydration (0) -> High ADH -> High Permeability -> High Reabsorption Chance
+                // High Hydration (100) -> Low ADH -> Low Permeability -> Low Reabsorption Chance
                 const adhLevel = 100 - hydration;
-                const permeability = adhLevel / 100; // 0 to 1
-                
-                // Initialize particles
+                // Make the effect very distinct:
+                // If High ADH, reabsorption chance is high (e.g. 2% per frame) -> Most particles leave
+                // If Low ADH, reabsorption chance is low (e.g. 0.1% per frame) -> Most particles stay
+                const reabsorbChance = (adhLevel / 100) * 0.08; 
+
+                // Initialize
                 if (particlesRef.current.length === 0) {
-                    for (let i=0; i<50; i++) {
+                    // Pre-fill some
+                    for(let i=0; i<20; i++) {
                         particlesRef.current.push({
-                            x: 100 + Math.random() * 100, // Inside duct (100-200)
+                            x: 110 + Math.random() * 80,
                             y: Math.random() * height,
                             vx: 0,
-                            vy: 2 + Math.random(),
-                            state: 'in_duct' // in_duct, reabsorbed
+                            vy: 2, // Constant speed
+                            state: 'in_duct'
                         });
                     }
                 }
@@ -173,37 +154,30 @@
                 const render = () => {
                     ctx.clearRect(0, 0, width, height);
 
-                    // --- Draw Structure ---
-                    // Collecting Duct Walls
-                    ctx.fillStyle = "#1e293b"; // Background
+                    // --- Draw Background Structure ---
+                    ctx.fillStyle = "#1e293b";
                     ctx.fillRect(0, 0, width, height);
 
                     // The Duct
                     ctx.fillStyle = "#0f172a";
                     ctx.fillRect(100, 0, 100, height);
                     
-                    // Walls with Aquaporins
-                    // Aquaporins open if ADH is high
+                    // Walls
                     const wallColor = "#fbbf24";
-                    const channelColor = "#3b82f6";
-                    
-                    // Left Wall
                     ctx.fillStyle = wallColor;
                     ctx.fillRect(90, 0, 10, height);
-                    // Right Wall
                     ctx.fillRect(200, 0, 10, height);
                     
-                    // Draw Aquaporins (Visual representation of open channels)
-                    const channelAlpha = permeability; // More visible/open when high ADH
+                    // Aquaporins (Visual)
+                    // Opacity linked to ADH level
+                    const channelAlpha = Math.max(0.1, adhLevel / 100);
                     ctx.fillStyle = `rgba(59, 130, 246, ${channelAlpha})`;
                     for(let y=20; y<height; y+=40) {
-                        // Left channels
                         ctx.fillRect(90, y, 10, 10);
-                        // Right channels
                         ctx.fillRect(200, y, 10, 10);
                     }
 
-                    // Capillaries (Outside the duct)
+                    // Capillaries
                     ctx.fillStyle = "rgba(239, 68, 68, 0.1)";
                     ctx.fillRect(0, 0, 90, height);
                     ctx.fillRect(210, 0, 90, height);
@@ -213,42 +187,60 @@
                     ctx.fillText("Capillary", 230, 20);
 
 
-                    // --- Particles Logic ---
-                    particlesRef.current.forEach(p => {
-                        // Move Down
-                        p.y += p.vy;
-                        if (p.y > height) {
-                            p.y = -10;
-                            p.state = 'in_duct';
-                            p.x = 110 + Math.random() * 80;
-                            p.vx = 0;
-                        }
+                    // --- Particle System ---
+                    
+                    // Spawn Logic
+                    // Constant inflow of filtrate
+                    if (Math.random() < 0.4) { // Fixed spawn rate
+                         particlesRef.current.push({
+                            x: 110 + Math.random() * 80,
+                            y: -10,
+                            vx: 0,
+                            vy: 2, // Constant Gravity Speed
+                            state: 'in_duct'
+                        });
+                    }
 
-                        // Reabsorption Chance
-                        // Only if in duct and passing a channel area
+                    // Update & Draw
+                    let urineCount = 0;
+
+                    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+                        const p = particlesRef.current[i];
+                        
+                        // Constant vertical movement
+                        p.y += p.vy;
+
+                        // Reabsorption Logic
                         if (p.state === 'in_duct') {
-                            // Check probability based on ADH
-                            if (Math.random() < (permeability * 0.05)) {
+                            if (Math.random() < reabsorbChance) {
                                 p.state = 'reabsorbing';
-                                p.vx = Math.random() > 0.5 ? 2 : -2; // Move Left or Right out
+                                p.vx = Math.random() > 0.5 ? 2 : -2; // Move out
                             }
                         }
 
                         if (p.state === 'reabsorbing') {
                             p.x += p.vx;
-                            // If reached blood
-                            if (p.x < 90 || p.x > 210) {
-                                p.state = 'reabsorbed';
-                                // Fade out logic handled by drawing opacity
+                            // Visual fade or kill when reaching blood
+                            if (p.x < 80 || p.x > 220) {
+                                particlesRef.current.splice(i, 1);
+                                continue;
                             }
                         }
                         
-                        // Draw Water Molecule
+                        // Count urine (particles reaching bottom)
+                        if (p.y > height && p.state === 'in_duct') {
+                            // Recycle to keep memory low, or just remove
+                            particlesRef.current.splice(i, 1);
+                            continue; 
+                        }
+                        
+                        // Draw
                         ctx.beginPath();
-                        ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
-                        ctx.fillStyle = p.state === 'reabsorbed' ? "rgba(96, 165, 250, 0.3)" : "#60a5fa";
+                        ctx.arc(p.x, p.y, 3.5, 0, Math.PI*2);
+                        // Color: Blue in duct, lighter/fading when reabsorbing
+                        ctx.fillStyle = p.state === 'reabsorbing' ? "rgba(96, 165, 250, 0.6)" : "#3b82f6";
                         ctx.fill();
-                    });
+                    }
 
                     requestAnimationFrame(render);
                 };
@@ -261,23 +253,13 @@
 
         // --- MAIN APP ---
         const App = () => {
-            const [hydration, setHydration] = useState(50); // 0 (Dehydrated) - 100 (Over)
-            
-            // Derived values
+            const [hydration, setHydration] = useState(50); // 0 to 100
             const adhLevel = 100 - hydration;
             
             // Urine Output Calculation
-            // Hydration 0 -> ADH 100 -> Reabsorb Max -> Urine Min (10ml), Dark
-            // Hydration 100 -> ADH 0 -> Reabsorb Min -> Urine Max (100ml), Clear
-            const urineVolume = Math.max(10, (hydration / 100) * 100);
-            const urineColorIntensity = 1 - (hydration / 100); // 1 = Dark, 0 = Clear
-            
-            // Color interpolation: Yellow (250, 204, 21) to Pale/Clear (254, 249, 195)
-            // Simplified: Use opacity or HSL
-            // Dark: hsl(45, 100%, 50%)
-            // Pale: hsl(45, 100%, 95%)
+            const urineVolume = Math.max(10, (hydration / 100) * 100); // 10ml to 100ml
+            const urineColorIntensity = 1 - (hydration / 100); 
             const urineColorStyle = `hsl(45, 100%, ${95 - (urineColorIntensity * 45)}%)`;
-
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden">
@@ -308,8 +290,8 @@
                                     />
                                 </div>
                                 <div className="flex justify-between text-[10px] font-bold">
-                                    <span className="text-orange-400">Dehydrated (Low)</span>
-                                    <span className="text-cyan-400">Over-hydrated (High)</span>
+                                    <span className="text-orange-400">Dehydrated</span>
+                                    <span className="text-cyan-400">Over-hydrated</span>
                                 </div>
                             </div>
 
@@ -328,13 +310,13 @@
                                 <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                     <div className="text-xs text-slate-500 uppercase mb-1">Collecting Duct</div>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-sm font-bold text-white">Permeability</span>
-                                        <span className="text-sm text-blue-300">
-                                            {adhLevel > 60 ? 'High (Pores Open)' : 'Low (Pores Closed)'}
+                                        <span className="text-sm font-bold text-white">Water Reabsorption</span>
+                                        <span className="text-sm font-mono text-blue-300">
+                                            {adhLevel > 60 ? 'HIGH' : 'LOW'}
                                         </span>
                                     </div>
-                                    <div className="mt-2 text-xs text-slate-400">
-                                        {adhLevel > 60 ? 'Water moves back to blood' : 'Water stays in urine'}
+                                    <div className="mt-2 text-xs text-slate-400 leading-tight">
+                                        {adhLevel > 60 ? 'Channels OPEN. Water returns to blood.' : 'Channels CLOSED. Water stays in duct.'}
                                     </div>
                                 </div>
                             </div>
@@ -360,8 +342,8 @@
                                     </div>
                                 </div>
                                 <div className="mt-2 text-center">
-                                    <div className="text-lg font-bold text-white">{urineVolume.toFixed(0)} ml</div>
-                                    <div className="text-xs" style={{color: urineColorStyle}}>
+                                    <div className="text-lg font-bold text-white">{urineVolume.toFixed(0)} ml/h</div>
+                                    <div className="text-xs font-bold" style={{color: urineColorStyle}}>
                                         {hydration < 30 ? 'Concentrated' : hydration > 70 ? 'Dilute' : 'Normal'}
                                     </div>
                                 </div>
@@ -373,7 +355,7 @@
                     {/* Main Stage */}
                     <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden gap-6">
                         
-                        <div className="flex-1 flex gap-6">
+                        <div className="flex-1 flex gap-6 h-full">
                             
                             {/* Left: Macro Diagram */}
                             <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-4 flex flex-col">
@@ -385,13 +367,21 @@
 
                             {/* Right: Microscopic View */}
                             <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-4 flex flex-col">
-                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">Collecting Duct (Microscopic)</div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs text-slate-500 uppercase font-bold">Collecting Duct (Microscopic)</span>
+                                    <div className="flex gap-2 text-[10px]">
+                                        <span className="text-blue-400 font-bold animate-pulse">
+                                            {adhLevel > 60 ? 'Reabsorbing...' : 'Excreting...'}
+                                        </span>
+                                    </div>
+                                </div>
                                 <div className="flex-1 relative bg-black/20 rounded-xl overflow-hidden">
                                     <CollectingDuct hydration={hydration} />
                                     
-                                    <div className="absolute bottom-4 left-4 text-[10px] text-slate-400 space-y-1">
-                                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-400"></div> Water Molecule</div>
-                                        <div className="flex items-center gap-2"><div className="w-2 h-2 bg-yellow-500"></div> Aquaporin Channel</div>
+                                    {/* Visual Labels inside canvas */}
+                                    <div className="absolute top-4 left-2 text-[10px] text-slate-500">Filtrate In (Constant)</div>
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-bold text-yellow-200 bg-black/40 px-2 py-1 rounded">
+                                        Urine Flow
                                     </div>
                                 </div>
                             </div>
@@ -399,12 +389,11 @@
                         </div>
                         
                         {/* Key Concept */}
-                        <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-sm text-slate-300">
+                        <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-sm text-slate-300 shrink-0">
                             <div className="font-bold text-blue-400 uppercase mb-1 flex items-center gap-2"><Icon name="info" size={16}/> Negative Feedback Mechanism</div>
                             <p>
-                                When blood water potential is <strong>LOW</strong> (Dehydration), the Pituitary releases <strong>MORE ADH</strong>. 
-                                This makes the collecting duct <strong>MORE permeable</strong> to water. 
-                                Water is reabsorbed into the blood, conserving water and producing concentrated urine.
+                                When water potential is <strong>HIGH</strong> (Over-hydrated) &rarr; Pituitary releases <strong>LESS ADH</strong> &rarr; Collecting duct is <strong>LESS permeable</strong>. <br/>
+                                Result: Less water is reabsorbed, more water stays in the duct &rarr; <strong>Large volume of dilute urine</strong>.
                             </p>
                         </div>
 
