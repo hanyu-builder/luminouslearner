@@ -92,10 +92,27 @@
                 const radius = 180;
 
                 // Manage Particles
-                // We visualise a subset of the actual count to keep performance high
-                // Visual Count = log10(Real Count) * factor or similar scaling
-                // Let's cap visual particles at 200 for performance
-                const visualCount = Math.min(200, Math.ceil(bacteriaCount / (maxCapacity/200)));
+                // Updated Logic: Use 1:1 mapping for small populations, and logarithmic scaling for large populations
+                let visualCount;
+                if (bacteriaCount < 150) {
+                    visualCount = Math.floor(bacteriaCount);
+                } else {
+                    // Logarithmic scale from 150 up to maxCapacity
+                    // Map to 150 -> 450 particles (visually dense but performant)
+                    const minVisual = 150;
+                    const maxVisual = 450;
+                    const logCurr = Math.log10(bacteriaCount);
+                    const logMin = Math.log10(150);
+                    const logMax = Math.log10(maxCapacity);
+                    
+                    // Linear interpolation on log scale
+                    if (logMax > logMin) {
+                         visualCount = minVisual + ((logCurr - logMin) / (logMax - logMin)) * (maxVisual - minVisual);
+                    } else {
+                         visualCount = maxVisual;
+                    }
+                }
+                visualCount = Math.floor(visualCount);
                 
                 // Add new particles
                 if (particlesRef.current.length < visualCount) {
@@ -109,22 +126,15 @@
                             y: centerY + r * Math.sin(angle),
                             vx: (Math.random()-0.5)*0.5,
                             vy: (Math.random()-0.5)*0.5,
-                            age: 0,
+                            age: Math.floor(Math.random() * 50), // Randomize age for async division animation
                             state: 'alive'
                         });
                     }
                 } 
-                // Remove particles (Death phase)
+                // Remove particles (Death phase or population drop)
                 else if (particlesRef.current.length > visualCount) {
-                    // Mark some as dead or remove
                     const toRemove = particlesRef.current.length - visualCount;
-                    // In death phase, we want to see dead bodies (ghosts) for a bit
-                    if (phase === 'death') {
-                         // Just slice for now to keep sync
-                         particlesRef.current.splice(0, toRemove);
-                    } else {
-                         particlesRef.current.splice(0, toRemove);
-                    }
+                    particlesRef.current.splice(0, toRemove);
                 }
 
                 const render = () => {
@@ -153,14 +163,17 @@
 
                         ctx.fillStyle = color;
                         
-                        // Shape: Bacillus (Rod) or Coccus (Round) - Let's do Rods
+                        // Shape: Bacillus (Rod)
                         ctx.save();
                         ctx.translate(p.x, p.y);
                         ctx.rotate(p.age * 0.02);
                         
                         // Dividing animation in Log phase
-                        if (phase === 'log' && p.age % 50 < 25) {
-                            // Elongating
+                        // Only animate division for a subset to reduce noise if too many
+                        const shouldAnimate = visualCount < 200 || p.age % 3 === 0;
+                        
+                        if (phase === 'log' && shouldAnimate && p.age % 50 < 25) {
+                            // Elongating / Dividing
                             ctx.beginPath(); ctx.roundRect(-6, -2, 12, 4, 2); ctx.fill();
                         } else {
                             ctx.beginPath(); ctx.roundRect(-4, -2, 8, 4, 2); ctx.fill();
