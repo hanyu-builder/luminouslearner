@@ -85,6 +85,19 @@
             { id: '9', text: 'Flame loop again', icon: 'zap' }
         ];
 
+        const ERROR_INFO = {
+            0: { // bench_cap
+                title: "Contamination Risk! (污染風險)",
+                error: "Placing the tube cap on the bench (把試管蓋放在桌面上)",
+                explanation: "The bench surface is never truly sterile. Placing the cap down can pick up dust or microbes, which will fall into your pure culture when you recap the tube. Always hold the cap in your little finger!"
+            },
+            1: { // hot_loop
+                title: "Bacteria Killed! (殺死細菌)",
+                error: "Using a red-hot loop to sample (使用紅熱的接種環取樣)",
+                explanation: "The intense heat will instantly kill the bacteria you are trying to transfer (you might hear a 'hiss' sound). You must allow the loop to cool for a few seconds near the flame before touching the colony."
+            }
+        };
+
         // Shuffle helper
         const shuffle = (array) => {
             let currentIndex = array.length, randomIndex;
@@ -131,20 +144,17 @@
 
         // 3. Error Spotting Scene
         const ErrorScene = ({ errorType, onCorrect }) => {
-            // Simple visual representation of common errors
-            // errorType: 'bench_cap', 'hot_loop', 'flame_off'
-            
             return (
                 <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-800 rounded-xl overflow-hidden p-8">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 absolute top-4 left-4">Identify the Error</h3>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 absolute top-4 left-4">Identify the Error (Click it)</h3>
                     
                     {errorType === 'bench_cap' && (
-                        <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all" onClick={onCorrect}>
+                        <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
                             <div className="relative">
                                 {/* Table */}
                                 <div className="w-48 h-2 bg-slate-500 rounded"></div>
                                 {/* Tube Cap on Table! */}
-                                <div className="absolute bottom-2 left-10 w-6 h-6 bg-red-500 rounded-t-md flex items-center justify-center">
+                                <div className="absolute bottom-2 left-10 w-6 h-6 bg-red-500 rounded-t-md flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <Icon name="alert-circle" size={12} className="text-white animate-bounce"/>
                                 </div>
                                 {/* Tube in hand */}
@@ -152,20 +162,20 @@
                                     <div className="w-4 h-16 bg-blue-200/30 border border-blue-300 rounded-b-lg"></div>
                                 </div>
                             </div>
-                            <p className="text-xs text-red-300 mt-2 font-bold">What's wrong here?</p>
+                            <p className="text-xs text-red-300 mt-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Cap on bench?</p>
                         </div>
                     )}
 
                     {errorType === 'hot_loop' && (
-                        <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all" onClick={onCorrect}>
+                        <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
                             <div className="flex items-center gap-2">
                                 <InoculatingLoop isHot={true} hasBacteria={false} />
-                                <div className="w-16 h-16 bg-blue-200/20 rounded-full border border-blue-300 relative flex items-center justify-center">
+                                <div className="w-16 h-16 bg-blue-200/20 rounded-full border border-blue-300 relative flex items-center justify-center group-hover:border-red-400 transition-colors">
                                     <span className="text-[8px] text-white">Culture</span>
                                     <div className="absolute -top-4 right-0 text-red-500 font-bold text-xs animate-ping">HISS!</div>
                                 </div>
                             </div>
-                             <p className="text-xs text-red-300 mt-2 font-bold">Loop is red hot!</p>
+                             <p className="text-xs text-red-300 mt-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Is it cool?</p>
                         </div>
                     )}
                 </div>
@@ -181,6 +191,7 @@
             
             // Error Game State
             const [errorLevel, setErrorLevel] = useState(0); // 0: bench_cap, 1: hot_loop
+            const [showExplanation, setShowExplanation] = useState(null); // stores the error info object
 
             const checkOrder = () => {
                 const currentOrder = items.map(i => i.id).join(',');
@@ -202,11 +213,13 @@
             };
 
             const handleErrorFound = () => {
-                setFeedback("Correct! You spotted the contamination risk.");
-                setTimeout(() => {
-                    setErrorLevel(prev => (prev + 1) % 2); // Cycle levels
-                    setFeedback("");
-                }, 2000);
+                // Instead of auto-advancing, show explanation
+                setShowExplanation(ERROR_INFO[errorLevel]);
+            };
+
+            const nextErrorLevel = () => {
+                setShowExplanation(null);
+                setErrorLevel(prev => (prev + 1) % 2);
             };
 
             return (
@@ -226,13 +239,13 @@
                             {/* Mode Switch */}
                             <div className="flex bg-slate-800 p-1 rounded-xl">
                                 <button 
-                                    onClick={() => { setMode('sort'); setFeedback(""); }}
+                                    onClick={() => { setMode('sort'); setFeedback(""); setShowExplanation(null); }}
                                     className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${mode === 'sort' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                 >
                                     <Icon name="list-ordered" size={14}/> Sequence
                                 </button>
                                 <button 
-                                    onClick={() => { setMode('error'); setFeedback(""); }}
+                                    onClick={() => { setMode('error'); setFeedback(""); setShowExplanation(null); }}
                                     className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${mode === 'error' ? 'bg-red-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                 >
                                     <Icon name="alert-triangle" size={14}/> Debug
@@ -249,9 +262,9 @@
                                 )}
                             </div>
 
-                            {/* Feedback */}
+                            {/* Feedback (Sort Mode) */}
                             <AnimatePresence>
-                                {feedback && (
+                                {feedback && mode === 'sort' && (
                                     <motion.div 
                                         initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                                         className={`p-4 rounded-xl border text-sm font-bold flex items-start gap-3
@@ -282,9 +295,6 @@
                             
                             {mode === 'sort' ? (
                                 <div className="h-full overflow-y-auto custom-scrollbar p-2">
-                                    {/* Using simple div list for drag simulation since framer-motion Reorder needs complex setup, simplified here for single file robustness */}
-                                    {/* Actually, let's implement a simple swap logic with buttons if drag is too complex for single file without external dnd lib dependency hell */}
-                                    {/* Let's try native HTML5 DnD for list */}
                                     <ul className="space-y-2 max-w-xl mx-auto">
                                         {items.map((item, index) => (
                                             <li 
@@ -315,10 +325,54 @@
                                     </ul>
                                 </div>
                             ) : (
-                                <ErrorScene 
-                                    errorType={errorLevel === 0 ? 'bench_cap' : 'hot_loop'} 
-                                    onCorrect={handleErrorFound}
-                                />
+                                <div className="relative w-full h-full">
+                                    <ErrorScene 
+                                        errorType={errorLevel === 0 ? 'bench_cap' : 'hot_loop'} 
+                                        onCorrect={handleErrorFound}
+                                    />
+                                    
+                                    {/* Explanation Overlay */}
+                                    <AnimatePresence>
+                                        {showExplanation && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, scale: 0.9 }} 
+                                                animate={{ opacity: 1, scale: 1 }} 
+                                                exit={{ opacity: 0, scale: 0.9 }}
+                                                className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8 z-10"
+                                            >
+                                                <div className="bg-slate-900 border border-slate-600 p-6 rounded-2xl shadow-2xl max-w-md w-full">
+                                                    <div className="flex items-center gap-3 mb-4 text-red-400">
+                                                        <Icon name="alert-octagon" size={32}/>
+                                                        <h2 className="text-xl font-bold">{showExplanation.title}</h2>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-4">
+                                                        <div className="bg-red-900/20 p-3 rounded-lg border border-red-500/30">
+                                                            <div className="text-xs font-bold text-red-300 uppercase mb-1">Error Identified</div>
+                                                            <p className="text-sm text-white">{showExplanation.error}</p>
+                                                        </div>
+                                                        
+                                                        <div className="bg-slate-800 p-4 rounded-lg">
+                                                            <div className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center gap-2">
+                                                                <Icon name="book-open" size={14}/> Biological Explanation
+                                                            </div>
+                                                            <p className="text-sm text-slate-300 leading-relaxed">
+                                                                {showExplanation.explanation}
+                                                            </p>
+                                                        </div>
+
+                                                        <button 
+                                                            onClick={nextErrorLevel}
+                                                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+                                                        >
+                                                            Next Scenario <Icon name="arrow-right" size={18}/>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             )}
 
                         </div>
