@@ -144,6 +144,9 @@
                             <path d={bactDNAShape} fill="none" stroke="#94a3b8" strokeWidth="3" strokeDasharray="5,5" />
                             {/* Integrated Viral Segment */}
                             <path d="M 340 255 Q 350 250 360 255" stroke="#3b82f6" strokeWidth="5" className="dna-pulse" />
+                            {/* Label for Prophage */}
+                            <line x1="360" y1="255" x2="450" y2="255" stroke="#60a5fa" strokeWidth="1" />
+                            <text x="455" y="260" fill="#60a5fa" fontSize="12" fontWeight="bold">Prophage (Integrated)</text>
                         </g>
                     )}
 
@@ -208,9 +211,20 @@
                         {step === 3 && cycle === 'lysogenic' && (
                             <g>
                                 {/* Two Bacteria Dividing (Simplified Visual) */}
-                                <rect x="50" y="220" width="200" height="150" rx="20" fill="#1e293b" stroke="#334155" strokeWidth="2" opacity="0.5"/>
-                                <rect x="350" y="220" width="200" height="150" rx="20" fill="#1e293b" stroke="#334155" strokeWidth="2" opacity="0.5"/>
-                                <text x="300" y="180" textAnchor="middle" fill="#94a3b8" fontSize="12">Binary Fission (Prophage Replicates)</text>
+                                <rect x="50" y="220" width="200" height="150" rx="20" fill="#1e293b" stroke="#334155" strokeWidth="2" opacity="0.8"/>
+                                <text x="150" y="210" textAnchor="middle" fill="#cbd5e1" fontSize="12" fontWeight="bold">Daughter Cell 1</text>
+                                
+                                <rect x="350" y="220" width="200" height="150" rx="20" fill="#1e293b" stroke="#334155" strokeWidth="2" opacity="0.8"/>
+                                <text x="450" y="210" textAnchor="middle" fill="#cbd5e1" fontSize="12" fontWeight="bold">Daughter Cell 2</text>
+                                
+                                {/* DNA inside daughters */}
+                                <path d="M 100 280 Q 150 260 200 280" fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4,4" />
+                                <path d="M 140 270 L 160 270" stroke="#3b82f6" strokeWidth="4" /> {/* Prophage 1 */}
+                                
+                                <path d="M 400 280 Q 450 260 500 280" fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4,4" />
+                                <path d="M 440 270 L 460 270" stroke="#3b82f6" strokeWidth="4" /> {/* Prophage 2 */}
+
+                                <text x="300" y="180" textAnchor="middle" fill="#60a5fa" fontSize="12" fontWeight="bold">Binary Fission (Prophage Replicates)</text>
                             </g>
                         )}
 
