@@ -97,25 +97,34 @@
                     {/* Bowl */}
                     <div className="relative mt-20">
                         <svg width="300" height="200" viewBox="0 0 300 200" className="overflow-visible">
+                            <defs>
+                                {/* Clip path to keep dough inside bowl but allow rising up */}
+                                <clipPath id="bowlClip">
+                                    <path d="M 20 50 C 20 150 280 150 280 50 L 280 -150 L 20 -150 Z" />
+                                </clipPath>
+                            </defs>
+
                             {/* Bowl Back */}
                             <path d="M 20 50 C 20 150 280 150 280 50" fill="#475569" stroke="#94a3b8" strokeWidth="4" />
                             
-                            {/* Dough */}
-                            <g transform={`translate(150, 50) scale(${scale}) translate(-150, -50)`} className="origin-bottom">
-                                <motion.path 
-                                    d="M 50 50 Q 150 -50 250 50 Q 250 100 150 100 Q 50 100 50 50" 
-                                    fill="#fcd34d" stroke="#d97706" strokeWidth="2"
-                                    animate={{ d: activity > 0 ? "M 45 50 Q 150 -55 255 50 Q 255 105 150 105 Q 45 105 45 50" : "M 50 50 Q 150 -50 250 50 Q 250 100 150 100 Q 50 100 50 50" }}
-                                    transition={{ repeat: Infinity, duration: 2 / (activity + 0.1), repeatType: "reverse" }}
-                                />
-                                {/* Pores */}
-                                <circle cx="100" cy="40" r={3 * scale} fill="#b45309" opacity="0.2"/>
-                                <circle cx="150" cy="20" r={4 * scale} fill="#b45309" opacity="0.2"/>
-                                <circle cx="200" cy="50" r={2 * scale} fill="#b45309" opacity="0.2"/>
+                            {/* Dough - Applied ClipPath */}
+                            <g clipPath="url(#bowlClip)">
+                                <g transform={`translate(150, 50) scale(${scale}) translate(-150, -50)`} className="origin-bottom">
+                                    <motion.path 
+                                        d="M 50 50 Q 150 -50 250 50 Q 250 100 150 100 Q 50 100 50 50" 
+                                        fill="#fcd34d" stroke="#d97706" strokeWidth="2"
+                                        animate={{ d: activity > 0 ? "M 45 50 Q 150 -55 255 50 Q 255 105 150 105 Q 45 105 45 50" : "M 50 50 Q 150 -50 250 50 Q 250 100 150 100 Q 50 100 50 50" }}
+                                        transition={{ repeat: Infinity, duration: 2 / (activity + 0.1), repeatType: "reverse" }}
+                                    />
+                                    {/* Pores */}
+                                    <circle cx="100" cy="40" r={3 * scale} fill="#b45309" opacity="0.2"/>
+                                    <circle cx="150" cy="20" r={4 * scale} fill="#b45309" opacity="0.2"/>
+                                    <circle cx="200" cy="50" r={2 * scale} fill="#b45309" opacity="0.2"/>
+                                </g>
                             </g>
 
-                            {/* Bowl Front (Mask) */}
-                            <path d="M 20 50 C 20 150 280 150 280 50" fill="none" stroke="#94a3b8" strokeWidth="4" strokeDasharray="10, 5" opacity="0.5" />
+                            {/* Bowl Front (Mask) - Visual Rim */}
+                            <path d="M 20 50 C 20 150 280 150 280 50" fill="none" stroke="#94a3b8" strokeWidth="4" strokeDasharray="10, 5" opacity="0.3" />
                         </svg>
                     </div>
 
@@ -416,7 +425,7 @@
                             )}
                             
                             {/* Activity Gauge */}
-                            <div className="absolute top-6 right-6 flex flex-col items-end">
+                            <div className="absolute top-8 right-8 flex flex-col items-end">
                                 <div className="text-xs font-bold text-slate-500 uppercase mb-1">Reaction Rate</div>
                                 <div className="text-2xl font-mono font-black text-yellow-400">
                                     {(currentActivity * 100).toFixed(0)}%
