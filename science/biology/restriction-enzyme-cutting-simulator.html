@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restriction Enzyme Tool</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* DNA Base Styling */
+        .base-A { color: #ef4444; } /* Red */
+        .base-T { color: #3b82f6; } /* Blue */
+        .base-C { color: #eab308; } /* Yellow */
+        .base-G { color: #22c55e; } /* Green */
+        
+        /* Cut Line Animation */
+        .cut-line {
+            stroke-dasharray: 10;
+            animation: dash 1s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -20; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        // Enzymes
+        // cutOffset: index after which the cut happens in 5'-3' strand
+        // bottomCutOffset: index after which the cut happens in 3'-5' strand
+        const ENZYMES = [
+            { 
+                id: 'EcoRI', 
+                name: 'EcoRI', 
+                seq: 'GAATTC', 
+                cutTop: 1, // G | AATTC
+                cutBottom: 5, // CTTAA | G (from 5' end of complementary, which is 3' end of template) -> Corresponds to index 1 from right
+                type: 'Sticky (黏性)',
+                source: 'Escherichia coli'
+            },
+            { 
+                id: 'BamHI', 
+                name: 'BamHI', 
+                seq: 'GGATCC', 
+                cutTop: 1, // G | GATCC
+                cutBottom: 5, // CCTAG | G
+                type: 'Sticky (黏性)',
+                source: 'Bacillus amyloliquefaciens'
+            },
+            { 
+                id: 'HindIII', 
+                name: 'HindIII', 
+                seq: 'AAGCTT', 
+                cutTop: 1, // A | AGCTT
+                cutBottom: 5, // TTCGA | A
+                type: 'Sticky (黏性)',
+                source: 'Haemophilus influenzae'
+            },
+            { 
+                id: 'SmaI', 
+                name: 'SmaI', 
+                seq: 'CCCGGG', 
+                cutTop: 3, // CCC | GGG
+                cutBottom: 3, // GGG | CCC
+                type: 'Blunt (平整)',
+                source: 'Serratia marcescens'
+            }
+        ];
+
+        // Default DNA Sequence (Contains sites for all above)
+        // EcoRI: GAATTC
+        // BamHI: GGATCC
+        // HindIII: AAGCTT
+        // SmaI: CCCGGG
+        const DEFAULT_DNA = "GCTAGAATTCGTAGGATCCATGCCTAAGCTTGCATCCCGGGATCGA";
+
+        // --- COMPONENTS ---
+
+        const DNAStrand = ({ sequence, label, cutIndex = -1, isBottom = false }) => {
+            return (
+                <div className="flex font-mono text-xl tracking-[0.2em] relative select-none">
+                    <div className="absolute -left-8 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-bold">{label}</div>
+                    {sequence.split('').map((base, i) => (
+                        <div key={i} className={`relative px-1 ${isBottom ? 'text-slate-400' : 'text-white'}`}>
+                            <span className={`base-${base} font-black`}>{base}</span>
+                            {/* Cut Marker */}
+                            {cutIndex === i + 1 && (
+                                <div className="absolute top-0 bottom-0 -left-[1px] w-[2px] bg-red-500 h-full z-10"></div>
+                            )}
+                        </div>
+                    ))}
+                    <div className="absolute -right-8 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-bold">{isBottom ? "5'" : "3'"}</div>
+                </div>
+            );
+        };
+
+        const DNABlock = ({ sequence, splitInfo }) => {
+            // splitInfo: { index: start index in full seq, cutTop: relative, cutBottom: relative, isCut: boolean }
+            
+            const compSeq = sequence.split('').map(b => 
+                b === 'A' ? 'T' : b === 'T' ? 'A' : b === 'C' ? 'G' : 'G'
+            ).join('');
+
+            return (
+                <div className="flex flex-col gap-1 p-4 bg-slate-900 rounded-lg border border-slate-700 shadow-md relative">
+                    <div className="flex justify-between items-center text-xs text-slate-500 mb-2 font-mono">
+                        <span>5'</span>
+                        <span>{sequence.length} bp</span>
+                        <span>3'</span>
+                    </div>
+                    
+                    {/* Top Strand */}
+                    <div className="flex font-mono text-lg tracking-widest justify-center">
+                        {sequence.split('').map((b, i) => (
+                            <span key={i} className={`base-${b} block w-6 text-center`}>{b}</span>
+                        ))}
+                    </div>
+
+                    {/* Hydrogen Bonds */}
+                    <div className="flex justify-center h-2 overflow-hidden">
+                        {sequence.split('').map((_, i) => (
+                            <div key={i} className="w-6 flex justify-center">
+                                <div className="h-full w-px bg-slate-600"></div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Bottom Strand */}
+                    <div className="flex font-mono text-lg tracking-widest justify-center opacity-80">
+                        {compSeq.split('').map((b, i) => (
+                            <span key={i} className={`base-${b} block w-6 text-center`}>{b}</span>
+                        ))}
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs text-slate-500 mt-2 font-mono">
+                        <span>3'</span>
+                        <span>5'</span>
+                    </div>
+                </div>
+            );
+        };
+
+        const FragmentVisualizer = ({ sequence, enzyme }) => {
+            // Find all cut sites
+            // Note: This simple implementation finds non-overlapping occurrences
+            const parts = [];
+            let currentSeq = sequence;
+            let lastIdx = 0;
+            let match;
+            
+            // Regex for global search
+            const regex = new RegExp(enzyme.seq, 'g');
+            
+            const sites = [];
+            while ((match = regex.exec(sequence)) !== null) {
+                sites.push(match.index);
+            }
+
+            // Split Logic
+            // If no sites, one fragment
+            if (sites.length === 0) {
+                return (
+                    <div className="flex justify-center">
+                        <DNABlock sequence={sequence} />
+                    </div>
+                );
+            }
+
+            // Construct Fragments
+            let prevCutEnd = 0;
+            
+            const fragments = sites.map((siteIdx, i) => {
+                // Cut happens inside the enzyme sequence
+                // Top strand cut at: siteIdx + enzyme.cutTop
+                // Bottom strand cut at: siteIdx + enzyme.cutBottom (relative to 5' of seq)
+                
+                // Fragment 1: From prevCutEnd to siteIdx + cutTop
+                // Wait, sticky ends are complex to render as simple blocks.
+                // Let's render the result as "Sticky End Blocks"
+                
+                // For visualization simplicity in this view:
+                // We show the cut occurring visually.
+                
+                return null;
+            });
+            
+            // Let's build a specific visual for a single cut site to demonstrate the concept clearly
+            // And then show the list of resulting linear fragments.
+            
+            // Split string by cut points on TOP strand to define "Main Blocks"
+            // Then handle overhangs.
+            
+            // Let's create a custom renderer for sticky ends.
+            // Split points (Top):
+            const cutPoints = sites.map(s => s + enzyme.cutTop);
+            const fragmentStrs = [];
+            let start = 0;
+            cutPoints.forEach(cp => {
+                fragmentStrs.push(sequence.slice(start, cp));
+                start = cp;
+            });
+            fragmentStrs.push(sequence.slice(start));
+
+            return (
+                <div className="flex flex-wrap gap-4 justify-center items-start">
+                    {fragmentStrs.map((frag, i) => {
+                        // Calculate overhangs for this fragment based on its neighbors and enzyme type
+                        // If it's the first fragment (i=0), right side has overhang if sites > 0
+                        // If middle, both sides.
+                        // If last, left side.
+                        
+                        // Sticky Logic:
+                        // EcoRI (G | AATTC): Left frag ends with G (Top), CTTAA (Bottom) -> 3' Overhang? No 5' overhang on the OTHER piece.
+                        // Left piece: 
+                        // 5' ...G 3'
+                        // 3' ...CTTAA 5'
+                        // So bottom is longer by 4 bases.
+                        
+                        const isSticky = enzyme.type.includes('Sticky');
+                        const overhangLen = Math.abs(enzyme.cutBottom - enzyme.cutTop);
+                        
+                        // Determine overhangs for THIS fragment
+                        let leftOverhang = 0; // Positive = Top is longer (not possible with standard enzymes usually?), Negative = Bottom is longer
+                        let rightOverhang = 0; 
+                        
+                        if (isSticky) {
+                            // Check Left Connection (Previous cut)
+                            if (i > 0) {
+                                // We are the right side of a cut.
+                                // EcoRI: Right side is AATTC (Top), G (Bottom). Top is longer by 4.
+                                // So we have a 5' Overhang (Top sticks out to left)
+                                leftOverhang = overhangLen; 
+                            }
+                            
+                            // Check Right Connection (Next cut)
+                            if (i < fragmentStrs.length - 1) {
+                                // We are the left side of a cut.
+                                // EcoRI: Left side is G (Top), CTTAA (Bottom). Bottom is longer by 4 (sticks out to right).
+                                rightOverhang = -overhangLen;
+                            }
+                        }
+                        
+                        // Generate Bottom Strand
+                        const compFrag = frag.split('').map(b => b === 'A' ? 'T' : b === 'T' ? 'A' : b === 'C' ? 'G' : 'G').join('');
+
+                        // Construct display strings with spacers
+                        // Left Overhang (Top longer): Bottom needs spacers on left
+                        // Right Overhang (Bottom longer): Top needs spacers on right
+                        
+                        let topDisplay = frag;
+                        let botDisplay = compFrag;
+                        
+                        // Apply Left Adjustment
+                        if (leftOverhang > 0) {
+                             // Top sticks out left, so Bottom needs padding on left
+                             botDisplay = " ".repeat(leftOverhang) + botDisplay;
+                             // Top is fine, it starts at 0
+                        }
+                        
+                        // Apply Right Adjustment
+                        if (rightOverhang < 0) {
+                            // Bottom sticks out right, so Top needs padding on right (visual only, handled by flex container usually, but let's be explicit if using mono font)
+                            // Actually, Bottom is longer. 
+                            // Left piece of EcoRI: Top G, Bot CTTAA. 
+                            // Visual:
+                            // G
+                            // CTTAA
+                            // Top needs 4 spaces on right? No, they align at left.
+                            // G    
+                            // CTTAA
+                        }
+
+                        // Let's render using a grid for perfect alignment
+                        // Calculate total grid width
+                        const lenTop = frag.length;
+                        const lenBot = compFrag.length; // Same as top in base count, but we need to account for overhangs in alignment
+                        
+                        // Real logic:
+                        // If i > 0 (Left side was cut):
+                        //   If Sticky (EcoRI): We have AATTC on top, G on bottom.
+                        //   Align:
+                        //   AATTC...
+                        //       G...
+                        //   So Bottom starts shifted by 'overhangLen'
+                        
+                        // If i < end (Right side is cut):
+                        //   EcoRI: Top ends with G, Bottom ends with CTTAA
+                        //   Align:
+                        //   ...G
+                        //   ...CTTAA
+                        //   Top ends early.
+                        
+                        return (
+                            <motion.div 
+                                key={i}
+                                layout
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: i * 0.2 }}
+                                className="bg-slate-800 p-3 rounded border border-slate-600 shadow-lg"
+                            >
+                                <div className="flex flex-col font-mono text-lg tracking-[0.2em] leading-none">
+                                    {/* Top Strand */}
+                                    <div className="flex">
+                                        {/* Left Spacer if bottom starts early? No, usually Top starts or they align */}
+                                        {/* For EcoRI Right Fragment: Top AATTC, Bot G. Bottom starts at index 4 (relative to cut pattern G|AATTC) */}
+                                        {/* Actually:
+                                            Left Frag:
+                                            5' G           3'
+                                            3' CTTAA       5'
+                                            
+                                            Right Frag:
+                                            5'     AATTC... 3'
+                                            3'     G...     5'
+                                        */}
+                                        
+                                        {/* Let's render characters with visibility control */}
+                                        {/* We need the full sequence of the overlap region? No just the frag string */}
+                                        
+                                        {/* Hacky Visualizer for Demo */}
+                                        {/* We construct the visual based on the enzyme pattern for the ends */}
+                                        
+                                        <div className="text-white mb-2 h-6 flex items-center">
+                                            {/* Spacer Left */}
+                                            {i > 0 && isSticky && <span className="invisible">{"A".repeat(overhangLen)}</span>} 
+                                            {/* We only pad top if bottom sticks out left? No, standard 5' overhang means top sticks out left on right fragment? */}
+                                            {/* EcoRI Right Frag: Top AATTC, Bot G. Top starts earlier. Bottom needs space. */}
+                                            {/* Wait, EcoRI cut: G | AATTC. 
+                                                Left side: Top G. Bot CTTAA.
+                                                Right side: Top AATTC. Bot G.
+                                            */}
+                                            {frag}
+                                        </div>
+                                        
+                                        <div className="text-slate-400 h-6 flex items-center">
+                                            {/* Spacer Left for Bottom Strand */}
+                                            {/* If i > 0 (Right piece), and EcoRI (5' overhang): Top starts at 0, Bottom starts at 4? */}
+                                            {/* Left Piece: Top G, Bot CTTAA. Aligned Left? Yes. */}
+                                            {/* Right Piece: Top AATTC, Bot G. Aligned Right? No. */}
+                                            {/* Let's look at the Cut Site:
+                                                ...G         AATTC...
+                                                ...CTTAA     G...
+                                            */}
+                                            
+                                            {/* Right Fragment Logic */}
+                                            {i > 0 && isSticky && <span className="invisible">{"A".repeat(overhangLen)}</span>}
+                                            
+                                            {/* Core */}
+                                            {compFrag}
+                                            
+                                            {/* Left Fragment Logic: Bottom extends right */}
+                                            {i < fragmentStrs.length - 1 && isSticky && <span className="text-slate-400">{"T".repeat(overhangLen)}</span>} 
+                                            {/* Wait, compFrag only contains the complementary of 'frag'. 
+                                                'frag' for Left piece is just 'G'. compFrag is 'C'.
+                                                We need to ADD the overhang to the bottom string manually for display?
+                                                Yes.
+                                             */}
+                                        </div>
+                                        
+                                    </div>
+                                    
+                                    {/* Better Approach: Just display pre-calculated strings */}
+                                    <VisualPair frag={frag} i={i} total={fragmentStrs.length} enzyme={enzyme} />
+                                    
+                                </div>
+                                <div className="text-center text-[10px] text-slate-500 mt-2">
+                                    {frag.length + (i < fragmentStrs.length - 1 && isSticky ? overhangLen : 0)} bp Fragment
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            );
+        };
+        
+        // Helper to render the pair correctly
+        const VisualPair = ({ frag, i, total, enzyme }) => {
+            const isSticky = enzyme.type.includes('Sticky');
+            const overhang = Math.abs(enzyme.cutBottom - enzyme.cutTop);
+            
+            // Construct Top and Bottom Display Strings
+            let topStr = frag;
+            let botStr = frag.split('').map(b => b === 'A' ? 'T' : b === 'T' ? 'A' : b === 'C' ? 'G' : 'G').join('');
+            
+            // Logic for EcoRI (5' Overhang)
+            // Cut: G | AATTC
+            //      C TTAA | G
+            
+            // Left Fragment (i < total - 1):
+            // Top: ...G
+            // Bot: ...CTTAA (Add TTAA to bottom)
+            
+            // Right Fragment (i > 0):
+            // Top: AATTC...
+            // Bot:     G... (Add space to bottom)
+            
+            let topPadLeft = 0;
+            let botPadLeft = 0;
+            let topSuffix = "";
+            let botSuffix = "";
+            
+            if (isSticky) {
+                // Left side of this fragment (Connection to previous)
+                if (i > 0) {
+                    // Right Piece of cut
+                    // For 5' Overhang (EcoRI): Top starts, Bottom lags
+                    botPadLeft = overhang; 
+                }
+                
+                // Right side of this fragment (Connection to next)
+                if (i < total - 1) {
+                    // Left Piece of cut
+                    // For 5' Overhang: Bottom extends
+                    // We need to 'borrow' the bases from the cut site pattern?
+                    // Or just visualize the overhang generically?
+                    // Let's use the actual complementary sequence if possible, or just placeholders for the concept.
+                    // Since we split the main string, 'frag' is accurate for Top.
+                    // We just need to extend Bottom.
+                    // EcoRI seq: GAATTC. 
+                    // Left frag ends in G. 
+                    // Bottom should be CTTAA. C is comp of G. TTAA is the overhang.
+                    // The overhang comes from the complementary of the enzyme site remainder.
+                    // Enzyme: GAATTC. Cut at 1. Remainder AATTC. Comp: TTAAG.
+                    // Overhang part: TTAA.
+                    
+                    // Let's simplify: Show geometric shape matching instead of perfect sequence if too complex?
+                    // No, sequence is better for biology.
+                    
+                    // Hardcode overhangs for demo enzymes to ensure correctness
+                    if (enzyme.id === 'EcoRI') { // G | AATTC vs CTTAA | G
+                        if (i < total - 1) botSuffix = "TTAA";
+                    } else if (enzyme.id === 'BamHI') { // G | GATCC vs CCTAG | G
+                        if (i < total - 1) botSuffix = "CTAG";
+                    } else if (enzyme.id === 'HindIII') { // A | AGCTT vs TTCGA | A
+                        if (i < total - 1) botSuffix = "TCGA";
+                    }
+                }
+                
+                // For the Right Piece (i>0), we need to PAD the bottom, not change content, because the content is already in the 'frag' variable?
+                // Wait, if we split the string "G AATTC", frag1="G", frag2="AATTC".
+                // Left Piece (G): Top="G", Bot="C" + Suffix "TTAA" -> "CTTAA". Correct.
+                // Right Piece (AATTC): Top="AATTC", Bot="TTAAG". 
+                // But Bot needs to start late.
+                // Display:
+                // AATTC
+                //     G  (Wait, comp of AATTC is TTAAG. We want just G? No, the rest of the strand continues)
+                // The right piece bottom strand is "G...". The TTAA was left on the other piece.
+                // So for Right Piece: Top="AATTC...", Bot="TTAAG...".
+                // We just need to hide/indent the first 4 chars of Bottom?
+                // Yes.
+                
+                 if (i > 0) {
+                    if (enzyme.id === 'EcoRI' || enzyme.id === 'BamHI' || enzyme.id === 'HindIII') {
+                        // These are all 5' overhangs.
+                        // Bottom needs to be indented.
+                        // But wait, the botStr is derived from topStr.
+                        // Top: AATTC. Bot: TTAAG.
+                        // We want Bot to display as "    G".
+                        // So we mask the first 'overhang' characters of botStr?
+                        // No, physically they are not there.
+                        // So we slice botStr.
+                        botStr = botStr.slice(overhang);
+                        botPadLeft = overhang;
+                    }
+                }
+            }
+            
+            return (
+                <div className="flex flex-col">
+                    <div className="text-white flex">
+                        {/* Top Strand */}
+                        <span style={{width: `${topPadLeft*0.6}em`, display:'inline-block'}}></span>
+                        {topStr.split('').map((b,k)=><span key={k} className={`base-${b}`}>{b}</span>)}
+                        <span className="text-slate-600">{topSuffix}</span>
+                    </div>
+                    
+                    <div className="flex h-3 relative">
+                        {/* Bonds - simplified visual */}
+                        <div className="w-full h-px bg-slate-700 absolute top-1/2"></div>
+                    </div>
+
+                    <div className="text-slate-400 flex">
+                        {/* Bottom Strand */}
+                        <span style={{width: `${botPadLeft*0.6}em`, display:'inline-block'}}></span>
+                        {botStr.split('').map((b,k)=><span key={k} className={`base-${b}`}>{b}</span>)}
+                        <span className={`base-${botSuffix[0]}`}>{botSuffix}</span>
+                    </div>
+                </div>
+            )
+        }
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [sequence, setSequence] = useState(DEFAULT_DNA);
+            const [selectedEnzyme, setSelectedEnzyme] = useState(ENZYMES[0]);
+            const [isCutting, setIsCutting] = useState(false);
+            const [isCutComplete, setIsCutComplete] = useState(false);
+
+            const handleCut = () => {
+                setIsCutting(true);
+                setIsCutComplete(false);
+                setTimeout(() => {
+                    setIsCutting(false);
+                    setIsCutComplete(true);
+                }, 1500); // Animation duration
+            };
+
+            const reset = () => {
+                setIsCutComplete(false);
+                setIsCutting(false);
+            };
+
+            // Calculate stats
+            const cutCount = (sequence.match(new RegExp(selectedEnzyme.seq, 'g')) || []).length;
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden font-sans">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="scissors" className="text-blue-500" /> Enzyme Tool
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Restriction Digestion Simulator</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Enzyme Selector */}
+                            <div className="space-y-3">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Select Enzyme</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {ENZYMES.map(enz => (
+                                        <button 
+                                            key={enz.id}
+                                            onClick={() => { setSelectedEnzyme(enz); reset(); }}
+                                            className={`w-full text-left p-3 rounded-xl border transition-all group relative overflow-hidden
+                                                ${selectedEnzyme.id === enz.id 
+                                                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg' 
+                                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                                            `}
+                                        >
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold">{enz.name}</span>
+                                                <span className="text-[10px] uppercase bg-black/20 px-2 py-0.5 rounded">{enz.type}</span>
+                                            </div>
+                                            <div className="font-mono text-xs opacity-80 tracking-widest">
+                                                {enz.seq.slice(0, enz.cutTop)}
+                                                <span className="text-yellow-300 mx-0.5">▼</span>
+                                                {enz.seq.slice(enz.cutTop)}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Action */}
+                            <div className="pt-4 border-t border-slate-800">
+                                <button 
+                                    onClick={handleCut}
+                                    disabled={isCutting || isCutComplete}
+                                    className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg text-lg
+                                        ${isCutting || isCutComplete 
+                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
+                                            : 'bg-emerald-600 hover:bg-emerald-500 text-white'}
+                                    `}
+                                >
+                                    {isCutting ? <Icon name="loader-2" className="animate-spin"/> : <Icon name="scissors" />}
+                                    {isCutting ? 'Digesting...' : isCutComplete ? 'Digestion Complete' : 'Cut DNA'}
+                                </button>
+                                {isCutComplete && (
+                                    <button onClick={reset} className="w-full mt-3 py-2 text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1">
+                                        <Icon name="rotate-ccw" size={14}/> Reset Sequence
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Stats */}
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                <div className="text-xs font-bold text-slate-500 uppercase mb-3">Digestion Stats</div>
+                                <div className="flex justify-between items-center border-b border-slate-700 pb-2 mb-2">
+                                    <span className="text-sm text-slate-300">Recognition Site</span>
+                                    <span className="font-mono text-blue-400">{selectedEnzyme.seq}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-300">Sites Found</span>
+                                    <span className="font-bold text-white bg-blue-600 px-2 py-0.5 rounded">{cutCount}</span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-8 overflow-hidden gap-8">
+                        
+                        {/* Title / Header */}
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-2xl font-black text-white mb-1">DNA Digestion Simulation</h2>
+                                <p className="text-sm text-slate-400">Visualizing phosphodiester bond cleavage</p>
+                            </div>
+                            <div className="flex gap-4 text-xs font-mono text-slate-500">
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> A</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-500 rounded-sm"></div> T</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-yellow-500 rounded-sm"></div> C</div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> G</div>
+                            </div>
+                        </div>
+
+                        {/* Visualization Area */}
+                        <div className="flex-1 bg-slate-900/50 rounded-3xl border border-slate-800 shadow-xl relative overflow-y-auto flex flex-col items-center justify-center p-8 custom-scrollbar">
+                            
+                            {!isCutComplete ? (
+                                // PRE-CUT VIEW
+                                <div className="relative">
+                                    {/* Scan Effect */}
+                                    {isCutting && (
+                                        <motion.div 
+                                            className="absolute top-0 bottom-0 w-2 bg-blue-500/50 shadow-[0_0_20px_#3b82f6] z-20"
+                                            initial={{ left: '0%' }}
+                                            animate={{ left: '100%' }}
+                                            transition={{ duration: 1.5, ease: "linear" }}
+                                        />
+                                    )}
+                                    
+                                    <div className="bg-slate-900 p-6 rounded-xl border border-slate-700 shadow-2xl">
+                                        <DNAStrand sequence={sequence} label="Sequence" />
+                                        
+                                        {/* Highlight Sites */}
+                                        {(() => {
+                                            const matches = [];
+                                            let match;
+                                            const regex = new RegExp(selectedEnzyme.seq, 'g');
+                                            while ((match = regex.exec(sequence)) !== null) {
+                                                matches.push(match.index);
+                                            }
+                                            return matches.map((idx, i) => (
+                                                <div 
+                                                    key={i}
+                                                    className="absolute top-0 bottom-0 border-2 border-yellow-500/50 rounded pointer-events-none"
+                                                    style={{ 
+                                                        left: `calc(${idx} * 1ch + 24px + ${idx*8}px)`, // Approx char width logic 
+                                                        // Actually, this manual positioning is brittle. 
+                                                        // A better way for the "Pre-cut" is just the string.
+                                                        // Let's rely on the simple DNAStrand for now.
+                                                        display: 'none'
+                                                    }}
+                                                ></div>
+                                            ));
+                                        })()}
+                                    </div>
+
+                                    {/* Scissors Icon Animation */}
+                                    {isCutting && (
+                                        <motion.div 
+                                            className="absolute top-1/2 -translate-y-1/2 text-red-500 drop-shadow-lg z-30"
+                                            initial={{ left: '0%' }}
+                                            animate={{ left: '100%' }}
+                                            transition={{ duration: 1.5, ease: "linear" }}
+                                        >
+                                            <Icon name="scissors" size={32} className="-rotate-90"/>
+                                        </motion.div>
+                                    )}
+                                </div>
+                            ) : (
+                                // POST-CUT VIEW (Fragments)
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="w-full"
+                                >
+                                    <FragmentVisualizer sequence={sequence} enzyme={selectedEnzyme} />
+                                    
+                                    <div className="mt-12 text-center">
+                                        <div className="inline-block bg-slate-800 px-6 py-3 rounded-full border border-slate-600 text-sm text-slate-300">
+                                            Result: <span className="text-white font-bold">{cutCount + 1} Fragments</span> generated with <span className={`font-bold ${selectedEnzyme.type.includes('Sticky') ? 'text-yellow-400' : 'text-blue-400'}`}>{selectedEnzyme.type} Ends</span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
