@@ -44,6 +44,16 @@
             from { stroke: #ef4444; filter: drop-shadow(0 0 2px red); }
             to { stroke: #fca5a5; filter: drop-shadow(0 0 8px red); }
         }
+        
+        /* Dust Particles */
+        .dust {
+            animation: fall 3s linear infinite;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { transform: translateY(50px); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -88,13 +98,23 @@
         const ERROR_INFO = {
             0: { // bench_cap
                 title: "Contamination Risk! (污染風險)",
-                error: "Placing the tube cap on the bench (把試管蓋放在桌面上)",
-                explanation: "The bench surface is never truly sterile. Placing the cap down can pick up dust or microbes, which will fall into your pure culture when you recap the tube. Always hold the cap in your little finger!"
+                error: "Placing cap on bench (把蓋子放在桌上)",
+                explanation: "The bench surface is never sterile. Placing the cap down picks up dust/microbes. Always hold the cap in your little finger!"
             },
             1: { // hot_loop
                 title: "Bacteria Killed! (殺死細菌)",
-                error: "Using a red-hot loop to sample (使用紅熱的接種環取樣)",
-                explanation: "The intense heat will instantly kill the bacteria you are trying to transfer (you might hear a 'hiss' sound). You must allow the loop to cool for a few seconds near the flame before touching the colony."
+                error: "Using red-hot loop (使用紅熱接種環)",
+                explanation: "Intense heat kills bacteria instantly (HISS!). You must let the loop cool near the flame before touching the colony."
+            },
+            2: { // far_flame
+                title: "Outside Sterile Zone! (離開無菌區)",
+                error: "Working too far from flame (離火太遠)",
+                explanation: "The updraft from the Bunsen burner creates a sterile zone (~10-15cm radius). Working too far away exposes samples to falling dust."
+            },
+            3: { // open_lid
+                title: "Air Contamination! (空氣污染)",
+                error: "Tube held vertically open (試管垂直開口)",
+                explanation: "Holding a tube vertically allows dust to fall straight in. Always hold tubes at an angle and keep them open for the minimum time possible."
             }
         };
 
@@ -115,6 +135,11 @@
         // 1. Bunsen Burner Visual
         const BunsenBurner = ({ isOn, isBlue }) => (
             <div className="relative w-20 h-40 flex flex-col items-center justify-end">
+                {/* Updraft arrows visual (Sterile zone hint) */}
+                <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-40 h-40 border-2 border-blue-500/20 rounded-full pointer-events-none flex items-center justify-center">
+                    <span className="text-[10px] text-blue-500/50 font-bold -mt-20">Sterile Zone</span>
+                </div>
+                
                 {/* Flame */}
                 {isOn && (
                     <div className={`flame absolute bottom-[60px] w-8 h-24 rounded-full filter blur-sm
@@ -123,9 +148,7 @@
                         <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-16 rounded-full opacity-80 ${isBlue ? 'bg-white' : 'bg-yellow-200'}`}></div>
                     </div>
                 )}
-                {/* Tube */}
                 <div className="w-4 h-24 bg-slate-400 rounded-t-sm border-x border-slate-500 relative z-10"></div>
-                {/* Base */}
                 <div className="w-16 h-4 bg-slate-500 rounded-t-md relative z-10"></div>
                 <div className="w-20 h-2 bg-slate-600 rounded-full relative z-10"></div>
             </div>
@@ -134,30 +157,29 @@
         // 2. Loop Visual
         const InoculatingLoop = ({ isHot, hasBacteria }) => (
             <div className="relative w-40 h-4 flex items-center">
-                <div className="w-24 h-2 bg-slate-600 rounded-l-full"></div> {/* Handle */}
-                <div className={`w-16 h-0.5 ${isHot ? 'bg-red-500 hot-loop' : 'bg-slate-300'}`}></div> {/* Wire */}
+                <div className="w-24 h-2 bg-slate-600 rounded-l-full"></div>
+                <div className={`w-16 h-0.5 ${isHot ? 'bg-red-500 hot-loop' : 'bg-slate-300'}`}></div>
                 <div className={`w-3 h-3 rounded-full border-2 absolute right-0 ${isHot ? 'border-red-500 hot-loop' : 'border-slate-300'} flex items-center justify-center`}>
                     {hasBacteria && <div className="w-1.5 h-1.5 bg-yellow-200 rounded-full"></div>}
                 </div>
             </div>
         );
 
-        // 3. Error Spotting Scene
+        // 3. Error Spotting Scenes
         const ErrorScene = ({ errorType, onCorrect }) => {
             return (
                 <div className="w-full h-full flex flex-col items-center justify-center relative bg-slate-800 rounded-xl overflow-hidden p-8">
                     <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 absolute top-4 left-4">Identify the Error (Click it)</h3>
                     
-                    {errorType === 'bench_cap' && (
+                    {/* Scenario 0: Bench Cap */}
+                    {errorType === 0 && (
                         <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
                             <div className="relative">
-                                {/* Table */}
                                 <div className="w-48 h-2 bg-slate-500 rounded"></div>
-                                {/* Tube Cap on Table! */}
-                                <div className="absolute bottom-2 left-10 w-6 h-6 bg-red-500 rounded-t-md flex items-center justify-center group-hover:scale-110 transition-transform">
+                                {/* ERROR: Cap on bench */}
+                                <div className="absolute bottom-2 left-10 w-6 h-6 bg-red-500 rounded-t-md flex items-center justify-center group-hover:scale-110 transition-transform border-2 border-white/20">
                                     <Icon name="alert-circle" size={12} className="text-white animate-bounce"/>
                                 </div>
-                                {/* Tube in hand */}
                                 <div className="absolute bottom-10 right-0 rotate-45">
                                     <div className="w-4 h-16 bg-blue-200/30 border border-blue-300 rounded-b-lg"></div>
                                 </div>
@@ -166,10 +188,12 @@
                         </div>
                     )}
 
-                    {errorType === 'hot_loop' && (
+                    {/* Scenario 1: Hot Loop */}
+                    {errorType === 1 && (
                         <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
                             <div className="flex items-center gap-2">
                                 <InoculatingLoop isHot={true} hasBacteria={false} />
+                                {/* ERROR: Touching culture with hot loop */}
                                 <div className="w-16 h-16 bg-blue-200/20 rounded-full border border-blue-300 relative flex items-center justify-center group-hover:border-red-400 transition-colors">
                                     <span className="text-[8px] text-white">Culture</span>
                                     <div className="absolute -top-4 right-0 text-red-500 font-bold text-xs animate-ping">HISS!</div>
@@ -178,25 +202,61 @@
                              <p className="text-xs text-red-300 mt-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Is it cool?</p>
                         </div>
                     )}
+
+                    {/* Scenario 2: Far from Flame */}
+                    {errorType === 2 && (
+                        <div className="flex items-center gap-12 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
+                            <div className="opacity-50 grayscale">
+                                <BunsenBurner isOn={true} isBlue={true} />
+                            </div>
+                            {/* ERROR: Working way too far right */}
+                            <div className="relative">
+                                <div className="w-px h-20 bg-red-500/50 absolute -left-6 top-0 border-l-2 border-dashed border-red-400"></div>
+                                <span className="absolute -left-12 top-8 text-[10px] text-red-400 rotate-90 font-bold">Too Far</span>
+                                <div className="rotate-45">
+                                    <div className="w-4 h-16 bg-blue-200/30 border border-blue-300 rounded-b-lg"></div>
+                                </div>
+                                <InoculatingLoop isHot={false} hasBacteria={false} />
+                                {/* Falling dust */}
+                                <div className="absolute -top-10 left-4 w-1 h-1 bg-slate-400 rounded-full dust"></div>
+                                <div className="absolute -top-12 left-2 w-1 h-1 bg-slate-400 rounded-full dust" style={{animationDelay:'0.5s'}}></div>
+                            </div>
+                            <p className="absolute bottom-4 text-xs text-red-300 mt-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Outside sterile zone!</p>
+                        </div>
+                    )}
+
+                    {/* Scenario 3: Open Lid Vertical */}
+                    {errorType === 3 && (
+                        <div className="flex flex-col items-center gap-4 cursor-pointer hover:bg-slate-700/50 p-4 rounded-xl transition-all group" onClick={onCorrect}>
+                            <div className="relative">
+                                {/* ERROR: Tube held vertically straight up */}
+                                <div className="w-6 h-24 bg-blue-200/30 border border-blue-300 rounded-b-lg border-t-0 relative">
+                                    <div className="absolute top-0 left-0 w-full h-2 bg-blue-300/50 rounded-full"></div> {/* Open top */}
+                                    {/* Falling dust into tube */}
+                                    <div className="absolute -top-8 left-1/2 w-1 h-1 bg-red-400 rounded-full dust"></div>
+                                    <div className="absolute -top-12 left-1/2 w-1 h-1 bg-red-400 rounded-full dust" style={{animationDelay:'1s'}}></div>
+                                </div>
+                            </div>
+                            <p className="text-xs text-red-300 mt-2 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Don't hold vertical!</p>
+                        </div>
+                    )}
                 </div>
             );
         };
 
         // --- MAIN APP ---
         const App = () => {
-            const [mode, setMode] = useState('sort'); // sort, error
+            const [mode, setMode] = useState('sort');
             const [items, setItems] = useState(shuffle(STEPS));
             const [isCorrect, setIsCorrect] = useState(false);
             const [feedback, setFeedback] = useState("");
             
-            // Error Game State
-            const [errorLevel, setErrorLevel] = useState(0); // 0: bench_cap, 1: hot_loop
-            const [showExplanation, setShowExplanation] = useState(null); // stores the error info object
+            const [errorLevel, setErrorLevel] = useState(0); // 0 to 3
+            const [showExplanation, setShowExplanation] = useState(null);
 
             const checkOrder = () => {
                 const currentOrder = items.map(i => i.id).join(',');
                 const correctOrder = STEPS.map(s => s.id).join(',');
-                
                 if (currentOrder === correctOrder) {
                     setIsCorrect(true);
                     setFeedback("Correct! Perfect aseptic chain.");
@@ -213,13 +273,12 @@
             };
 
             const handleErrorFound = () => {
-                // Instead of auto-advancing, show explanation
                 setShowExplanation(ERROR_INFO[errorLevel]);
             };
 
             const nextErrorLevel = () => {
                 setShowExplanation(null);
-                setErrorLevel(prev => (prev + 1) % 2);
+                setErrorLevel(prev => (prev + 1) % 4); // Cycle 4 levels
             };
 
             return (
@@ -258,7 +317,7 @@
                                 {mode === 'sort' ? (
                                     <p>Drag and drop the steps to form the correct aseptic procedure for sub-culturing bacteria.</p>
                                 ) : (
-                                    <p>Watch the scene and click on the unsafe practice that could cause contamination.</p>
+                                    <p>Watch the scene and click on the unsafe practice that could cause contamination. ({errorLevel + 1}/4)</p>
                                 )}
                             </div>
 
@@ -327,7 +386,7 @@
                             ) : (
                                 <div className="relative w-full h-full">
                                     <ErrorScene 
-                                        errorType={errorLevel === 0 ? 'bench_cap' : 'hot_loop'} 
+                                        errorType={errorLevel} 
                                         onCorrect={handleErrorFound}
                                     />
                                     
