@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Non-infectious Disease Risk Simulator</title>
+    <title>Sewage Treatment Stages</title>
     
     <!-- React & Tailwind -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -11,48 +11,37 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Recharts -->
-    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Framer Motion -->
-    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
     
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* Custom Sliders */
-        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; 
-            background: #fff; cursor: pointer; margin-top: -8px; 
-            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        /* Water Flow Animation */
+        .water-surface {
+            animation: wave 3s linear infinite;
+            background: repeat-x;
+            background-size: 50% 100%;
         }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px;
+        @keyframes wave {
+            0% { background-position: 0 0; }
+            100% { background-position: 100% 0; }
         }
-        
-        /* Heartbeat Animation */
-        .heartbeat-slow { animation: beat 1.5s infinite; }
-        .heartbeat-fast { animation: beat 0.6s infinite; }
-        @keyframes beat {
-            0% { transform: scale(1); }
-            15% { transform: scale(1.15); }
-            30% { transform: scale(1); }
-            45% { transform: scale(1.15); }
-            60% { transform: scale(1); }
+
+        /* Bubbles in Aeration Tank */
+        .aeration-bubble {
+            animation: bubble-rise 2s infinite ease-in;
         }
-        
-        /* Smoke Animation */
-        .smoke-particle { animation: smoke 3s ease-out infinite; opacity: 0; }
-        @keyframes smoke {
-            0% { transform: translateY(0) scale(0.5); opacity: 0.5; }
-            100% { transform: translateY(-50px) scale(1.5); opacity: 0; }
+        @keyframes bubble-rise {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-60px) scale(1.2); opacity: 0; }
         }
     </style>
 </head>
@@ -61,7 +50,6 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
-        const { RadialBarChart, RadialBar, Legend, ResponsiveContainer, Tooltip } = window.Recharts;
         const { motion, AnimatePresence } = window.Motion;
 
         const Icon = ({ name, className = "", size = 20 }) => {
@@ -83,223 +71,247 @@
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
 
-        // --- DATA (Aligned with HKDSE Biology Curriculum) ---
-        const DISEASES = {
-            heart: {
-                id: 'heart', 
-                name: 'Cardiovascular Disease (心血管疾病)',
-                subName: 'e.g. Coronary Heart Disease',
-                icon: 'heart-pulse', color: '#ef4444',
-                factors: ['Fatty Diet (High Cholesterol)', 'Lack of Exercise', 'Smoking', 'Alcohol'],
-                prev: 'Balanced diet (Low fat), Regular exercise',
-                control: 'Angioplasty, Bypass surgery, Medication',
-                desc: 'Fatty deposits (plaque) block coronary arteries, reducing blood supply to heart muscles.'
+        // --- DATA ---
+        const STAGES = [
+            {
+                id: 'screening',
+                title: 'Screening (篩濾)',
+                type: 'Preliminary',
+                desc: 'Metal grids remove large solid objects (e.g., rags, wood, plastics) to protect pumps.',
+                removal: 'Large Solids',
+                waterColor: '#5f4b32' // Very dirty brown
             },
-            diabetes: {
-                id: 'diabetes', 
-                name: 'Diabetes Mellitus (糖尿病)',
-                subName: 'Type 2 (Non-insulin-dependent)',
-                icon: 'droplet', color: '#f59e0b',
-                factors: ['High Sugar/Fat Diet', 'Obesity', 'Lack of Exercise'],
-                prev: 'Low sugar/fat diet, Weight control',
-                control: 'Dietary control (regulate carbohydrate intake), Weight loss, Oral drugs',
-                desc: 'Body cells become resistant to insulin. Associated with lifestyle factors unlike Type 1.'
+            {
+                id: 'primary',
+                title: 'Primary Sedimentation (初級沉澱)',
+                type: 'Primary Treatment (Physical)',
+                desc: 'Sewage flows slowly. Suspended solids settle by gravity to form primary sludge. Grease floats to top.',
+                removal: '~50% Suspended Solids',
+                waterColor: '#856948' // Dirty brown
             },
-            lung: {
-                id: 'lung', 
-                name: 'Cancer (癌症)',
-                subName: 'e.g. Lung Cancer',
-                icon: 'wind', color: '#64748b',
-                factors: ['Smoking (Carcinogens)', 'Air Pollution', 'Second-hand smoke'],
-                prev: 'Do not smoke, Avoid pollutants',
-                control: 'Surgery, Chemotherapy, Radiotherapy',
-                desc: 'Uncontrolled cell division forming tumours. Smoking contains tar which is carcinogenic.'
+            {
+                id: 'aeration',
+                title: 'Aeration Tank (曝氣池)',
+                type: 'Secondary Treatment (Biological)',
+                desc: 'Air is pumped in. Aerobic bacteria digest organic matter (activated sludge process). Reduces BOD.',
+                removal: 'Dissolved Organic Matter',
+                waterColor: '#a89f72' // Murky green-brown
             },
-            liver: {
-                id: 'liver', 
-                name: 'Liver Cirrhosis (肝硬化)',
-                subName: 'Alcohol-related',
-                icon: 'flask-conical', color: '#a855f7',
-                factors: ['Excessive Alcohol Consumption', 'Fatty Diet'],
-                prev: 'Limit alcohol intake, Healthy diet',
-                control: 'Stop drinking, Liver transplant (severe cases)',
-                desc: 'Healthy liver tissue is replaced by scar tissue due to chronic damage, impairing function.'
+            {
+                id: 'final',
+                title: 'Final Sedimentation (最終沉澱)',
+                type: 'Secondary Treatment (Biological)',
+                desc: 'Bacteria (activated sludge) settle down. Some sludge is recycled to aeration tank; rest goes to digester.',
+                removal: 'Bacteria & Remaining Solids',
+                waterColor: '#60a5fa' // Clearer blue
+            },
+            {
+                id: 'disinfection',
+                title: 'Disinfection (消毒)',
+                type: 'Tertiary/Final',
+                desc: 'Chlorine or UV light kills pathogens (bacteria/viruses) before discharge into the sea.',
+                removal: 'Pathogens',
+                waterColor: '#38bdf8' // Clean blue
+            },
+            {
+                id: 'sludge',
+                title: 'Sludge Digestion (污泥消化)',
+                type: 'Solids Treatment',
+                desc: 'Anaerobic bacteria break down sludge, producing methane (biogas) for energy.',
+                removal: 'Sludge Volume Reduction',
+                waterColor: '#3f2e18' // Dark sludge
             }
+        ];
+
+        // --- VISUAL COMPONENTS ---
+        
+        const WaterParticle = ({ type, x, y }) => {
+            // type: solid, organic, bacteria, pathogen
+            
+            if (type === 'solid') {
+                return <rect x={x} y={y} width="8" height="8" fill="#3f2e18" transform={`rotate(${Math.random()*360} ${x+4} ${y+4})`} />;
+            } else if (type === 'organic') {
+                return <circle cx={x} cy={y} r="3" fill="#fbbf24" opacity="0.8" />;
+            } else if (type === 'bacteria') {
+                // Simple bacterium shape
+                return <ellipse cx={x} cy={y} rx="4" ry="2" fill="#22c55e" />;
+            } else if (type === 'pathogen') {
+                // Red dot
+                return <circle cx={x} cy={y} r="2.5" fill="#ef4444" />;
+            }
+            return null;
         };
 
-        // --- AVATAR VISUALIZER ---
-        const HumanAvatar = ({ diet, exercise, smoking, alcohol }) => {
-            // 0 (Good) to 100 (Bad)
+        const Tank = ({ stage, isActive }) => {
+            // Determine visual elements based on stage
+            const isAeration = stage.id === 'aeration';
+            const isSettling = stage.id === 'primary' || stage.id === 'final';
+            const isScreen = stage.id === 'screening';
             
-            // Body Shape (Obesity)
-            const bodyWidth = 80 + (diet * 0.4) + (100 - exercise) * 0.3;
-            
-            // Heart Rate / Color
-            const heartRateClass = (exercise < 30 || diet > 70) ? 'heartbeat-fast' : 'heartbeat-slow';
-            const heartColor = (diet > 80) ? '#b91c1c' : '#ef4444';
-
-            // Lungs Color
-            const lungColor = `rgb(${150 - smoking}, ${200 - smoking*1.5}, ${250 - smoking*1.5})`;
-
-            // Liver Color
-            const liverColor = `rgb(${180 - alcohol*0.5}, ${100 - alcohol}, ${180 - alcohol*0.5})`;
-
             return (
-                <div className="relative w-full h-full flex items-center justify-center">
-                    <svg viewBox="0 0 400 500" className="w-full h-full drop-shadow-xl">
-                        
-                        {/* Smoke Effect */}
-                        {smoking > 20 && (
-                            <g transform="translate(220, 120)">
-                                {[...Array(5)].map((_, i) => (
-                                    <circle key={i} cx={0} cy={0} r={10 + i*2} fill="#94a3b8" className="smoke-particle" style={{animationDelay: `${i*0.5}s`}} />
+                <div className={`relative w-full h-48 border-b-4 border-x-4 border-slate-600 rounded-b-xl overflow-hidden transition-colors duration-500 ${isActive ? 'bg-slate-800' : 'bg-slate-900'}`}>
+                    
+                    {/* Water Body */}
+                    <div 
+                        className="absolute bottom-0 left-0 right-0 transition-all duration-1000 ease-in-out"
+                        style={{ 
+                            height: '80%', 
+                            backgroundColor: stage.waterColor,
+                            opacity: 0.8
+                        }}
+                    >
+                        {/* Bubbles for Aeration */}
+                        {isAeration && (
+                            <div className="absolute inset-0 pointer-events-none">
+                                {[...Array(10)].map((_, i) => (
+                                    <div 
+                                        key={i} 
+                                        className="absolute w-2 h-2 bg-white/40 rounded-full aeration-bubble"
+                                        style={{ left: `${10 + i*10}%`, animationDelay: `${i*0.2}s`, animationDuration: `${1.5 + Math.random()}s` }}
+                                    ></div>
                                 ))}
-                            </g>
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full text-center text-[10px] text-white/50 mb-2 font-bold">AIR PUMP</div>
+                            </div>
                         )}
 
-                        {/* Body Outline */}
-                        <path 
-                            d={`M 200 80 
-                               Q 240 80 240 120 
-                               L 240 130 
-                               Q ${200 + bodyWidth} 180 ${200 + bodyWidth - 20} 350 
-                               L ${200 + bodyWidth - 30} 500 
-                               L ${200 - bodyWidth + 30} 500 
-                               L ${200 - bodyWidth + 20} 350 
-                               Q ${200 - bodyWidth} 180 160 130 
-                               L 160 120 
-                               Q 160 80 200 80`} 
-                            fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="4"
-                            className="transition-all duration-500 ease-in-out"
-                        />
-
-                        {/* Head */}
-                        <circle cx="200" cy="60" r="40" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="4" />
+                        {/* Sludge Layer for Sedimentation */}
+                        {isSettling && (
+                            <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#3f2e18] opacity-80"></div>
+                        )}
                         
-                        {/* Lungs */}
-                        <path d="M 190 150 Q 150 150 150 220 Q 150 260 190 250 Z" fill={lungColor} className="transition-colors duration-500" />
-                        <path d="M 210 150 Q 250 150 250 220 Q 250 260 210 250 Z" fill={lungColor} className="transition-colors duration-500" />
-
-                        {/* Heart */}
-                        <g transform="translate(200, 200)">
-                            <path d="M 0 0 C -20 -20 -40 10 0 40 C 40 10 20 -20 0 0" fill={heartColor} className={`${heartRateClass} transition-colors duration-500 origin-center`} />
-                        </g>
-
-                        {/* Liver */}
-                        <path d="M 180 260 Q 240 250 260 280 Q 240 300 180 280 Z" fill={liverColor} className="transition-colors duration-500" />
-
-                        {/* Fat Visual (Yellow layer) */}
-                        {diet > 60 && (
-                            <path 
-                                d={`M 200 300 Q ${200 + bodyWidth - 10} 300 ${200 + bodyWidth - 15} 400 L ${200 - bodyWidth + 15} 400 Q ${200 - bodyWidth + 10} 300 200 300`}
-                                fill="#fef08a" opacity="0.5"
-                            />
+                        {/* Screen Grid */}
+                        {isScreen && (
+                            <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-400 flex flex-col justify-around z-10">
+                                {[...Array(5)].map((_,i) => <div key={i} className="w-full h-1 bg-slate-800"></div>)}
+                            </div>
                         )}
 
-                    </svg>
+                        {/* Disinfection Rays */}
+                        {stage.id === 'disinfection' && (
+                            <div className="absolute top-0 left-0 right-0 h-full bg-gradient-to-b from-purple-500/20 to-transparent"></div>
+                        )}
+                    </div>
+                    
+                    {/* Label */}
+                    <div className="absolute top-2 left-2 bg-black/50 px-2 py-1 rounded text-[10px] text-white font-bold z-20">
+                        {stage.title}
+                    </div>
                 </div>
             );
         };
 
         // --- MAIN APP ---
         const App = () => {
-            // Inputs: 0 (Good) to 100 (Bad)
-            const [diet, setDiet] = useState(20); 
-            const [exercise, setExercise] = useState(80); 
-            const [smoking, setSmoking] = useState(0);
-            const [alcohol, setAlcohol] = useState(0);
+            const [currentStageIdx, setCurrentStageIdx] = useState(0);
+            const [particles, setParticles] = useState([]);
+            const requestRef = useRef();
             
-            const [selectedDisease, setSelectedDisease] = useState(null);
+            const currentStage = STAGES[currentStageIdx];
 
-            // Risk Calculation Logic
-            const risks = useMemo(() => {
-                const heartRisk = (diet * 0.4) + ((100 - exercise) * 0.3) + (smoking * 0.2) + (alcohol * 0.1);
-                const diabetesRisk = (diet * 0.6) + ((100 - exercise) * 0.4);
-                const lungRisk = (smoking * 0.9) + (10); 
-                const liverRisk = (alcohol * 0.8) + (diet * 0.2);
+            // Initialize Particles
+            useEffect(() => {
+                const p = [];
+                // Initial Load: Solids, Organic matter, Bacteria, Pathogens
+                // Quantities vary by stage to simulate removal process
+                
+                const width = 400; // Approx width of SVG viewBox
+                const waterTop = 50; // Approximate water surface in viewBox Y
 
-                return [
-                    { name: 'Heart', fullName: 'Cardiovascular', risk: heartRisk, fill: '#ef4444', id: 'heart' },
-                    { name: 'Diabetes', fullName: 'Diabetes (Type 2)', risk: diabetesRisk, fill: '#f59e0b', id: 'diabetes' },
-                    { name: 'Lung', fullName: 'Lung Cancer', risk: lungRisk, fill: '#64748b', id: 'lung' },
-                    { name: 'Liver', fullName: 'Liver Cirrhosis', risk: liverRisk, fill: '#a855f7', id: 'liver' }
-                ];
-            }, [diet, exercise, smoking, alcohol]);
+                // Logic:
+                // Stage 0 (Screening): Everything present
+                // Stage 1 (Primary): Solids removed/settled. Organics present.
+                // Stage 2 (Aeration): Organics consumed, Bacteria added.
+                // Stage 3 (Final): Bacteria removed.
+                // Stage 4 (Disinfection): Pathogens removed.
+                
+                // Simulating content *entering* or *present in* this stage
+                const solidCount = currentStageIdx === 0 ? 15 : 0;
+                const organicCount = currentStageIdx <= 2 ? 30 : currentStageIdx === 3 ? 10 : 0;
+                const bacteriaCount = currentStageIdx === 2 ? 40 : currentStageIdx === 3 ? 20 : 0; // Activated sludge high in aeration
+                const pathogenCount = currentStageIdx <= 4 ? 15 : 0; // Present until disinfection completes
+
+                for(let i=0; i<solidCount; i++) p.push({ id: Math.random(), type: 'solid', x: Math.random()*width, y: Math.random()*100 + waterTop, vx: 0.5, vy: 0.2 });
+                for(let i=0; i<organicCount; i++) p.push({ id: Math.random(), type: 'organic', x: Math.random()*width, y: Math.random()*100 + waterTop, vx: 0.5, vy: 0.1 });
+                for(let i=0; i<bacteriaCount; i++) p.push({ id: Math.random(), type: 'bacteria', x: Math.random()*width, y: Math.random()*100 + waterTop, vx: 0.5, vy: 0 });
+                for(let i=0; i<pathogenCount; i++) p.push({ id: Math.random(), type: 'pathogen', x: Math.random()*width, y: Math.random()*100 + waterTop, vx: 0.5, vy: 0 });
+                
+                setParticles(p);
+            }, [currentStageIdx]);
+
+            // Animation Loop
+            const update = () => {
+                setParticles(prev => prev.map(p => {
+                    let nx = p.x + p.vx;
+                    let ny = p.y + p.vy;
+                    
+                    // Stage specific physics
+                    if (currentStage.id === 'primary' || currentStage.id === 'final') {
+                        // Settle down
+                        if (p.type === 'solid' || (currentStage.id === 'final' && p.type === 'bacteria')) {
+                            ny += 0.5;
+                        }
+                    }
+                    if (currentStage.id === 'aeration') {
+                        // Churning
+                        ny += Math.sin(Date.now() * 0.005 + p.x) * 0.5;
+                    }
+
+                    // Bounds (ViewBox 0-400, Water roughly 50-180)
+                    if (nx > 400) nx = 0; // Loop
+                    if (ny > 170) ny = 170; // Bottom
+                    if (ny < 50) ny = 50; // Top surface
+
+                    return { ...p, x: nx, y: ny };
+                }));
+                requestRef.current = requestAnimationFrame(update);
+            };
+
+            useEffect(() => {
+                requestRef.current = requestAnimationFrame(update);
+                return () => cancelAnimationFrame(requestRef.current);
+            }, [currentStageIdx]);
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden font-sans">
                     
-                    {/* Sidebar: Controls */}
-                    <div className="w-full md:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
                         <div className="p-6 border-b border-slate-800">
                             <h1 className="text-xl font-bold flex items-center gap-2">
-                                <Icon name="activity" className="text-emerald-400" /> Health Risk Sim
+                                <Icon name="factory" className="text-blue-400" /> Sewage Treatment
                             </h1>
-                            <p className="text-xs text-slate-400 mt-1">Lifestyle & Non-infectious Diseases</p>
+                            <p className="text-xs text-slate-400 mt-1">Water Purification Process</p>
                         </div>
 
-                        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
+                        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-6">
                             
-                            {/* Sliders */}
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex justify-between text-xs mb-2">
-                                        <span className="font-bold text-yellow-400 flex items-center gap-2"><Icon name="utensils" size={14}/> Unhealthy Diet</span>
-                                        <span className="font-mono">{diet}%</span>
-                                    </div>
-                                    <input 
-                                        type="range" min="0" max="100" value={diet} onChange={(e) => setDiet(Number(e.target.value))}
-                                        className="w-full accent-yellow-500"
-                                    />
-                                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                                        <span>Balanced</span>
-                                        <span>High Fat/Sugar</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between text-xs mb-2">
-                                        <span className="font-bold text-emerald-400 flex items-center gap-2"><Icon name="dumbbell" size={14}/> Physical Activity</span>
-                                        <span className="font-mono">{exercise}%</span>
-                                    </div>
-                                    <input 
-                                        type="range" min="0" max="100" value={exercise} onChange={(e) => setExercise(Number(e.target.value))}
-                                        className="w-full accent-emerald-500"
-                                    />
-                                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                                        <span>Sedentary</span>
-                                        <span>Active</span>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between text-xs mb-2">
-                                        <span className="font-bold text-slate-400 flex items-center gap-2"><Icon name="cigarette" size={14}/> Smoking</span>
-                                        <span className="font-mono">{smoking}%</span>
-                                    </div>
-                                    <input 
-                                        type="range" min="0" max="100" value={smoking} onChange={(e) => setSmoking(Number(e.target.value))}
-                                        className="w-full accent-slate-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <div className="flex justify-between text-xs mb-2">
-                                        <span className="font-bold text-purple-400 flex items-center gap-2"><Icon name="wine" size={14}/> Alcohol Intake</span>
-                                        <span className="font-mono">{alcohol}%</span>
-                                    </div>
-                                    <input 
-                                        type="range" min="0" max="100" value={alcohol} onChange={(e) => setAlcohol(Number(e.target.value))}
-                                        className="w-full accent-purple-500"
-                                    />
-                                </div>
+                            {/* Flow Map */}
+                            <div className="space-y-2 relative">
+                                <div className="absolute left-3 top-4 bottom-4 w-0.5 bg-slate-700"></div>
+                                {STAGES.map((s, i) => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => setCurrentStageIdx(i)}
+                                        className={`relative w-full text-left p-3 pl-8 rounded-xl border transition-all flex flex-col gap-1 group
+                                            ${currentStageIdx === i 
+                                                ? 'bg-slate-800 border-blue-500 shadow-lg' 
+                                                : 'bg-transparent border-transparent hover:bg-slate-800/50'}
+                                        `}
+                                    >
+                                        <div className={`absolute left-[6px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 z-10 ${currentStageIdx >= i ? 'bg-blue-500 border-blue-500' : 'bg-slate-900 border-slate-600'}`}></div>
+                                        <span className={`text-xs font-bold uppercase ${currentStageIdx === i ? 'text-blue-400' : 'text-slate-500'}`}>{s.type}</span>
+                                        <span className="text-sm font-bold text-white">{s.title}</span>
+                                    </button>
+                                ))}
                             </div>
 
-                            <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-xs text-slate-300">
-                                <div className="font-bold text-blue-400 uppercase mb-2 flex items-center gap-2"><Icon name="book-open" size={14}/> Learning Target</div>
-                                <p>
-                                    Discuss the causal relationships between the incidence of various non-infectious diseases and certain lifestyles.
-                                </p>
+                            {/* Legend */}
+                            <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 text-xs text-slate-400 space-y-2">
+                                <div className="font-bold text-white mb-1">Particle Key</div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#3f2e18]"></div> Solid Waste</div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#fbbf24]"></div> Organic Matter</div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#22c55e]"></div> Bacteria (Good)</div>
+                                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#ef4444]"></div> Pathogen (Bad)</div>
                             </div>
 
                         </div>
@@ -308,107 +320,64 @@
                     {/* Main Stage */}
                     <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden gap-6">
                         
-                        <div className="flex-1 flex gap-6 min-h-0">
+                        {/* Stage Visualizer */}
+                        <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col items-center justify-center p-8">
                             
-                            {/* Avatar Visualization */}
-                            <div className="flex-1 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col items-center justify-center p-4">
-                                <HumanAvatar diet={diet} exercise={exercise} smoking={smoking} alcohol={alcohol} />
-                                <div className="absolute bottom-4 text-xs text-slate-500 font-mono">Body Response Visualizer</div>
+                            {/* Tank Container */}
+                            <div className="w-full max-w-2xl relative">
+                                <Tank stage={currentStage} isActive={true} />
+                                
+                                {/* Particle Layer (SVG Overlay - FIXED) */}
+                                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 400 200" preserveAspectRatio="none">
+                                    {particles.map(p => (
+                                        <WaterParticle key={p.id} type={p.type} x={p.x} y={p.y} />
+                                    ))}
+                                </svg>
                             </div>
 
-                            {/* Risk Dashboard */}
-                            <div className="flex-1 flex flex-col gap-4">
-                                {/* Radial Chart */}
-                                <div className="flex-1 bg-slate-900 rounded-2xl border border-slate-800 p-4 flex flex-col relative">
-                                    <div className="text-xs font-bold text-slate-500 uppercase mb-2">Disease Risk Meter</div>
-                                    <div className="flex-1 min-h-0">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <RadialBarChart 
-                                                innerRadius="20%" 
-                                                outerRadius="100%" 
-                                                data={risks} 
-                                                startAngle={180} 
-                                                endAngle={0}
-                                            >
-                                                <RadialBar minAngle={15} background clockWise={true} dataKey="risk" cornerRadius={10}/>
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }}
-                                                    itemStyle={{ color: '#fff' }}
-                                                    cursor={false}
-                                                />
-                                                <Legend 
-                                                    iconSize={10} 
-                                                    layout="vertical" 
-                                                    verticalAlign="middle" 
-                                                    align="right"
-                                                    wrapperStyle={{ fontSize: '10px', color: '#94a3b8' }}
-                                                />
-                                            </RadialBarChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                    {/* Clickable Risk Buttons */}
-                                    <div className="grid grid-cols-2 gap-2 mt-2">
-                                        {risks.map(r => (
-                                            <button 
-                                                key={r.id}
-                                                onClick={() => setSelectedDisease(DISEASES[r.id])}
-                                                className={`text-[10px] py-1 px-2 rounded border transition-all flex justify-between items-center
-                                                    ${selectedDisease?.id === r.id ? 'bg-slate-700 border-white text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}
-                                                `}
-                                            >
-                                                <span className="truncate max-w-[80px]">{r.name}</span>
-                                                <span className="font-bold" style={{color: r.fill}}>{r.risk.toFixed(0)}%</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Disease Detail Card */}
+                            {/* Info Card */}
+                            <div className="mt-8 max-w-2xl w-full">
                                 <AnimatePresence mode='wait'>
-                                    {selectedDisease ? (
-                                        <motion.div 
-                                            key={selectedDisease.id}
-                                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
-                                            className="h-64 bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-lg overflow-y-auto custom-scrollbar"
-                                        >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <div className="p-1.5 rounded-lg bg-slate-800" style={{color: selectedDisease.color}}>
-                                                    <Icon name={selectedDisease.icon} size={18}/>
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-sm font-bold text-white">{selectedDisease.name}</h3>
-                                                    <div className="text-[10px] text-slate-500">{selectedDisease.subName}</div>
+                                    <motion.div 
+                                        key={currentStage.id}
+                                        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                                        className="bg-slate-800 p-6 rounded-2xl border border-slate-700"
+                                    >
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <div className="text-xs font-bold text-blue-400 uppercase mb-1">Current Process</div>
+                                                <h2 className="text-2xl font-black text-white">{currentStage.title}</h2>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs font-bold text-slate-500 uppercase mb-1">Removes</div>
+                                                <div className="text-sm font-mono text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30">
+                                                    {currentStage.removal}
                                                 </div>
                                             </div>
-                                            
-                                            <p className="text-xs text-slate-300 mb-3 border-b border-slate-800 pb-2">{selectedDisease.desc}</p>
-                                            
-                                            <div className="grid grid-cols-1 gap-3 text-xs">
-                                                <div>
-                                                    <span className="font-bold text-red-400 block mb-1">Risk Factors (Causes)</span>
-                                                    <ul className="list-disc pl-3 space-y-0.5 text-slate-400">
-                                                        {selectedDisease.factors.map(f => <li key={f}>{f}</li>)}
-                                                    </ul>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <span className="font-bold text-emerald-400 block mb-1">Prevention</span>
-                                                        <p className="text-slate-400">{selectedDisease.prev}</p>
-                                                    </div>
-                                                    <div>
-                                                        <span className="font-bold text-blue-400 block mb-1">Control / Treatment</span>
-                                                        <p className="text-slate-400">{selectedDisease.control}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ) : (
-                                        <div className="h-64 bg-slate-900/50 rounded-2xl border border-slate-800 border-dashed flex flex-col items-center justify-center text-slate-500 text-center p-4">
-                                            <Icon name="mouse-pointer-click" size={24} className="mb-2 opacity-50"/>
-                                            <p className="text-xs">Select a disease above to view causes, prevention and control.</p>
                                         </div>
-                                    )}
+                                        <p className="text-sm text-slate-300 leading-relaxed">
+                                            {currentStage.desc}
+                                        </p>
+                                    </motion.div>
                                 </AnimatePresence>
+                            </div>
+
+                            {/* Navigation Footer */}
+                            <div className="absolute bottom-6 flex gap-4">
+                                <button 
+                                    onClick={() => setCurrentStageIdx(p => Math.max(0, p - 1))}
+                                    disabled={currentStageIdx === 0}
+                                    className="p-3 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-600 disabled:opacity-50 transition-all"
+                                >
+                                    <Icon name="arrow-left" />
+                                </button>
+                                <button 
+                                    onClick={() => setCurrentStageIdx(p => Math.min(STAGES.length - 1, p + 1))}
+                                    disabled={currentStageIdx === STAGES.length - 1}
+                                    className="px-8 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg flex items-center gap-2 disabled:bg-slate-700 disabled:text-slate-500"
+                                >
+                                    Next Stage <Icon name="arrow-right" size={18}/>
+                                </button>
                             </div>
 
                         </div>
