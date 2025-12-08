@@ -11,13 +11,14 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Recharts -->
+    <!-- Recharts Dependencies -->
     <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
     <script src="https://unpkg.com/recharts@2.12.7/umd/recharts.js"></script>
 
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Framer Motion -->
+    <!-- Lucide Icons (Pinned version for stability) -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+    
+    <!-- Framer Motion (Using a specific UMD build usually implies window.Motion might be flaky, so we handle it in code) -->
     <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -46,6 +47,12 @@
             50% { opacity: 0.8; }
             100% { transform: translateY(-50px) scale(1); opacity: 0; }
         }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
 </head>
 <body>
@@ -53,24 +60,56 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
-        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, Legend } = window.Recharts;
-        const { motion, AnimatePresence } = window.Motion;
 
+        // --- SAFELY ACCESS EXTERNAL LIBRARIES ---
+        // 這是修正的關鍵：如果不做檢查，一旦 library 載入失敗，整個 App 就會白畫面
+        
+        // 1. Recharts Safety
+        const Recharts = window.Recharts || {};
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, Legend } = Recharts;
+
+        // 2. Framer Motion Safety (Mocking it if it fails to load from CDN)
+        // 如果 window.Motion 抓不到，我們就用普通的 div 代替，避免 crash
+        const MotionLib = window.Motion || window.FramerMotion;
+        const motion = MotionLib ? MotionLib.motion : new Proxy({}, {
+            get: (target, prop) => (props) => React.createElement(prop, props)
+        });
+        const AnimatePresence = MotionLib ? MotionLib.AnimatePresence : ({children}) => <>{children}</>;
+
+        // --- ICON COMPONENT ---
         const Icon = ({ name, className = "", size = 20 }) => {
             const [svgHtml, setSvgHtml] = useState('');
+            
             useEffect(() => {
-                if (window.lucide && window.lucide.icons) {
+                // Check if lucide is loaded
+                if (window.lucide) {
                     const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
-                    const iconData = window.lucide.icons[pascalName];
-                    if (iconData && typeof window.lucide.createElement === 'function') {
-                        const svgElement = window.lucide.createElement(iconData);
-                        svgElement.setAttribute('class', className);
-                        svgElement.setAttribute('width', size);
-                        svgElement.setAttribute('height', size);
-                        setSvgHtml(svgElement.outerHTML);
+                    // Try to find icon in different possible structures depending on version
+                    const iconData = window.lucide.icons ? window.lucide.icons[pascalName] : (window.lucide[pascalName]);
+                    
+                    if (iconData) {
+                        // Create element manually if createElement exists, otherwise constructing might be needed
+                        // Old lucide versions used createElement, newer might differ. 
+                        // Simplified SVG generation for stability:
+                        const tempDiv = document.createElement('div');
+                        
+                        // If it's the modern lucide approach:
+                        if (typeof window.lucide.createElement === 'function') {
+                             const svg = window.lucide.createElement(iconData);
+                             svg.setAttribute('class', className);
+                             svg.setAttribute('width', size);
+                             svg.setAttribute('height', size);
+                             setSvgHtml(svg.outerHTML);
+                        } 
+                        // Fallback if createElement isn't available but we have icon data
+                        else if (iconData) {
+                             // This is a simple fallback for some versions
+                             setSvgHtml(`<svg width="${size}" height="${size}" class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconData.map? iconData.map(c => `<${c[0]} ${Object.entries(c[1]).map(([k,v]) => `${k}="${v}"`).join(' ')} />`).join('') : ''}</svg>`);
+                        }
                     }
                 }
             }, [name, className, size]);
+
             if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
             return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
         };
@@ -80,9 +119,8 @@
 
         // --- COMPONENTS ---
 
-        // River Cross-section Visualizer (Moved outside App to prevent re-definition issues)
+        // River Cross-section Visualizer
         const RiverVisual = ({ point }) => {
-            // Safety check: if data isn't ready yet, render a placeholder or return null
             if (!point) {
                 return (
                     <div className="relative w-full h-64 rounded-xl bg-[#334155] border-2 border-slate-600 flex items-center justify-center">
@@ -91,50 +129,40 @@
                 );
             }
 
-            // Water Color based on pollution/DO
-            let waterColor = "#0ea5e9"; // Clean
+            let waterColor = "#0ea5e9"; 
             let opacity = 0.6;
             
             if (point.zone.includes('Septic')) {
-                waterColor = "#1e293b"; // Dark
+                waterColor = "#1e293b"; 
                 opacity = 0.9;
             } else if (point.zone.includes('Polluted') || point.zone.includes('Decomposing')) {
-                waterColor = "#059669"; // Algae/Waste Green
+                waterColor = "#059669"; 
                 opacity = 0.8;
             }
 
-            // Bubbles amount (DO level)
             const bubbleCount = Math.floor(point.do / 10);
-
-            // Bacteria amount (BOD level)
             const bacteriaCount = Math.floor(point.bod / 5);
 
             return (
                 <div className="relative w-full h-64 rounded-xl overflow-hidden bg-[#334155] border-2 border-slate-600">
-                    {/* Sky */}
                     <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-sky-200 to-white opacity-20"></div>
                     
-                    {/* Water Body */}
                     <div 
                         className="absolute bottom-0 left-0 right-0 h-2/3 transition-colors duration-1000"
                         style={{ backgroundColor: waterColor, opacity: opacity }}
                     >
-                        {/* Flow Effect Overlay */}
                         <div className="absolute inset-0 water-flow opacity-30"></div>
                     </div>
 
-                    {/* River Bed */}
                     <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#3f2e18]"></div>
 
-                    {/* Organisms */}
                     <div className="absolute inset-0 pointer-events-none">
                         <AnimatePresence mode='wait'>
                             <motion.div 
-                                key={point.zone} // Re-render on zone change
+                                key={point.zone}
                                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                 className="w-full h-full relative"
                             >
-                                {/* Fish (High DO) */}
                                 {point.organisms.includes('trout') && (
                                     <>
                                         <div className="absolute top-[50%] left-[20%] drop-shadow-md text-white"><Icon name="fish" size={32}/></div>
@@ -145,7 +173,6 @@
                                     <div className="absolute top-[55%] left-[40%] drop-shadow-md text-yellow-200"><Icon name="fish-off" size={32}/></div>
                                 )}
                                 
-                                {/* Waste/Bacteria (High BOD) */}
                                 {bacteriaCount > 0 && [...Array(Math.min(20, bacteriaCount))].map((_, i) => (
                                     <div key={i} className="absolute w-1 h-1 bg-yellow-400 rounded-full opacity-70" 
                                          style={{ 
@@ -154,7 +181,6 @@
                                          }}></div>
                                 ))}
 
-                                {/* Tubifex Worms (Low DO) */}
                                 {point.organisms.includes('tubifex') && (
                                     <div className="absolute bottom-2 left-1/3 flex gap-1">
                                         <div className="w-1 h-4 bg-red-500 animate-bounce"></div>
@@ -165,7 +191,6 @@
                             </motion.div>
                         </AnimatePresence>
 
-                        {/* Oxygen Bubbles */}
                         {[...Array(bubbleCount)].map((_, i) => (
                             <div 
                                 key={`b-${i}`}
@@ -179,7 +204,6 @@
                         ))}
                     </div>
                     
-                    {/* Zone Label */}
                     <div className="absolute top-2 right-2 bg-black/60 backdrop-blur px-3 py-1 rounded text-xs text-white font-bold border border-white/20">
                         {point.zone} Zone
                     </div>
@@ -189,54 +213,45 @@
         
         // --- SIMULATION LOGIC ---
         const App = () => {
-            const [pollutionLoad, setPollutionLoad] = useState(0); // 0 (Clean) to 100 (Heavy Sewage)
-            const [flowRate, setFlowRate] = useState(50); // Affects recovery speed
+            const [pollutionLoad, setPollutionLoad] = useState(0); 
+            const [flowRate, setFlowRate] = useState(50); 
             const [data, setData] = useState([]);
-            const [selectedPoint, setSelectedPoint] = useState(0); // Distance along river
+            const [selectedPoint, setSelectedPoint] = useState(0); 
 
-            // Calculate Oxygen Sag Curve based on inputs
             useEffect(() => {
                 const newData = [];
-                let doLevel = 100; // % Saturation
-                let bodLevel = 2; // mg/L (Baseline)
+                let doLevel = 100; 
+                let bodLevel = 2; 
                 
-                // Parameters
-                const deoxygenationRate = 0.1 + (pollutionLoad / 200); // Bacteria eating waste
-                const reaerationRate = 0.05 + (flowRate / 200); // Oxygen from air
-                const initialBOD = 2 + pollutionLoad; // Discharge at x=10
+                const deoxygenationRate = 0.1 + (pollutionLoad / 200); 
+                const reaerationRate = 0.05 + (flowRate / 200); 
+                const initialBOD = 2 + pollutionLoad; 
 
                 for (let x = 0; x <= RIVER_LENGTH; x++) {
-                    // Pollution Discharge Point at x=10
                     if (x === 10) {
                         bodLevel = initialBOD;
                     }
 
                     if (x > 10) {
-                        // BOD Decay (Organic matter consumed)
                         const bodConsumed = bodLevel * deoxygenationRate;
                         bodLevel -= bodConsumed;
                         
-                        // DO Deficit Calculation
                         const deficit = 100 - doLevel;
                         const reaeration = deficit * reaerationRate;
                         
-                        // Scale factor to make visual nice
                         const consumptionEffect = bodConsumed * 2.5; 
                         
                         doLevel = doLevel - consumptionEffect + reaeration;
                     }
 
-                    // Clamp values
                     doLevel = Math.max(0, Math.min(100, doLevel));
                     bodLevel = Math.max(0, bodLevel);
 
-                    // Determine Zone
                     let zone = 'Clean';
                     if (doLevel < 20) zone = 'Septic (Dissolved)';
                     else if (doLevel < 60) zone = 'Polluted';
                     else if (x > 10 && bodLevel > 10) zone = 'Decomposing';
 
-                    // Determine Biodiversity (Simplified)
                     let organisms = [];
                     if (doLevel > 80) organisms = ['trout', 'mayfly'];
                     else if (doLevel > 40) organisms = ['carp', 'leech'];
@@ -254,8 +269,12 @@
                 setData(newData);
             }, [pollutionLoad, flowRate]);
 
-            // Safety check: ensure data exists before accessing
             const currentDataPoint = data.length > 0 ? (data[selectedPoint] || data[0]) : null;
+
+            // Fallback UI if libraries failed completely
+            if (!LineChart || !Line) {
+                 return <div className="p-10 text-white">Error: Recharts library failed to load. Please check your internet connection.</div>;
+            }
 
             return (
                 <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden font-sans">
@@ -383,10 +402,8 @@
                                         />
                                         <Legend wrapperStyle={{fontSize: '10px'}} verticalAlign="top" height={36}/>
                                         
-                                        {/* Pollution Source Line */}
                                         <ReferenceLine x={10} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Sewage Discharge', position: 'insideTopLeft', fill: '#ef4444', fontSize: 10 }} />
                                         
-                                        {/* Interactive Cursor Line */}
                                         <ReferenceLine x={selectedPoint} stroke="white" strokeOpacity={0.5} />
 
                                         <Line yAxisId="left" type="monotone" dataKey="do" name="Dissolved Oxygen (DO)" stroke="#38bdf8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} animationDuration={500} />
