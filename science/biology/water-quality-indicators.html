@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Quality Indicators Simulator</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/recharts.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Water Flow Animation */
+        .water-flow {
+            background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 50%, #0ea5e9 100%);
+            background-size: 200% 100%;
+            animation: flow 5s linear infinite;
+        }
+        @keyframes flow {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+
+        /* Bubble Animation */
+        .bubble {
+            animation: rise 3s ease-in infinite;
+        }
+        @keyframes rise {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-50px) scale(1); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Area, Legend } = window.Recharts;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- CONSTANTS ---
+        const RIVER_LENGTH = 100; // km (simulation steps)
+
+        // --- COMPONENTS ---
+
+        // River Cross-section Visualizer (Moved outside App to prevent re-definition issues)
+        const RiverVisual = ({ point }) => {
+            // Safety check: if data isn't ready yet, render a placeholder or return null
+            if (!point) {
+                return (
+                    <div className="relative w-full h-64 rounded-xl bg-[#334155] border-2 border-slate-600 flex items-center justify-center">
+                        <span className="text-slate-400 text-sm animate-pulse">Loading Ecosystem...</span>
+                    </div>
+                );
+            }
+
+            // Water Color based on pollution/DO
+            let waterColor = "#0ea5e9"; // Clean
+            let opacity = 0.6;
+            
+            if (point.zone.includes('Septic')) {
+                waterColor = "#1e293b"; // Dark
+                opacity = 0.9;
+            } else if (point.zone.includes('Polluted') || point.zone.includes('Decomposing')) {
+                waterColor = "#059669"; // Algae/Waste Green
+                opacity = 0.8;
+            }
+
+            // Bubbles amount (DO level)
+            const bubbleCount = Math.floor(point.do / 10);
+
+            // Bacteria amount (BOD level)
+            const bacteriaCount = Math.floor(point.bod / 5);
+
+            return (
+                <div className="relative w-full h-64 rounded-xl overflow-hidden bg-[#334155] border-2 border-slate-600">
+                    {/* Sky */}
+                    <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-sky-200 to-white opacity-20"></div>
+                    
+                    {/* Water Body */}
+                    <div 
+                        className="absolute bottom-0 left-0 right-0 h-2/3 transition-colors duration-1000"
+                        style={{ backgroundColor: waterColor, opacity: opacity }}
+                    >
+                        {/* Flow Effect Overlay */}
+                        <div className="absolute inset-0 water-flow opacity-30"></div>
+                    </div>
+
+                    {/* River Bed */}
+                    <div className="absolute bottom-0 left-0 right-0 h-4 bg-[#3f2e18]"></div>
+
+                    {/* Organisms */}
+                    <div className="absolute inset-0 pointer-events-none">
+                        <AnimatePresence mode='wait'>
+                            <motion.div 
+                                key={point.zone} // Re-render on zone change
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="w-full h-full relative"
+                            >
+                                {/* Fish (High DO) */}
+                                {point.organisms.includes('trout') && (
+                                    <>
+                                        <div className="absolute top-[50%] left-[20%] drop-shadow-md text-white"><Icon name="fish" size={32}/></div>
+                                        <div className="absolute top-[60%] left-[60%] drop-shadow-md text-white"><Icon name="fish" size={24}/></div>
+                                    </>
+                                )}
+                                {point.organisms.includes('carp') && (
+                                    <div className="absolute top-[55%] left-[40%] drop-shadow-md text-yellow-200"><Icon name="fish-off" size={32}/></div>
+                                )}
+                                
+                                {/* Waste/Bacteria (High BOD) */}
+                                {bacteriaCount > 0 && [...Array(Math.min(20, bacteriaCount))].map((_, i) => (
+                                    <div key={i} className="absolute w-1 h-1 bg-yellow-400 rounded-full opacity-70" 
+                                         style={{ 
+                                             left: `${Math.random()*90}%`, 
+                                             top: `${40 + Math.random()*50}%` 
+                                         }}></div>
+                                ))}
+
+                                {/* Tubifex Worms (Low DO) */}
+                                {point.organisms.includes('tubifex') && (
+                                    <div className="absolute bottom-2 left-1/3 flex gap-1">
+                                        <div className="w-1 h-4 bg-red-500 animate-bounce"></div>
+                                        <div className="w-1 h-3 bg-red-500 animate-bounce" style={{animationDelay:'0.1s'}}></div>
+                                        <div className="w-1 h-5 bg-red-500 animate-bounce" style={{animationDelay:'0.2s'}}></div>
+                                    </div>
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
+
+                        {/* Oxygen Bubbles */}
+                        {[...Array(bubbleCount)].map((_, i) => (
+                            <div 
+                                key={`b-${i}`}
+                                className="absolute w-2 h-2 border border-white/50 rounded-full bubble"
+                                style={{ 
+                                    left: `${Math.random()*100}%`, 
+                                    top: `${40 + Math.random()*60}%`,
+                                    animationDelay: `${Math.random()*2}s`
+                                }}
+                            ></div>
+                        ))}
+                    </div>
+                    
+                    {/* Zone Label */}
+                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur px-3 py-1 rounded text-xs text-white font-bold border border-white/20">
+                        {point.zone} Zone
+                    </div>
+                </div>
+            );
+        };
+        
+        // --- SIMULATION LOGIC ---
+        const App = () => {
+            const [pollutionLoad, setPollutionLoad] = useState(0); // 0 (Clean) to 100 (Heavy Sewage)
+            const [flowRate, setFlowRate] = useState(50); // Affects recovery speed
+            const [data, setData] = useState([]);
+            const [selectedPoint, setSelectedPoint] = useState(0); // Distance along river
+
+            // Calculate Oxygen Sag Curve based on inputs
+            useEffect(() => {
+                const newData = [];
+                let doLevel = 100; // % Saturation
+                let bodLevel = 2; // mg/L (Baseline)
+                
+                // Parameters
+                const deoxygenationRate = 0.1 + (pollutionLoad / 200); // Bacteria eating waste
+                const reaerationRate = 0.05 + (flowRate / 200); // Oxygen from air
+                const initialBOD = 2 + pollutionLoad; // Discharge at x=10
+
+                for (let x = 0; x <= RIVER_LENGTH; x++) {
+                    // Pollution Discharge Point at x=10
+                    if (x === 10) {
+                        bodLevel = initialBOD;
+                    }
+
+                    if (x > 10) {
+                        // BOD Decay (Organic matter consumed)
+                        const bodConsumed = bodLevel * deoxygenationRate;
+                        bodLevel -= bodConsumed;
+                        
+                        // DO Deficit Calculation
+                        const deficit = 100 - doLevel;
+                        const reaeration = deficit * reaerationRate;
+                        
+                        // Scale factor to make visual nice
+                        const consumptionEffect = bodConsumed * 2.5; 
+                        
+                        doLevel = doLevel - consumptionEffect + reaeration;
+                    }
+
+                    // Clamp values
+                    doLevel = Math.max(0, Math.min(100, doLevel));
+                    bodLevel = Math.max(0, bodLevel);
+
+                    // Determine Zone
+                    let zone = 'Clean';
+                    if (doLevel < 20) zone = 'Septic (Dissolved)';
+                    else if (doLevel < 60) zone = 'Polluted';
+                    else if (x > 10 && bodLevel > 10) zone = 'Decomposing';
+
+                    // Determine Biodiversity (Simplified)
+                    let organisms = [];
+                    if (doLevel > 80) organisms = ['trout', 'mayfly'];
+                    else if (doLevel > 40) organisms = ['carp', 'leech'];
+                    else if (doLevel > 10) organisms = ['fungi', 'bacteria', 'tubifex'];
+                    else organisms = ['anaerobic_bacteria'];
+
+                    newData.push({
+                        distance: x,
+                        do: doLevel,
+                        bod: bodLevel,
+                        zone,
+                        organisms
+                    });
+                }
+                setData(newData);
+            }, [pollutionLoad, flowRate]);
+
+            // Safety check: ensure data exists before accessing
+            const currentDataPoint = data.length > 0 ? (data[selectedPoint] || data[0]) : null;
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden font-sans">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="droplets" className="text-blue-400" /> Water Quality
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">DO vs BOD Simulator</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Controls */}
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-bold text-yellow-400 flex items-center gap-2"><Icon name="trash-2" size={14}/> Sewage Discharge</span>
+                                        <span className="font-mono">{pollutionLoad > 0 ? 'Active' : 'None'}</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0" max="100" value={pollutionLoad} onChange={(e) => setPollutionLoad(Number(e.target.value))}
+                                        className="w-full accent-yellow-500"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                        <span>Clean</span>
+                                        <span>Heavy Pollution</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-bold text-emerald-400 flex items-center gap-2"><Icon name="waves" size={14}/> River Flow / Aeration</span>
+                                        <span className="font-mono">{flowRate}%</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="10" max="100" value={flowRate} onChange={(e) => setFlowRate(Number(e.target.value))}
+                                        className="w-full accent-emerald-500"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                        <span>Stagnant</span>
+                                        <span>Turbulent</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Concept Box */}
+                            <div className="bg-blue-900/20 p-4 rounded-xl border border-blue-500/30 text-xs text-slate-300 space-y-2">
+                                <div className="font-bold text-blue-400 uppercase mb-1 flex items-center gap-2"><Icon name="book-open" size={14}/> Key Concepts</div>
+                                <p>
+                                    <strong>BOD (生化需氧量):</strong> Amount of oxygen needed by bacteria to break down organic matter. High BOD = High Pollution.
+                                </p>
+                                <p>
+                                    <strong>DO (溶解氧):</strong> Oxygen available for aquatic life. High BOD causes Low DO (bacteria use it up).
+                                </p>
+                            </div>
+                            
+                            {/* Current Point Stats */}
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
+                                <div className="text-xs font-bold text-slate-500 uppercase">Sample at {selectedPoint} km</div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-blue-300">Dissolved Oxygen</span>
+                                    <span className="font-mono font-bold text-white">
+                                        {currentDataPoint ? currentDataPoint.do.toFixed(1) : '0.0'}%
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-yellow-300">BOD</span>
+                                    <span className="font-mono font-bold text-white">
+                                        {currentDataPoint ? currentDataPoint.bod.toFixed(1) : '0.0'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+                                    <span className="text-xs text-slate-400">Indicator Species:</span>
+                                    <div className="flex gap-1">
+                                        {currentDataPoint?.organisms?.map(o => (
+                                            <span key={o} className="text-[10px] bg-slate-900 px-1 rounded border border-slate-600 text-slate-300 capitalize">{o}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden gap-6">
+                        
+                        {/* River Visual */}
+                        <div className="flex-1 flex flex-col gap-2">
+                            <div className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+                                <span>Cross-section View</span>
+                                <span>Distance from Source: {selectedPoint} km</span>
+                            </div>
+                            <RiverVisual point={currentDataPoint} />
+                        </div>
+
+                        {/* Graph */}
+                        <div className="flex-[1.5] bg-slate-900 rounded-2xl border border-slate-800 p-4 flex flex-col relative">
+                            <div className="text-xs font-bold text-slate-500 uppercase mb-2">Oxygen Sag Curve (氧垂曲線)</div>
+                            <div className="flex-1 min-h-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={data} 
+                                        onClick={(e) => e && e.activeLabel && setSelectedPoint(e.activeLabel)}
+                                        onMouseMove={(e) => e && e.activeLabel && setSelectedPoint(e.activeLabel)}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                        <XAxis 
+                                            dataKey="distance" 
+                                            stroke="#64748b" 
+                                            fontSize={10} 
+                                            label={{ value: 'Distance Downstream (km)', position: 'insideBottom', offset: -5, fill: '#64748b', fontSize: 10 }}
+                                            type="number"
+                                            domain={[0, 100]}
+                                        />
+                                        <YAxis yAxisId="left" stroke="#64748b" fontSize={10} domain={[0, 100]} label={{ value: 'DO (%)', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 10 }}/>
+                                        <YAxis yAxisId="right" orientation="right" stroke="#64748b" fontSize={10} domain={[0, 'auto']} label={{ value: 'BOD', angle: 90, position: 'insideRight', fill: '#facc15', fontSize: 10 }}/>
+                                        
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }}
+                                            itemStyle={{ padding: 0 }}
+                                            labelFormatter={(label) => `${label} km`}
+                                        />
+                                        <Legend wrapperStyle={{fontSize: '10px'}} verticalAlign="top" height={36}/>
+                                        
+                                        {/* Pollution Source Line */}
+                                        <ReferenceLine x={10} stroke="#ef4444" strokeDasharray="3 3" label={{ value: 'Sewage Discharge', position: 'insideTopLeft', fill: '#ef4444', fontSize: 10 }} />
+                                        
+                                        {/* Interactive Cursor Line */}
+                                        <ReferenceLine x={selectedPoint} stroke="white" strokeOpacity={0.5} />
+
+                                        <Line yAxisId="left" type="monotone" dataKey="do" name="Dissolved Oxygen (DO)" stroke="#38bdf8" strokeWidth={3} dot={false} activeDot={{ r: 6 }} animationDuration={500} />
+                                        <Line yAxisId="right" type="monotone" dataKey="bod" name="Biochemical Oxygen Demand (BOD)" stroke="#facc15" strokeWidth={3} dot={false} animationDuration={500} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="text-center text-[10px] text-slate-500 mt-1">
+                                Click or hover over the chart to inspect river condition at that point.
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
