@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecological Succession Animator</title>
+    
+    <!-- React & Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/recharts.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #e2e8f0; margin: 0; overflow: hidden; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Custom Slider */
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; 
+            background: #22c55e; cursor: pointer; margin-top: -8px; 
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5); border: 2px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #334155; border-radius: 2px;
+        }
+
+        /* Plant Grow Animation */
+        .grow-up { animation: grow 1s ease-out forwards; transform-origin: bottom; }
+        @keyframes grow {
+            from { transform: scaleY(0); opacity: 0; }
+            to { transform: scaleY(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className = "", size = 20 }) => {
+            const [svgHtml, setSvgHtml] = useState('');
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons) {
+                    const pascalName = name.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('');
+                    const iconData = window.lucide.icons[pascalName];
+                    if (iconData && typeof window.lucide.createElement === 'function') {
+                        const svgElement = window.lucide.createElement(iconData);
+                        svgElement.setAttribute('class', className);
+                        svgElement.setAttribute('width', size);
+                        svgElement.setAttribute('height', size);
+                        setSvgHtml(svgElement.outerHTML);
+                    }
+                }
+            }, [name, className, size]);
+            if (!svgHtml) return <span className={className} style={{ width: size, height: size, display: 'inline-block' }}></span>;
+            return <span dangerouslySetInnerHTML={{ __html: svgHtml }} className="flex items-center justify-center" />;
+        };
+
+        // --- DATA ---
+        const STAGES = [
+            { id: 0, name: 'Bare Rock', desc: 'No soil, exposed rock. Harsh conditions.', soilDepth: 0, biodiversity: 0, biomass: 0 },
+            { id: 1, name: 'Pioneer (Lichen/Moss)', desc: 'Lichens break down rock. Soil begins to form.', soilDepth: 2, biodiversity: 10, biomass: 5 },
+            { id: 2, name: 'Grasses/Herbs', desc: 'Soil thickens. Grasses replace pioneers. Insects arrive.', soilDepth: 10, biodiversity: 30, biomass: 20 },
+            { id: 3, name: 'Shrubs', desc: 'Deeper soil allows woody plants. More animals.', soilDepth: 25, biodiversity: 60, biomass: 50 },
+            { id: 4, name: 'Young Forest', desc: 'Fast-growing trees (e.g., Pine) dominate.', soilDepth: 50, biodiversity: 80, biomass: 80 },
+            { id: 5, name: 'Climax Forest', desc: 'Stable community. Slow-growing hardwoods dominate.', soilDepth: 80, biodiversity: 100, biomass: 100 }
+        ];
+
+        // --- VISUAL COMPONENTS ---
+
+        // Plant Icons (SVG Paths)
+        const Rock = () => <path d="M0 0 H100 V20 H0 Z" fill="#64748b" />;
+        
+        const Lichen = ({ x, y }) => (
+            <g transform={`translate(${x}, ${y})`} className="grow-up">
+                <circle cx="0" cy="0" r="3" fill="#bef264" opacity="0.8" />
+                <circle cx="4" cy="2" r="2" fill="#a3e635" opacity="0.8" />
+                <circle cx="-3" cy="3" r="2.5" fill="#d9f99d" opacity="0.8" />
+            </g>
+        );
+
+        const Grass = ({ x, y, h }) => (
+            <path d={`M ${x} ${y} q 2 -${h/2} 5 -${h} q -5 ${h/2} 5 ${h}`} stroke="#4ade80" strokeWidth="2" fill="none" className="grow-up" />
+        );
+
+        const Shrub = ({ x, y }) => (
+            <g transform={`translate(${x}, ${y})`} className="grow-up">
+                <path d="M 0 0 L 0 -10 M 0 -10 L -5 -15 M 0 -10 L 5 -15" stroke="#854d0e" strokeWidth="2" />
+                <circle cx="0" cy="-15" r="8" fill="#16a34a" />
+            </g>
+        );
+
+        const PineTree = ({ x, y, h }) => (
+            <g transform={`translate(${x}, ${y})`} className="grow-up">
+                <rect x="-2" y={-h} width="4" height={h} fill="#78350f" />
+                <path d={`M -15 ${-h*0.3} L 0 ${-h} L 15 ${-h*0.3} Z`} fill="#15803d" />
+                <path d={`M -15 ${-h*0.6} L 0 ${-h*1.2} L 15 ${-h*0.6} Z`} fill="#15803d" />
+            </g>
+        );
+
+        const OakTree = ({ x, y, h }) => (
+            <g transform={`translate(${x}, ${y})`} className="grow-up">
+                <rect x="-4" y={-h} width="8" height={h} fill="#451a03" />
+                <circle cx="0" cy={-h} r={20} fill="#166534" />
+                <circle cx="-10" cy={-h+5} r={15} fill="#15803d" />
+                <circle cx="10" cy={-h+5} r={15} fill="#14532d" />
+            </g>
+        );
+
+        const Landscape = ({ stage, type }) => {
+            // Determine elements based on stage and type
+            // Primary: starts from 0 soil. Secondary: starts from stage 2 equivalent soil?
+            // Simplified: Just visual mapping of STAGES index
+            
+            const currentStage = STAGES[stage];
+            const soilH = currentStage.soilDepth; // visual height
+
+            // Generate Plants
+            const plants = [];
+            
+            // Random seed for consistency
+            const seed = 12345;
+            const pseudoRandom = (i) => Math.sin(seed + i) * 10000 - Math.floor(Math.sin(seed + i) * 10000);
+
+            // Populate
+            for (let i = 0; i < 20; i++) {
+                const x = 50 + i * 40 + pseudoRandom(i) * 20;
+                const groundY = 300 - soilH; 
+                
+                if (stage >= 1) { // Lichen
+                    if (Math.random() > 0.5) plants.push(<Lichen key={`l-${i}`} x={x} y={300} />);
+                }
+                if (stage >= 2) { // Grass
+                    plants.push(<Grass key={`g-${i}`} x={x} y={groundY} h={10 + Math.random()*10} />);
+                }
+                if (stage >= 3 && i % 3 === 0) { // Shrubs
+                    plants.push(<Shrub key={`s-${i}`} x={x} y={groundY} />);
+                }
+                if (stage >= 4 && i % 5 === 0) { // Pines
+                    plants.push(<PineTree key={`p-${i}`} x={x} y={groundY} h={60 + Math.random()*20} />);
+                }
+                if (stage >= 5 && i % 6 === 0) { // Oaks (replace some pines)
+                    plants.push(<OakTree key={`o-${i}`} x={x} y={groundY} h={80 + Math.random()*20} />);
+                }
+            }
+
+            return (
+                <div className="relative w-full h-full overflow-hidden bg-sky-200 rounded-xl border-2 border-slate-700">
+                    {/* Sky */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-sky-400 to-sky-100"></div>
+                    
+                    {/* Sun */}
+                    <motion.div 
+                        className="absolute top-10 right-10 w-16 h-16 bg-yellow-400 rounded-full shadow-[0_0_40px_rgba(250,204,21,0.6)]"
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    />
+
+                    {/* SVG Scene */}
+                    <svg viewBox="0 0 800 400" className="absolute inset-0 w-full h-full">
+                        
+                        {/* Bedrock */}
+                        <rect x="0" y="300" width="800" height="100" fill="#64748b" />
+                        
+                        {/* Soil Layer (Grows) */}
+                        <motion.rect 
+                            x="0" y={300 - soilH} width="800" height={soilH} 
+                            fill="#573c18"
+                            initial={{ height: 0, y: 300 }}
+                            animate={{ height: soilH, y: 300 - soilH }}
+                            transition={{ duration: 1 }}
+                        />
+
+                        {/* Plants */}
+                        <AnimatePresence>
+                            {plants}
+                        </AnimatePresence>
+
+                    </svg>
+
+                    {/* Labels overlay */}
+                    <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-white text-xs font-bold border border-white/20">
+                        {type === 'primary' ? 'Primary Succession' : 'Secondary Succession'} - {currentStage.name}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [type, setType] = useState('primary'); // primary, secondary
+            const [time, setTime] = useState(0); // 0 to 100%
+            const [isPlaying, setIsPlaying] = useState(false);
+            
+            // Map time (0-100) to Stage Index (0-5)
+            // Primary: starts at 0. Secondary: starts at 2 (has soil)
+            const getStage = (t, simType) => {
+                if (simType === 'secondary') {
+                    // Secondary starts with soil, maybe stage 2 equivalent
+                    // Map 0-100 to 2-5
+                    const mapped = 2 + (t / 100) * 3;
+                    return Math.min(5, Math.floor(mapped));
+                }
+                // Primary: 0-5
+                return Math.min(5, Math.floor((t / 100) * 6));
+            };
+
+            const currentStageIdx = getStage(time, type);
+            const currentStageData = STAGES[currentStageIdx];
+
+            // Simulation Loop
+            useEffect(() => {
+                let interval;
+                if (isPlaying) {
+                    interval = setInterval(() => {
+                        setTime(prev => {
+                            if (prev >= 100) {
+                                setIsPlaying(false);
+                                return 100;
+                            }
+                            return prev + 0.5; // Speed
+                        });
+                    }, 50);
+                }
+                return () => clearInterval(interval);
+            }, [isPlaying]);
+
+            // Chart Data Construction
+            // Interpolate values based on time
+            const chartData = useMemo(() => {
+                const data = [];
+                for(let t=0; t<=100; t+=10) {
+                    const sIdx = getStage(t, type);
+                    const s = STAGES[sIdx];
+                    data.push({
+                        time: t,
+                        soil: s.soilDepth,
+                        bio: s.biodiversity,
+                        mass: s.biomass
+                    });
+                }
+                return data;
+            }, [type]);
+
+            return (
+                <div className="min-h-screen bg-[#0F172A] text-white flex flex-col md:flex-row overflow-hidden font-sans">
+                    
+                    {/* Sidebar */}
+                    <div className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shadow-xl h-screen shrink-0">
+                        <div className="p-6 border-b border-slate-800">
+                            <h1 className="text-xl font-bold flex items-center gap-2">
+                                <Icon name="sprout" className="text-green-500" /> Succession Sim
+                            </h1>
+                            <p className="text-xs text-slate-400 mt-1">Ecological Development</p>
+                        </div>
+
+                        <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                            
+                            {/* Type Switch */}
+                            <div className="flex bg-slate-800 p-1 rounded-xl">
+                                <button 
+                                    onClick={() => { setType('primary'); setTime(0); }}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${type === 'primary' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Primary (初級)
+                                </button>
+                                <button 
+                                    onClick={() => { setType('secondary'); setTime(0); }}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${type === 'secondary' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Secondary (次級)
+                                </button>
+                            </div>
+
+                            {/* Timeline Control */}
+                            <div className="space-y-4">
+                                <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
+                                    <span>Time Progress</span>
+                                    <span>{time.toFixed(0)} Years (Scale)</span>
+                                </div>
+                                <input 
+                                    type="range" min="0" max="100" step="0.1"
+                                    value={time} 
+                                    onChange={(e) => setTime(parseFloat(e.target.value))}
+                                    className="w-full accent-green-500"
+                                />
+                            </div>
+
+                            {/* Info Card */}
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg min-h-[150px]">
+                                <div className="text-xs font-bold text-emerald-400 uppercase mb-2">Current Sere</div>
+                                <h2 className="text-xl font-black text-white mb-2">{currentStageData.name}</h2>
+                                <p className="text-sm text-slate-300 leading-relaxed">
+                                    {currentStageData.desc}
+                                </p>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+                                    <div className="text-[10px] text-slate-500 uppercase">Soil</div>
+                                    <div className="text-lg font-bold text-amber-600">{currentStageData.soilDepth}cm</div>
+                                </div>
+                                <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+                                    <div className="text-[10px] text-slate-500 uppercase">Diversity</div>
+                                    <div className="text-lg font-bold text-blue-400">{currentStageData.biodiversity}</div>
+                                </div>
+                                <div className="bg-slate-800 p-2 rounded-lg border border-slate-700 text-center">
+                                    <div className="text-[10px] text-slate-500 uppercase">Biomass</div>
+                                    <div className="text-lg font-bold text-green-400">{currentStageData.biomass}</div>
+                                </div>
+                            </div>
+
+                            {/* Controls */}
+                            <button 
+                                onClick={() => setIsPlaying(!isPlaying)}
+                                className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg
+                                    ${isPlaying ? 'bg-slate-700 text-slate-300' : 'bg-emerald-600 text-white hover:bg-emerald-500'}
+                                `}
+                            >
+                                <Icon name={isPlaying ? "pause" : "play"} size={18} fill="currentColor"/>
+                                {isPlaying ? 'Pause' : 'Start Evolution'}
+                            </button>
+
+                        </div>
+                    </div>
+
+                    {/* Main Stage */}
+                    <div className="flex-1 bg-[#020617] relative flex flex-col p-6 overflow-hidden gap-6">
+                        
+                        {/* Visualizer */}
+                        <div className="flex-[2] bg-slate-900 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden flex flex-col p-4">
+                            <Landscape stage={currentStageIdx} type={type} />
+                        </div>
+
+                        {/* Graph */}
+                        <div className="flex-1 bg-slate-900 rounded-2xl border border-slate-800 p-4 flex flex-col relative">
+                             <div className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">
+                                <Icon name="line-chart" size={14}/> Ecosystem Trends
+                            </div>
+                            <div className="flex-1 min-h-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                        <XAxis dataKey="time" hide />
+                                        <YAxis hide />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', fontSize: '12px' }}
+                                            itemStyle={{ padding: 0 }}
+                                        />
+                                        <Area type="monotone" dataKey="soil" name="Soil Depth" stroke="#d97706" fill="#d97706" fillOpacity={0.1} strokeWidth={2} />
+                                        <Area type="monotone" dataKey="bio" name="Biodiversity" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.1} strokeWidth={2} />
+                                        <Area type="monotone" dataKey="mass" name="Biomass" stroke="#22c55e" fill="#22c55e" fillOpacity={0.1} strokeWidth={2} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
