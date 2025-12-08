@@ -38,6 +38,7 @@
         }
 
         /* Plant Grow Animation */
+        /* Note: transform-origin: bottom refers to the bounding box bottom, which works well for plants drawn upwards from y=0 */
         .grow-up { animation: grow 1s ease-out forwards; transform-origin: bottom; }
         @keyframes grow {
             from { transform: scaleY(0); opacity: 0; }
@@ -87,39 +88,50 @@
         // Plant Icons (SVG Paths)
         const Rock = () => <path d="M0 0 H100 V20 H0 Z" fill="#64748b" />;
         
+        // Fixed Components: Separated positioning (transform) from animation (className)
         const Lichen = ({ x, y }) => (
-            <g transform={`translate(${x}, ${y})`} className="grow-up">
-                <circle cx="0" cy="0" r="3" fill="#bef264" opacity="0.8" />
-                <circle cx="4" cy="2" r="2" fill="#a3e635" opacity="0.8" />
-                <circle cx="-3" cy="3" r="2.5" fill="#d9f99d" opacity="0.8" />
+            <g transform={`translate(${x}, ${y})`}>
+                <g className="grow-up">
+                    <circle cx="0" cy="0" r="3" fill="#bef264" opacity="0.8" />
+                    <circle cx="4" cy="2" r="2" fill="#a3e635" opacity="0.8" />
+                    <circle cx="-3" cy="3" r="2.5" fill="#d9f99d" opacity="0.8" />
+                </g>
             </g>
         );
 
         const Grass = ({ x, y, h }) => (
-            <path d={`M ${x} ${y} q 2 -${h/2} 5 -${h} q -5 ${h/2} 5 ${h}`} stroke="#4ade80" strokeWidth="2" fill="none" className="grow-up" />
+            <g transform={`translate(${x}, ${y})`}>
+                <path d={`M 0 0 q 2 -${h/2} 5 -${h} q -5 ${h/2} 5 ${h}`} stroke="#4ade80" strokeWidth="2" fill="none" className="grow-up" />
+            </g>
         );
 
         const Shrub = ({ x, y }) => (
-            <g transform={`translate(${x}, ${y})`} className="grow-up">
-                <path d="M 0 0 L 0 -10 M 0 -10 L -5 -15 M 0 -10 L 5 -15" stroke="#854d0e" strokeWidth="2" />
-                <circle cx="0" cy="-15" r="8" fill="#16a34a" />
+            <g transform={`translate(${x}, ${y})`}>
+                <g className="grow-up">
+                    <path d="M 0 0 L 0 -10 M 0 -10 L -5 -15 M 0 -10 L 5 -15" stroke="#854d0e" strokeWidth="2" />
+                    <circle cx="0" cy="-15" r="8" fill="#16a34a" />
+                </g>
             </g>
         );
 
         const PineTree = ({ x, y, h }) => (
-            <g transform={`translate(${x}, ${y})`} className="grow-up">
-                <rect x="-2" y={-h} width="4" height={h} fill="#78350f" />
-                <path d={`M -15 ${-h*0.3} L 0 ${-h} L 15 ${-h*0.3} Z`} fill="#15803d" />
-                <path d={`M -15 ${-h*0.6} L 0 ${-h*1.2} L 15 ${-h*0.6} Z`} fill="#15803d" />
+            <g transform={`translate(${x}, ${y})`}>
+                <g className="grow-up">
+                    <rect x="-2" y={-h} width="4" height={h} fill="#78350f" />
+                    <path d={`M -15 ${-h*0.3} L 0 ${-h} L 15 ${-h*0.3} Z`} fill="#15803d" />
+                    <path d={`M -15 ${-h*0.6} L 0 ${-h*1.2} L 15 ${-h*0.6} Z`} fill="#15803d" />
+                </g>
             </g>
         );
 
         const OakTree = ({ x, y, h }) => (
-            <g transform={`translate(${x}, ${y})`} className="grow-up">
-                <rect x="-4" y={-h} width="8" height={h} fill="#451a03" />
-                <circle cx="0" cy={-h} r={20} fill="#166534" />
-                <circle cx="-10" cy={-h+5} r={15} fill="#15803d" />
-                <circle cx="10" cy={-h+5} r={15} fill="#14532d" />
+            <g transform={`translate(${x}, ${y})`}>
+                <g className="grow-up">
+                    <rect x="-4" y={-h} width="8" height={h} fill="#451a03" />
+                    <circle cx="0" cy={-h} r={20} fill="#166534" />
+                    <circle cx="-10" cy={-h+5} r={15} fill="#15803d" />
+                    <circle cx="10" cy={-h+5} r={15} fill="#14532d" />
+                </g>
             </g>
         );
 
