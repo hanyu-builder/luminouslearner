@@ -3,181 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luminous Learner | 2026 DSE 全科目個人化倒數器</title>
+    <title>Luminous Learner | 2026 DSE 實時個人倒數器</title>
     <style>
         :root {
-            --primary-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-            --secondary-bg: #f8fafc;
-            --accent-red: #ef4444;
-            --text-dark: #0f172a;
+            --primary-gradient: linear-gradient(135deg, #1e40af 0%, #7e22ce 100%);
+            --bg-color: #f1f5f9;
+            --accent-red: #dc2626;
         }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--secondary-bg); color: var(--text-dark); margin: 0; padding: 15px; }
-        .container { max-width: 900px; margin: 0 auto; }
-        
-        /* 激勵型大卡片 */
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg-color); margin: 0; padding: 15px; }
+        .container { max-width: 850px; margin: 0 auto; }
+
+        /* 主倒數卡片：以 4月8日 08:30 為準 */
         .hero-card {
             background: var(--primary-gradient);
-            color: white;
-            padding: 30px 15px;
-            border-radius: 20px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.2);
-            margin-bottom: 25px;
+            color: white; padding: 30px 15px; border-radius: 20px; text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); margin-bottom: 25px;
         }
-        .timer-grid { display: flex; justify-content: center; gap: 10px; margin-top: 15px; }
-        .unit-box { background: rgba(255,255,255,0.15); padding: 12px; border-radius: 12px; min-width: 65px; backdrop-filter: blur(4px); }
-        .unit-num { display: block; font-size: 2.2rem; font-weight: 800; }
-        .unit-label { font-size: 0.75rem; opacity: 0.9; }
+        .timer-display { display: flex; justify-content: center; gap: 8px; margin-top: 15px; }
+        .unit-box { background: rgba(255,255,255,0.15); padding: 10px; border-radius: 12px; min-width: 60px; backdrop-filter: blur(5px); }
+        .unit-num { display: block; font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .unit-label { font-size: 0.7rem; opacity: 0.8; }
 
-        /* 科目選擇區域 */
-        .selection-panel { background: white; padding: 20px; border-radius: 16px; margin-bottom: 25px; border: 1px solid #e2e8f0; }
-        .category-title { font-size: 1rem; color: #64748b; margin: 15px 0 8px; border-left: 4px solid #3b82f6; padding-left: 10px; }
-        .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
-        .subject-chip { 
-            padding: 6px 14px; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 0.85rem; 
-            cursor: pointer; transition: 0.2s; background: white;
-        }
-        .subject-chip.active { background: #2563eb; color: white; border-color: #2563eb; font-weight: 600; }
+        /* 科目選擇器 */
+        .selector-panel { background: white; padding: 20px; border-radius: 16px; margin-bottom: 25px; }
+        .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .chip { padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
+        .chip.active { background: #3b82f6; color: white; border-color: #3b82f6; }
 
-        /* 個人化列表 */
-        .my-schedule { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
-        .subject-card { 
-            background: white; padding: 16px; border-radius: 12px; border-left: 5px solid #cbd5e1;
-            display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        /* Action: 2 Items Per Row 佈局 */
+        .schedule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        @media (max-width: 600px) { .schedule-grid { grid-template-columns: 1fr; } }
+
+        .subject-card {
+            background: white; padding: 15px; border-radius: 15px;
+            border-left: 6px solid #e2e8f0; display: flex; flex-direction: column;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: transform 0.2s;
         }
-        .subject-card.is-core { border-left-color: #f59e0b; }
         .subject-card.is-active { border-left-color: #10b981; }
-        .days-count { text-align: right; }
-        .days-val { font-size: 1.3rem; font-weight: 800; color: var(--accent-red); }
+        .subject-name { font-weight: 700; color: #334155; margin-bottom: 5px; }
+        .subject-date { font-size: 0.75rem; color: #94a3b8; margin-bottom: 10px; }
+        
+        /* 跳動的實時時間 */
+        .live-timer { font-family: 'Courier New', Courier, monospace; color: var(--accent-red); font-weight: bold; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="hero-card">
-        <div id="main-target-label" style="font-weight: 600; opacity: 0.9;">距離 2026 DSE 首科筆試 (VA) 還有</div>
-        <div class="timer-grid">
-            <div class="unit-box"><span class="unit-num" id="main-d">--</span><span class="unit-label">天</span></div>
-            <div class="unit-box"><span class="unit-num" id="main-h">--</span><span class="unit-label">時</span></div>
-            <div class="unit-box"><span class="unit-num" id="main-m">--</span><span class="unit-label">分</span></div>
-            <div class="unit-box"><span class="unit-num" id="main-s">--</span><span class="unit-label">秒</span></div>
+        <div style="font-size: 1.1rem; font-weight: 600;">距離 2026 DSE 首科 (VA) 開考還有</div>
+        <div class="timer-display" id="hero-timer">
+            <div class="unit-box"><span class="unit-num" id="h-d">--</span><span class="unit-label">天</span></div>
+            <div class="unit-box"><span class="unit-num" id="h-h">--</span><span class="unit-label">時</span></div>
+            <div class="unit-box"><span class="unit-num" id="h-m">--</span><span class="unit-label">分</span></div>
+            <div class="unit-box"><span class="unit-num" id="h-s">--</span><span class="unit-label">秒</span></div>
         </div>
+        <div style="margin-top:10px; font-size: 0.8rem; opacity: 0.8;">目標：2026年4月8日 08:30</div>
     </div>
 
-    <div class="selection-panel">
-        <h3 style="margin-top:0;">🛠️ 設定你的考試組合</h3>
-        <p style="font-size: 0.85rem; color: #64748b;">勾選你應考的選修科，系統會自動儲存並排序。</p>
-        
-        <div class="category-title">語言及主科 (預設)</div>
-        <div class="chip-group" id="core-chips"></div>
-
-        <div class="category-title">選修科目 (請選擇)</div>
-        <div class="chip-group" id="elective-chips"></div>
+    <div class="selector-panel">
+        <h3 style="margin-top:0;">🛠️ 設定你的選修科</h3>
+        <div class="chip-group" id="elective-selector"></div>
     </div>
 
-    <h3 id="list-header">📅 我的專屬考試時間表</h3>
-    <div class="my-schedule" id="schedule-list"></div>
+    <h3 style="margin-left: 5px;">📅 我的應考時間表 (實時更新)</h3>
+    <div class="schedule-grid" id="my-list"></div>
 </div>
 
 <script>
-    // 完整導入 2026_dse_timetable.pdf 數據 
-    const fullTimetable = [
-        // 實習及口試 [cite: 13]
-        { id: 'pe_p', name: '體育 (實習)', date: '2026-02-25', cat: 'other' },
-        { id: 'mu_p', name: '音樂 (實習)', date: '2026-03-01', cat: 'other' },
-        { id: 'eng_s', name: '英文口試', date: '2026-03-10', cat: 'other' },
-        // 筆試系列 
-        { id: 'va', name: '視覺藝術', date: '2026-04-08', cat: 'elective' },
-        { id: 'chi', name: '中國語文', date: '2026-04-09', cat: 'core' },
-        { id: 'eng', name: '英國語文', date: '2026-04-10', cat: 'core' },
-        { id: 'math', name: '數學必修', date: '2026-04-13', cat: 'core' },
-        { id: 'cs', name: '公民與社會', date: '2026-04-14', cat: 'core' },
-        { id: 'ers', name: '倫理與宗教', date: '2026-04-15', cat: 'elective' },
-        { id: 'chem', name: '化學', date: '2026-04-16', cat: 'elective' },
-        { id: 'dat', name: '設計與應用科技', date: '2026-04-17', cat: 'elective' },
-        { id: 'lit_eng', name: '英語文學', date: '2026-04-17', cat: 'elective' },
-        { id: 'hmsc', name: '健康管理與社會關懷', date: '2026-04-18', cat: 'elective' },
-        { id: 'bio', name: '生物', date: '2026-04-20', cat: 'elective' },
-        { id: 'lit_chi', name: '中國文學', date: '2026-04-21', cat: 'elective' },
-        { id: 'tl', name: '科技與生活', date: '2026-04-21', cat: 'elective' },
-        { id: 'phy', name: '物理', date: '2026-04-22', cat: 'elective' },
-        { id: 'geog', name: '地理', date: '2026-04-23', cat: 'elective' },
-        { id: 'ict', name: '資訊及通訊科技', date: '2026-04-24', cat: 'elective' },
-        { id: 'hist', name: '歷史', date: '2026-04-25', cat: 'elective' },
-        { id: 'bafs', name: '企會財 (BAFS)', date: '2026-04-27', cat: 'elective' },
-        { id: 'pe', name: '體育 (筆試)', date: '2026-04-28', cat: 'elective' },
-        { id: 'chi_hist', name: '中國歷史', date: '2026-04-29', cat: 'elective' },
-        { id: 'm1m2', name: '數學延伸 (M1/M2)', date: '2026-04-30', cat: 'elective' },
-        { id: 'ths', name: '旅遊與款待', date: '2026-05-02', cat: 'elective' },
-        { id: 'econ', name: '經濟', date: '2026-05-04', cat: 'elective' },
-        { id: 'mu', name: '音樂 (筆試)', date: '2026-05-05', cat: 'elective' }
+    // 完整數據 
+    const timetable = [
+        { id: 'va', name: '視覺藝術 (首科)', date: '2026-04-08T08:30:00', type: 'written' },
+        { id: 'chi', name: '中國語文', date: '2026-04-09T08:30:00', type: 'core' },
+        { id: 'eng', name: '英國語文', date: '2026-04-10T08:30:00', type: 'core' },
+        { id: 'math', name: '數學必修', date: '2026-04-13T08:30:00', type: 'core' },
+        { id: 'cs', name: '公民與社會', date: '2026-04-14T08:30:00', type: 'core' },
+        { id: 'chem', name: '化學', date: '2026-04-16T08:30:00', type: 'science' },
+        { id: 'bio', name: '生物', date: '2026-04-20T08:30:00', type: 'science' },
+        { id: 'phy', name: '物理', date: '2026-04-22T08:30:00', type: 'science' },
+        { id: 'ict', name: '資訊及通訊科技', date: '2026-04-24T08:30:00', type: 'elective' },
+        { id: 'econ', name: '經濟', date: '2026-05-04T08:30:00', type: 'elective' }
     ];
 
-    const STORAGE_KEY = 'luminous_dse_user_config';
-    let selectedIds = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi','eng','math','cs'];
+    const STORAGE_KEY = 'luminous_user_v3';
+    let userChoices = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['va','chi','eng','math','cs','chem'];
 
-    function updateMainTimer() {
-        const firstExam = new Date('2026-04-08T08:30:00');
-        const now = new Date();
-        const diff = firstExam - now;
-        
-        const d = Math.floor(diff / (1000*60*60*24));
-        const h = Math.floor((diff / (1000*60*60)) % 24);
-        const m = Math.floor((diff/1000/60) % 60);
-        const s = Math.floor((diff/1000) % 60);
+    function getTimeRemaining(target) {
+        const total = Date.parse(target) - Date.parse(new Date());
+        if (total <= 0) return { total: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+        return {
+            total,
+            days: Math.floor(total / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((total / (1000 * 60 * 60)) % 24),
+            minutes: Math.floor((total / 1000 / 60) % 60),
+            seconds: Math.floor((total / 1000) % 60)
+        };
+    }
 
-        document.getElementById('main-d').innerText = d;
-        document.getElementById('main-h').innerText = h.toString().padStart(2,'0');
-        document.getElementById('main-m').innerText = m.toString().padStart(2,'0');
-        document.getElementById('main-s').innerText = s.toString().padStart(2,'0');
+    function updateAll() {
+        // 更新主倒數 
+        const main = getTimeRemaining('2026-04-08T08:30:00');
+        document.getElementById('h-d').innerText = main.days;
+        document.getElementById('h-h').innerText = main.hours.toString().padStart(2, '0');
+        document.getElementById('h-m').innerText = main.minutes.toString().padStart(2, '0');
+        document.getElementById('h-s').innerText = main.seconds.toString().padStart(2, '0');
+
+        // 更新列表中的每一個實時計時器
+        userChoices.forEach(id => {
+            const subject = timetable.find(s => s.id === id);
+            const t = getTimeRemaining(subject.date);
+            const el = document.getElementById(`timer-${id}`);
+            if (el) {
+                el.innerText = `${t.days}天 ${t.hours}時 ${t.minutes}分 ${t.seconds}秒`;
+            }
+        });
     }
 
     function renderSelectors() {
-        const coreCont = document.getElementById('core-chips');
-        const electCont = document.getElementById('elective-chips');
-        
-        coreCont.innerHTML = fullTimetable.filter(s => s.cat === 'core').map(s => 
-            `<div class="subject-chip active" style="cursor:default;">${s.name}</div>`).join('');
-            
-        electCont.innerHTML = fullTimetable.filter(s => s.cat !== 'core').map(s => 
-            `<div class="subject-chip ${selectedIds.includes(s.id) ? 'active' : ''}" 
-                  onclick="toggleSubject('${s.id}')">${s.name}</div>`).join('');
+        const container = document.getElementById('elective-selector');
+        container.innerHTML = timetable.map(s => `
+            <div class="chip ${userChoices.includes(s.id) ? 'active' : ''}" onclick="toggle('${s.id}')">
+                ${s.name}
+            </div>
+        `).join('');
     }
 
     function renderList() {
-        const listCont = document.getElementById('schedule-list');
-        const myData = fullTimetable.filter(s => s.cat === 'core' || selectedIds.includes(s.id));
-        myData.sort((a,b) => new Date(a.date) - new Date(b.date));
-
-        listCont.innerHTML = myData.map(s => {
-            const days = Math.ceil((new Date(s.date) - new Date()) / (1000*60*60*24));
-            return `
-                <div class="subject-card ${s.cat === 'core' ? 'is-core' : ''}">
-                    <div>
-                        <div style="font-weight:700;">${s.name}</div>
-                        <div style="font-size:0.75rem; color:#64748b;">${s.date}</div>
-                    </div>
-                    <div class="days-count">
-                        <span class="days-val">${days}</span> <span style="font-size:0.7rem; color:#64748b;">天後</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        const container = document.getElementById('my-list');
+        const sorted = timetable.filter(s => userChoices.includes(s.id)).sort((a,b) => Date.parse(a.date) - Date.parse(b.date));
+        
+        container.innerHTML = sorted.map(s => `
+            <div class="subject-card ${Date.parse(s.date) > Date.now() ? 'is-active' : ''}">
+                <div class="subject-name">${s.name}</div>
+                <div class="subject-date">📅 ${s.date.split('T')[0]} 08:30</div>
+                <div class="live-timer" id="timer-${s.id}">載入中...</div>
+            </div>
+        `).join('');
     }
 
-    window.toggleSubject = (id) => {
-        const idx = selectedIds.indexOf(id);
-        if(idx > -1) selectedIds.splice(idx, 1);
-        else selectedIds.push(id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedIds));
+    window.toggle = (id) => {
+        const idx = userChoices.indexOf(id);
+        if (idx > -1) userChoices.splice(idx, 1);
+        else userChoices.push(id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
         renderSelectors();
         renderList();
     };
 
-    setInterval(updateMainTimer, 1000);
     renderSelectors();
     renderList();
-    updateMainTimer();
+    setInterval(updateAll, 1000);
 </script>
 </body>
 </html>
