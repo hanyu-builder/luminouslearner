@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>霍爾效應模擬實驗 | Luminous Learner</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff; background: #3b82f6;
+        }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    const PLATE_WIDTH = 600;
+    const PLATE_HEIGHT = 200;
+    
+    const App = () => {
+        const [current, setCurrent] = useState(2.0); // 電流
+        const [bField, setBField] = useState(0.5); // 磁場
+        const [carrierType, setCarrierType] = useState("Electron"); // 電子或電洞
+        const [showForces, setShowForces] = useState(true);
+        const [isEquilibrium, setIsEquilibrium] = useState(false); // 平衡狀態
+
+        const canvasRef = useRef(null);
+        const simRef = useRef({ charges: [], hallVoltage: 0 });
+
+        const qSign = carrierType === "Electron" ? -1 : 1;
+        const driftVelocity = current * 2.0 * qSign;
+
+        // 初始化電荷
+        const initCharges = () => {
+            const charges = [];
+            for (let i=0; i<45; i++) {
+                charges.push({
+                    x: Math.random() * PLATE_WIDTH + (CANVAS_WIDTH - PLATE_WIDTH)/2,
+                    y: Math.random() * PLATE_HEIGHT + (CANVAS_HEIGHT - PLATE_HEIGHT)/2,
+                    vx: 0, vy: 0
+                });
+            }
+            simRef.current.charges = charges;
+            simRef.current.hallVoltage = 0;
+        };
+
+        const updatePhysics = () => {
+            const state = simRef.current;
+            const targetVH = current * bField * 15 * qSign;
+            state.hallVoltage += (targetVH - state.hallVoltage) * 0.03;
+            
+            setIsEquilibrium(Math.abs(state.hallVoltage - targetVH) < 0.1);
+
+            const f_mag_visual = -5 * Math.abs(current) * bField; // 磁力向上
+            const f_elec_visual = Math.abs(state.hallVoltage) * 0.3; // 電力向下
+            const totalForceY = f_mag_visual + f_elec_visual;
+
+            state.charges.forEach(p => {
+                p.x += driftVelocity;
+                p.y += totalForceY + (Math.random() - 0.5) * 2; // 加入熱運動模擬
+
+                // 邊界處理 (X軸循環)
+                const left = (CANVAS_WIDTH - PLATE_WIDTH)/2;
+                const right = left + PLATE_WIDTH;
+                if (driftVelocity > 0 && p.x > right) p.x = left;
+                if (driftVelocity < 0 && p.x < left) p.x = right;
+                
+                // 邊界處理 (Y軸碰撞)
+                const top = (CANVAS_HEIGHT - PLATE_HEIGHT)/2;
+                const bottom = top + PLATE_HEIGHT;
+                if (p.y < top) p.y = top;
+                if (p.y > bottom) p.y = bottom;
+            });
+        };
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const topY = (CANVAS_HEIGHT - PLATE_HEIGHT)/2;
+            const bottomY = topY + PLATE_HEIGHT;
+            const leftX = (CANVAS_WIDTH - PLATE_WIDTH)/2;
+            const rightX = leftX + PLATE_WIDTH;
+
+            // 1. 繪製導體金屬板
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(leftX, topY, PLATE_WIDTH, PLATE_HEIGHT);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(leftX, topY, PLATE_WIDTH, PLATE_HEIGHT);
+
+            // 2. 繪製電荷
+            simRef.current.charges.forEach(p => {
+                ctx.fillStyle = carrierType === "Electron" ? '#38bdf8' : '#f472b6';
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+            });
+
+            // 3. 繪製表面電荷符號
+            const chargeCount = Math.floor(Math.abs(simRef.current.hallVoltage) / 4);
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            const topSign = carrierType === "Hole" ? "+" : "-";
+            const botSign = carrierType === "Hole" ? "-" : "+";
+            
+            ctx.fillStyle = carrierType === "Hole" ? '#f472b6' : '#38bdf8';
+            for(let i=0; i<chargeCount; i++) ctx.fillText(topSign, leftX + 30 + i*40, topY - 10);
+            ctx.fillStyle = carrierType === "Hole" ? '#38bdf8' : '#f472b6';
+            for(let i=0; i<chargeCount; i++) ctx.fillText(botSign, leftX + 30 + i*40, bottomY + 25);
+
+            // 4. 繪製磁場符號 (X 表示進入屏幕)
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+            for (let x = leftX + 50; x < rightX; x += 100) {
+                for (let y = topY + 50; y < bottomY; y += 100) ctx.fillText("✕", x, y);
+            }
+
+            // 5. 繪製電壓計
+            const meterX = rightX + 80;
+            const meterY = CANVAS_HEIGHT / 2;
+            ctx.strokeStyle = '#64748b';
+            ctx.beginPath();
+            ctx.moveTo(rightX - 20, topY); ctx.lineTo(meterX, topY); ctx.lineTo(meterX, meterY - 40);
+            ctx.moveTo(rightX - 20, bottomY); ctx.lineTo(meterX, bottomY); ctx.lineTo(meterX, meterY + 40);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(meterX, meterY, 45, 0, Math.PI*2); ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 18px monospace';
+            ctx.fillText(Math.abs(simRef.current.hallVoltage).toFixed(1) + " mV", meterX, meterY + 5);
+            ctx.font = '10px sans-serif';
+            ctx.fillText("霍爾電壓 (Vh)", meterX, meterY - 15);
+
+            // 6. 受力矢量
+            if (showForces && simRef.current.charges.length > 0) {
+                const p = simRef.current.charges[10];
+                drawArrow(ctx, p.x, p.y, 0, -40, '#22c55e', '磁力 Fb');
+                if (Math.abs(simRef.current.hallVoltage) > 1) {
+                    drawArrow(ctx, p.x + 5, p.y, 0, 40 * (Math.abs(simRef.current.hallVoltage)/targetVH), '#ef4444', '電力 Fe');
+                }
+            }
+        };
+
+        const drawArrow = (ctx, x, y, dx, dy, color, label) => {
+            ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); ctx.stroke();
+            const angle = Math.atan2(dy, dx);
+            ctx.beginPath(); ctx.moveTo(x + dx, y + dy);
+            ctx.lineTo(x + dx - 8 * Math.cos(angle - Math.PI/6), y + dy - 8 * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(x + dx - 8 * Math.cos(angle + Math.PI/6), y + dy - 8 * Math.sin(angle + Math.PI/6));
+            ctx.fill();
+            ctx.fillText(label, x + dx, y + dy + (dy > 0 ? 15 : -10));
+        };
+
+        useEffect(() => {
+            initCharges();
+            let frame;
+            const loop = () => { updatePhysics(); draw(); frame = requestAnimationFrame(loop); };
+            frame = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(frame);
+        }, [current, bField, carrierType, showForces]);
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-4 h-14 flex items-center justify-between shadow-lg">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-blue-600 p-1.5 rounded-lg"><i data-lucide="zap" className="w-5 h-5 text-white"></i></div>
+                        <h1 className="text-lg font-bold tracking-tight">霍爾效應模擬實驗室</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-blue-400 border border-slate-700">DSE Physics: Electromagnetism</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 overflow-hidden">
+                    <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        <div className="absolute top-4 left-4 bg-slate-900/90 p-3 rounded-xl border border-slate-700 text-[11px] space-y-2 shadow-xl">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-400"></div> <span>電子 Electron (-)</span></div>
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-pink-400"></div> <span>電洞 Hole (+)</span></div>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-1 bg-slate-900 p-6 flex flex-col space-y-8 overflow-y-auto custom-scroll border-l border-slate-800">
+                        <div>
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">實驗狀態</h3>
+                            <div className={`p-4 rounded-xl border text-center transition-all ${isEquilibrium ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-amber-500/10 border-amber-500/50 text-amber-400'}`}>
+                                <div className="text-sm font-bold">{isEquilibrium ? "已達到動態平衡" : "電壓建立中..."}</div>
+                                <div className="text-[10px] mt-1 font-mono">F_magnetic = F_electric</div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 mb-3 block">載流子類型 (Carrier Type)</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setCarrierType("Electron")} className={`py-2 text-xs font-bold rounded-lg border transition-all ${carrierType === "Electron" ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>電子 (-)</button>
+                                    <button onClick={() => setCarrierType("Hole")} className={`py-2 text-xs font-bold rounded-lg border transition-all ${carrierType === "Hole" ? 'bg-pink-600 border-pink-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>電洞 (+)</button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold mb-2"><span>電流 Current (I)</span><span className="text-blue-400">{current} A</span></div>
+                                    <input type="range" min="0.5" max="5" step="0.5" value={current} onChange={(e) => setCurrent(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold mb-2"><span>磁場 B-Field</span><span className="text-purple-400">{bField} T</span></div>
+                                    <input type="range" min="0.1" max="1.0" step="0.1" value={bField} onChange={(e) => setBField(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                </div>
+                            </div>
+
+                            <label className="flex items-center gap-3 p-4 bg-slate-800/50 rounded-xl border border-slate-700 cursor-pointer hover:bg-slate-800 transition-all">
+                                <input type="checkbox" checked={showForces} onChange={() => setShowForces(!showForces)} className="w-4 h-4 rounded border-slate-600 text-blue-600 bg-slate-900 focus:ring-0" />
+                                <span className="text-xs font-bold text-slate-300">顯示受力矢量圖 (Fb / Fe)</span>
+                            </label>
+                        </div>
+
+                        <div className="mt-auto p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+                            <h4 className="text-indigo-300 font-bold text-xs mb-2">霍爾電壓公式</h4>
+                            <p className="text-[11px] font-mono text-indigo-200/70 leading-relaxed">Vh = (I &times; B) / (n &times; q &times; t)</p>
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => lucide.createIcons(), 100);
+</script>
+</body>
+</html>
