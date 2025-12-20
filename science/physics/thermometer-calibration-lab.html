@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>溫度計定標模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .beaker-glass {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: none;
+            backdrop-filter: blur(2px);
+        }
+        .liquid-water { background: rgba(56, 189, 248, 0.4); }
+        .liquid-unknown { background: rgba(168, 85, 247, 0.4); }
+        .bubble {
+            position: absolute; background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%; animation: rise 2s infinite ease-in;
+        }
+        @keyframes rise {
+            0% { bottom: 0; transform: scale(0.5); opacity: 0; }
+            50% { opacity: 1; }
+            100% { bottom: 100%; transform: scale(1.2); opacity: 0; }
+        }
+        .steam {
+            position: absolute; background: rgba(255, 255, 255, 0.2);
+            filter: blur(8px); border-radius: 50%; animation: steam 3s infinite ease-out;
+        }
+        @keyframes steam {
+            0% { bottom: 80%; transform: translateX(0) scale(1); opacity: 0.5; }
+            100% { bottom: 150%; transform: translateX(20px) scale(2); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { motion, AnimatePresence } = window.Motion;
+
+    // 計算液柱高度 L = 2T + 50
+    const calcHeightFromTemp = (t) => t * 2 + 50; 
+
+    const App = () => {
+        const [environment, setEnvironment] = useState('ROOM'); 
+        const [thermometerTemp, setThermometerTemp] = useState(25); 
+        const [isStabilized, setIsStabilized] = useState(true);
+        
+        const [markL0, setMarkL0] = useState(null);
+        const [markL100, setMarkL100] = useState(null);
+        const [markLT, setMarkLT] = useState(null);
+
+        const [unknownLiquidTemp, setUnknownLiquidTemp] = useState(65); 
+        const [showAnswer, setShowAnswer] = useState(false);
+
+        useEffect(() => {
+            let targetTemp = 25;
+            if (environment === 'ROOM') targetTemp = 25;
+            if (environment === 'ICE') targetTemp = 0;
+            if (environment === 'STEAM') targetTemp = 100;
+            if (environment === 'UNKNOWN') targetTemp = unknownLiquidTemp;
+
+            if (Math.abs(thermometerTemp - targetTemp) < 0.5) {
+                setThermometerTemp(targetTemp);
+                setIsStabilized(true);
+                return;
+            }
+
+            setIsStabilized(false);
+            const interval = setInterval(() => {
+                setThermometerTemp(prev => {
+                    const diff = targetTemp - prev;
+                    if (Math.abs(diff) < 0.5) return targetTemp;
+                    return prev + diff * 0.05; 
+                });
+            }, 16);
+            return () => clearInterval(interval);
+        }, [environment, unknownLiquidTemp, thermometerTemp]);
+
+        const handleMark = () => {
+            const currentHeight = calcHeightFromTemp(thermometerTemp);
+            if (environment === 'ICE' && isStabilized) setMarkL0(currentHeight);
+            if (environment === 'STEAM' && isStabilized) setMarkL100(currentHeight);
+            if (environment === 'UNKNOWN' && isStabilized) setMarkLT(currentHeight);
+        };
+
+        const resetLab = () => {
+            setMarkL0(null); setMarkL100(null); setMarkLT(null);
+            setEnvironment('ROOM'); setShowAnswer(false);
+            setUnknownLiquidTemp(Math.floor(Math.random() * 60) + 20);
+        };
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 p-4 md:p-8 font-sans">
+                <header className="mb-8 flex items-center space-x-3 border-b border-slate-700 pb-4">
+                    <div className="p-2 bg-rose-500/10 rounded-lg"><i data-lucide="thermometer" className="w-8 h-8 text-rose-400"></i></div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">溫度計定標模擬實驗室</h1>
+                        <p className="text-slate-400 text-sm">Heat and Gases • 物理熱學</p>
+                    </div>
+                </header>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 backdrop-blur-sm">
+                            <h2 className="text-rose-400 font-semibold mb-4 flex items-center"><i data-lucide="flask-conical" className="w-4 h-4 mr-2"></i> 1. 選擇實驗環境</h2>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => setEnvironment('ROOM')} className={`p-3 rounded-lg flex flex-col items-center justify-center transition-all ${environment === 'ROOM' ? 'bg-slate-600 text-white shadow-lg ring-2 ring-slate-500' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                                    <i data-lucide="wind" className="w-6 h-6 mb-2"></i>
+                                    <span className="text-xs font-bold text-center leading-tight">室溫空氣</span>
+                                </button>
+                                <button onClick={() => setEnvironment('ICE')} className={`p-3 rounded-lg flex flex-col items-center justify-center transition-all ${environment === 'ICE' ? 'bg-cyan-600 text-white shadow-lg ring-2 ring-cyan-400' : 'bg-slate-700 hover:bg-cyan-900/30 text-slate-300'}`}>
+                                    <i data-lucide="snowflake" className="w-6 h-6 mb-2"></i>
+                                    <span className="text-xs font-bold text-center leading-tight">熔冰 (0°C)</span>
+                                </button>
+                                <button onClick={() => setEnvironment('STEAM')} className={`p-3 rounded-lg flex flex-col items-center justify-center transition-all ${environment === 'STEAM' ? 'bg-orange-600 text-white shadow-lg ring-2 ring-orange-400' : 'bg-slate-700 hover:bg-orange-900/30 text-slate-300'}`}>
+                                    <i data-lucide="flame" className="w-6 h-6 mb-2"></i>
+                                    <span className="text-xs font-bold text-center leading-tight">沸水蒸汽 (100°C)</span>
+                                </button>
+                                <button onClick={() => setEnvironment('UNKNOWN')} className={`p-3 rounded-lg flex flex-col items-center justify-center transition-all ${environment === 'UNKNOWN' ? 'bg-purple-600 text-white shadow-lg ring-2 ring-purple-400' : 'bg-slate-700 hover:bg-purple-900/30 text-slate-300'}`}>
+                                    <i data-lucide="help-circle" className="w-6 h-6 mb-2"></i>
+                                    <span className="text-xs font-bold text-center leading-tight">未知液體</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 backdrop-blur-sm">
+                            <h2 className="text-emerald-400 font-semibold mb-4 flex items-center"><i data-lucide="pen-tool" className="w-4 h-4 mr-2"></i> 2. 定標操作步驟</h2>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                                    <div><div className="text-sm font-bold text-slate-200">標記下定點 (L0)</div><div className="text-[10px] text-slate-500 uppercase">熔冰環境</div></div>
+                                    <button onClick={handleMark} disabled={environment !== 'ICE'} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${markL0 ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-400 hover:bg-slate-500'} ${environment !== 'ICE' ? 'opacity-50 cursor-not-allowed' : ''}`}>{markL0 ? '已標記 ✓' : '記錄 0°C'}</button>
+                                </div>
+                                <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                                    <div><div className="text-sm font-bold text-slate-200">標記上定點 (L100)</div><div className="text-[10px] text-slate-500 uppercase">蒸汽環境</div></div>
+                                    <button onClick={handleMark} disabled={environment !== 'STEAM'} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${markL100 ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-400 hover:bg-slate-500'} ${environment !== 'STEAM' ? 'opacity-50 cursor-not-allowed' : ''}`}>{markL100 ? '已標記 ✓' : '記錄 100°C'}</button>
+                                </div>
+                                <div className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg border border-slate-700">
+                                    <div><div className="text-sm font-bold text-slate-200">標記未知液體 (LT)</div><div className="text-[10px] text-slate-500 uppercase">待測液體</div></div>
+                                    <button onClick={handleMark} disabled={environment !== 'UNKNOWN'} className={`px-3 py-1 rounded text-xs font-bold transition-colors ${markLT ? 'bg-emerald-500 text-white' : 'bg-slate-600 text-slate-400 hover:bg-slate-500'} ${environment !== 'UNKNOWN' ? 'opacity-50 cursor-not-allowed' : ''}`}>{markLT ? '已記錄 ✓' : '記錄 LT'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 flex flex-col items-center justify-end relative h-[600px] bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
+                        <div className="absolute top-4 left-0 w-full text-center z-10">
+                            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold border bg-slate-900/80 text-slate-300 border-slate-600">
+                                目前環境: {environment}
+                            </span>
+                            {!isStabilized && <div className="text-amber-400 text-[10px] mt-1 animate-pulse font-bold">熱平衡建立中...</div>}
+                        </div>
+
+                        <div className="relative w-64 h-80 mb-10">
+                            <AnimatePresence>
+                                {environment === 'STEAM' && (
+                                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="absolute -bottom-24 left-1/2 transform -translate-x-1/2 flex flex-col items-center">
+                                        <div className="w-4 h-12 bg-orange-500 blur-sm rounded-full animate-pulse"></div>
+                                        <div className="w-16 h-4 bg-slate-600 rounded-t"></div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                            <div className="beaker-glass w-full h-full rounded-b-3xl relative overflow-hidden">
+                                <div className={`absolute bottom-0 w-full transition-all duration-1000 ${environment === 'STEAM' ? 'h-3/4' : 'h-2/3'} ${environment === 'ICE' || environment === 'STEAM' ? 'liquid-water' : environment === 'UNKNOWN' ? 'liquid-unknown' : 'opacity-0'}`}>
+                                    {environment === 'STEAM' && <div className="absolute inset-0 overflow-hidden pointer-events-none">{[...Array(10)].map((_, i) => <div key={i} className="bubble w-2 h-2" style={{ left: `${Math.random() * 80 + 10}%`, animationDelay: `${Math.random() * 2}s` }} />)}<div className="absolute -top-20 left-0 w-full h-20 pointer-events-none">{[...Array(5)].map((_, i) => <div key={i} className="steam w-8 h-8" style={{ left: `${Math.random() * 60 + 20}%`, animationDelay: `${Math.random() * 2}s` }} />)}</div></div>}
+                                    {environment === 'ICE' && <div className="absolute bottom-0 w-full h-2/3 pointer-events-none flex flex-wrap justify-center content-end p-2 opacity-80">{[...Array(6)].map((_, i) => <div key={i} className="w-10 h-10 bg-white/40 border border-white/60 m-1 rounded transform" style={{ transform: `rotate(${Math.random() * 360}deg)` }} />)}</div>}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 flex flex-col items-center">
+                            <div className="w-6 h-[400px] bg-slate-200/20 backdrop-blur-md rounded-full border border-slate-300/30 relative shadow-xl">
+                                <div className="absolute left-1/2 transform -translate-x-1/2 bottom-8 w-1.5 h-[350px] bg-slate-400/30 rounded-t-full">
+                                    <motion.div className="absolute bottom-0 w-full bg-rose-500 rounded-t-sm origin-bottom" animate={{ height: calcHeightFromTemp(thermometerTemp) + 'px' }} transition={{ type: "spring", stiffness: 50, damping: 20 }} />
+                                </div>
+                                <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-8 h-8 bg-rose-500 rounded-full shadow-inner border-2 border-slate-300/30"></div>
+                                {markL0 && <div className="absolute w-8 border-b-2 border-cyan-400 right-0" style={{ bottom: (markL0 + 32) + 'px' }}><span className="absolute left-full ml-1 text-[10px] text-cyan-300 whitespace-nowrap">0°C</span></div>}
+                                {markL100 && <div className="absolute w-8 border-b-2 border-orange-400 right-0" style={{ bottom: (markL100 + 32) + 'px' }}><span className="absolute left-full ml-1 text-[10px] text-orange-300 whitespace-nowrap">100°C</span></div>}
+                                {markLT && <div className="absolute w-8 border-b-2 border-purple-400 right-0" style={{ bottom: (markLT + 32) + 'px' }}><span className="absolute left-full ml-1 text-[10px] text-purple-300 whitespace-nowrap">T = ?</span></div>}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+                            <h2 className="text-blue-400 font-semibold mb-4 flex items-center"><i data-lucide="clipboard-list" className="w-4 h-4 mr-2"></i> 3. 實驗數據記錄</h2>
+                            <div className="space-y-3 font-mono text-sm">
+                                <div className="flex justify-between border-b border-slate-700 pb-2"><span className="text-slate-400">下定點長度 (L0)</span><span className={markL0 ? "text-cyan-400 font-bold" : "text-slate-600"}>{markL0 ? `${markL0.toFixed(1)} mm` : "--"}</span></div>
+                                <div className="flex justify-between border-b border-slate-700 pb-2"><span className="text-slate-400">上定點長度 (L100)</span><span className={markL100 ? "text-orange-400 font-bold" : "text-slate-600"}>{markL100 ? `${markL100.toFixed(1)} mm` : "--"}</span></div>
+                                <div className="flex justify-between border-b border-slate-700 pb-2"><span className="text-slate-400">未知液柱長度 (LT)</span><span className={markLT ? "text-purple-400 font-bold" : "text-slate-600"}>{markLT ? `${markLT.toFixed(1)} mm` : "--"}</span></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-950 border border-slate-700 rounded-xl p-5 relative overflow-hidden">
+                            <h2 className="text-emerald-400 font-semibold mb-4 flex items-center"><i data-lucide="calculator" className="w-4 h-4 mr-2"></i> 4. 數值計算區域</h2>
+                            {markL0 && markL100 && markLT ? (
+                                <div className="space-y-4">
+                                    <div className="bg-slate-900 p-3 rounded text-xs text-slate-300 font-mono leading-relaxed">
+                                        <div className="mb-2 text-slate-500 uppercase font-bold tracking-widest">// 定標公式</div>
+                                        <div>T = [({markLT.toFixed(1)} - {markL0.toFixed(1)}) / ({markL100.toFixed(1)} - {markL0.toFixed(1)})] &times; 100</div>
+                                    </div>
+                                    <div className="bg-emerald-900/30 border border-emerald-500/30 p-4 rounded text-center">
+                                        <div className="text-[10px] text-emerald-400 uppercase tracking-widest mb-1">計算所得溫度 (T)</div>
+                                        <div className="text-3xl font-black text-white">{(((markLT - markL0) / (markL100 - markL0)) * 100).toFixed(1)}°C</div>
+                                    </div>
+                                    <button onClick={() => setShowAnswer(true)} className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded text-xs text-slate-400 transition-colors">{showAnswer ? `真實數值: ${unknownLiquidTemp}°C` : "顯示真實數值對照"}</button>
+                                </div>
+                            ) : (
+                                <div className="h-40 flex items-center justify-center text-slate-600 text-xs text-center px-4 leading-relaxed italic">請先完成三個環境的測量（熔冰、沸水、未知液體）以解鎖計算邏輯。</div>
+                            )}
+                        </div>
+                        <button onClick={resetLab} className="w-full py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-400 text-xs hover:text-white transition-all flex items-center justify-center gap-2"><i data-lucide="rotate-ccw" className="w-4 h-4"></i> 重置實驗環境</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if(window.lucide) window.lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
