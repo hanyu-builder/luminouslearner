@@ -3,100 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luminous Learner - DSE 2026 倒數器</title>
+    <title>Luminous Learner | 2026 DSE 倒數計時器</title>
     <style>
-        :root { --primary: #2563eb; --secondary: #64748b; --accent: #ef4444; }
-        body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 20px; background: #f8fafc; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .summary-card { background: #eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid var(--primary); }
-        .subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 20px 0; }
-        .subject-item { border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; cursor: pointer; text-align: center; transition: 0.3s; }
-        .subject-item.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .countdown-list { margin-top: 20px; }
-        .countdown-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .days-left { font-weight: bold; color: var(--accent); font-size: 1.2em; }
-        .label { font-size: 0.9em; color: var(--secondary); }
+        :root {
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --accent: #f43f5e;
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f1f5f9; color: var(--text-main); margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        
+        /* Action A: 大卡片設計 */
+        .hero-countdown {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+            margin-bottom: 30px;
+        }
+        .hero-countdown h1 { font-size: 1.5rem; margin-bottom: 20px; opacity: 0.9; }
+        .timer-display { display: flex; justify-content: center; gap: 15px; }
+        .time-unit { background: rgba(255,255,255,0.2); padding: 15px; border-radius: 12px; min-width: 70px; backdrop-filter: blur(5px); }
+        .time-num { display: block; font-size: 2.5rem; font-weight: 800; line-height: 1; }
+        .time-label { font-size: 0.8rem; text-transform: uppercase; opacity: 0.8; }
+
+        /* 科目選擇器 */
+        .selector-section { background: white; padding: 20px; border-radius: 16px; margin-bottom: 25px; }
+        .subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-top: 15px; }
+        .subject-chip { 
+            padding: 8px 12px; border: 1.5px solid #e2e8f0; border-radius: 50px; text-align: center; 
+            font-size: 0.9rem; cursor: pointer; transition: all 0.2s; 
+        }
+        .subject-chip.active { background: #6366f1; color: white; border-color: #6366f1; }
+
+        /* 個人倒數列表 */
+        .my-list { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (max-width: 600px) { .my-list { grid-template-columns: 1fr; } }
+        .subject-card { 
+            background: white; padding: 20px; border-radius: 16px; 
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .subject-info h4 { margin: 0; color: #475569; }
+        .subject-date { font-size: 0.8rem; color: #94a3b8; }
+        .days-badge { background: #fff1f2; color: var(--accent); padding: 5px 12px; border-radius: 8px; font-weight: 700; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🕯️ Luminous Learner 倒數器</h2>
-    
-    <div id="summary">
-        <div class="summary-card">
-            <div>距離 2026 DSE 首科 (VA) 還有： <span id="first-exam" class="days-left">-</span> 天</div>
-            <div style="margin-top:10px;">距離首門主科 (中文) 還有： <span id="first-core" class="days-left">-</span> 天</div>
+    <div class="hero-countdown">
+        <h1 id="hero-title">距離 2026 DSE 中文科筆試還有</h1>
+        <div class="timer-display">
+            <div class="time-unit"><span class="time-num" id="d-days">00</span><span class="time-label">Days</span></div>
+            <div class="time-unit"><span class="time-num" id="d-hrs">00</span><span class="time-label">Hrs</span></div>
+            <div class="time-unit"><span class="time-num" id="d-min">00</span><span class="time-label">Min</span></div>
+            <div class="time-unit"><span class="time-num" id="d-sec">00</span><span class="time-label">Sec</span></div>
         </div>
     </div>
 
-    <h3>選擇你的應考科目：</h3>
-    <div class="subject-grid" id="selector"></div>
+    <div class="selector-section">
+        <h3>🎯 選擇你的選修科</h3>
+        <div class="subject-grid" id="selector-container"></div>
+    </div>
 
-    <h3>我的考試倒數：</h3>
-    <div id="my-countdowns" class="countdown-list"></div>
+    <h3 id="my-list-title">我的應考科目時間表</h3>
+    <div class="my-list" id="personal-list"></div>
 </div>
 
 <script>
-    // 根據 PDF 數據整理的科目表 
+    // Action B: 補全數據 (包含實習與口試)
     const examData = [
-        { id: 'chi', name: '中國語文', date: '2026-04-09', isCore: true },
-        { id: 'eng', name: '英國語文', date: '2026-04-10', isCore: true },
-        { id: 'math', name: '數學必修', date: '2026-04-13', isCore: true },
-        { id: 'cs', name: '公民與社會', date: '2026-04-14', isCore: true },
-        { id: 'chem', name: '化學 (Chem)', date: '2026-04-16', isCore: false },
-        { id: 'bio', name: '生物 (Bio)', date: '2026-04-20', isCore: false },
-        { id: 'phy', name: '物理 (Phy)', date: '2026-04-22', isCore: false },
-        { id: 'econ', name: '經濟 (Econ)', date: '2026-05-04', isCore: false }
+        { id: 'pe_p', name: '體育 (實習)', date: '2026-02-25', type: 'practical' }, // 參考 PDF 
+        { id: 'mu_p', name: '音樂 (實習)', date: '2026-03-05', type: 'practical' }, // 參考 PDF 
+        { id: 'eng_s', name: '英文口試', date: '2026-03-10', type: 'speaking' }, // 參考 PDF 
+        { id: 'va', name: '視覺藝術', date: '2026-04-08', type: 'written' }, // 參考 PDF 
+        { id: 'chi', name: '中國語文', date: '2026-04-09', type: 'core' }, // 參考 PDF 
+        { id: 'eng', name: '英國語文', date: '2026-04-10', type: 'core' }, // 參考 PDF 
+        { id: 'math', name: '數學必修', date: '2026-04-13', type: 'core' }, // 參考 PDF 
+        { id: 'cs', name: '公民與社會', date: '2026-04-14', type: 'core' }, // 參考 PDF 
+        { id: 'chem', name: '化學', date: '2026-04-16', type: 'science' }, // 參考 PDF 
+        { id: 'bio', name: '生物', date: '2026-04-20', type: 'science' }, // 參考 PDF 
+        { id: 'phy', name: '物理', date: '2026-04-22', type: 'science' }, // 參考 PDF 
+        { id: 'ict', name: 'ICT', date: '2026-04-24', type: 'elective' }, // 參考 PDF 
+        { id: 'econ', name: '經濟', date: '2026-05-04', type: 'elective' } // 參考 PDF 
     ];
 
-    const STORAGE_KEY = 'luminous_user_subjects';
-    let selectedSubjects = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi', 'eng', 'math', 'cs'];
+    const STORAGE_KEY = 'luminous_user_v2';
+    let userSubjects = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi', 'eng', 'math', 'cs', 'chem'];
 
-    function calculateDays(targetDate) {
-        const diff = new Date(targetDate) - new Date();
-        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    function updateMainTimer() {
+        const target = new Date('2026-04-09T08:30:00'); // 中文科開考時間 
+        const now = new Date();
+        const diff = target - now;
+
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / 1000 / 60) % 60);
+        const s = Math.floor((diff / 1000) % 60);
+
+        document.getElementById('d-days').innerText = d.toString().padStart(2, '0');
+        document.getElementById('d-hrs').innerText = h.toString().padStart(2, '0');
+        document.getElementById('d-min').innerText = m.toString().padStart(2, '0');
+        document.getElementById('d-sec').innerText = s.toString().padStart(2, '0');
     }
 
-    function render() {
-        // 更新總覽
-        document.getElementById('first-exam').innerText = calculateDays('2026-04-08'); // Visual Arts 
-        document.getElementById('first-core').innerText = calculateDays('2026-04-09'); // Chinese 
-
-        // 渲染選擇器
-        const selectorEl = document.getElementById('selector');
-        selectorEl.innerHTML = examData.map(s => `
-            <div class="subject-item ${selectedSubjects.includes(s.id) ? 'active' : ''}" 
-                 onclick="toggleSubject('${s.id}')">
+    function renderSelectors() {
+        const container = document.getElementById('selector-container');
+        // 只顯示選修科供選擇
+        const electives = examData.filter(s => s.type !== 'core');
+        container.innerHTML = electives.map(s => `
+            <div class="subject-chip ${userSubjects.includes(s.id) ? 'active' : ''}" onclick="toggleSubject('${s.id}')">
                 ${s.name}
             </div>
         `).join('');
-
-        // 渲染個人倒數列表
-        const listEl = document.getElementById('my-countdowns');
-        const filtered = examData.filter(s => selectedSubjects.includes(s.id));
-        listEl.innerHTML = filtered.map(s => `
-            <div class="countdown-item">
-                <div>
-                    <strong>${s.name}</strong><br>
-                    <span class="label">${s.date}</span>
-                </div>
-                <div class="days-left">${calculateDays(s.date)} Days</div>
-            </div>
-        `).join('');
     }
 
-    window.toggleSubject = function(id) {
-        if (selectedSubjects.includes(id)) {
-            selectedSubjects = selectedSubjects.filter(sid => sid !== id);
-        } else {
-            selectedSubjects.push(id);
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedSubjects));
-        render();
+    function renderMyList() {
+        const container = document.getElementById('personal-list');
+        const myData = examData.filter(s => userSubjects.includes(s.id) || s.type === 'core');
+        
+        // 按日期排序
+        myData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        container.innerHTML = myData.map(s => {
+            const days = Math.ceil((new Date(s.date) - new Date()) / (1000 * 60 * 60 * 24));
+            return `
+                <div class="subject-card">
+                    <div class="subject-info">
+                        <h4>${s.name}</h4>
+                        <span class="subject-date">${s.date}</span>
+                    </div>
+                    <div class="days-badge">${days > 0 ? days + ' 天後' : '已開考'}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.toggleSubject = (id) => {
+        const index = userSubjects.indexOf(id);
+        if (index > -1) userSubjects.splice(index, 1);
+        else userSubjects.push(id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(userSubjects));
+        renderSelectors();
+        renderMyList();
     };
 
-    render();
+    setInterval(updateMainTimer, 1000);
+    renderSelectors();
+    renderMyList();
+    updateMainTimer();
 </script>
+
 </body>
 </html>
