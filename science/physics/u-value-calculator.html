@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U值計算器 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    
+    // 材料數據庫 (k 為熱傳導率 W/mK)
+    const MATERIALS = [
+        { name: "磚塊 (Brick)", k: 0.84, color: "#9a3412", pattern: "brick" },
+        { name: "混凝土 (Concrete)", k: 1.40, color: "#64748b", pattern: "dots" },
+        { name: "絕熱棉 (Insulation)", k: 0.04, color: "#fef3c7", pattern: "wool" },
+        { name: "木材 (Wood)", k: 0.14, color: "#a87748", pattern: "grain" },
+        { name: "石膏板 (Plasterboard)", k: 0.19, color: "#e2e8f0", pattern: "solid" },
+        { name: "玻璃 (Glass)", k: 1.05, color: "#bae6fd", pattern: "solid" },
+        { name: "空氣層 (Air Gap)", k: 0.025, color: "#f1f5f9", pattern: "air" }
+    ];
+
+    const R_SI = 0.13; // 內部表面熱阻
+    const R_SE = 0.04; // 外部表面熱阻
+
+    const App = () => {
+        const [layers, setLayers] = useState([
+            { id: 1, type: "石膏板 (Plasterboard)", d: 15 }, 
+            { id: 2, type: "絕熱棉 (Insulation)", d: 100 },
+            { id: 3, type: "磚塊 (Brick)", d: 110 }
+        ]);
+        const [tempIn, setTempIn] = useState(20); 
+        const [tempOut, setTempOut] = useState(0); 
+
+        const canvasRef = useRef(null);
+
+        const calculations = useMemo(() => {
+            let totalR = R_SI + R_SE;
+            const layerData = layers.map(l => {
+                const mat = MATERIALS.find(m => m.name === l.type);
+                const d_meters = l.d / 1000;
+                const r_value = d_meters / mat.k;
+                totalR += r_value;
+                return { ...l, mat, r_value, d_meters };
+            });
+            const uValue = 1 / totalR;
+            const heatFlow = uValue * (tempIn - tempOut); 
+            let currentTemp = tempIn;
+            const t_si = currentTemp - (heatFlow * R_SI);
+            const interfaces = [{ x: 0, temp: t_si, label: "內牆面" }];
+            let accumulatedR = R_SI;
+            layerData.forEach(l => {
+                accumulatedR += l.r_value;
+                const t_next = tempIn - (heatFlow * accumulatedR);
+                interfaces.push({ temp: t_next, label: l.type });
+            });
+            return { totalR, uValue, layerData, interfaces };
+        }, [layers, tempIn, tempOut]);
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const WALL_START_X = 100; const WALL_MAX_WIDTH = 700; const SCALE_Y = 300; const WALL_TOP = 150;
+            const totalVisualUnits = layers.reduce((acc, l) => acc + Math.max(l.d, 30), 0);
+            const scaleX = WALL_MAX_WIDTH / totalVisualUnits;
+            let currentX = WALL_START_X;
+
+            ctx.font = "bold 18px sans-serif";
+            ctx.fillStyle = tempIn > tempOut ? '#fca5a5' : '#93c5fd';
+            ctx.fillText(`室內: ${tempIn}°C`, 20, 80);
+            ctx.fillStyle = tempOut > tempIn ? '#fca5a5' : '#93c5fd';
+            ctx.fillText(`室外: ${tempOut}°C`, CANVAS_WIDTH - 130, 80);
+
+            calculations.layerData.forEach((l, idx) => {
+                const visualWidth = Math.max(l.d, 30) * scaleX;
+                ctx.fillStyle = l.mat.color; ctx.fillRect(currentX, WALL_TOP, visualWidth, SCALE_Y);
+                ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2; ctx.strokeRect(currentX, WALL_TOP, visualWidth, SCALE_Y);
+                ctx.fillStyle = '#fff'; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(`${l.d}mm`, currentX + visualWidth/2, WALL_TOP + SCALE_Y + 20);
+                l.visualXStart = currentX; l.visualWidth = visualWidth;
+                currentX += visualWidth;
+            });
+
+            const tempScaleY = 5; const tempBaseY = WALL_TOP + SCALE_Y / 2;
+            ctx.beginPath(); ctx.lineWidth = 4; ctx.strokeStyle = '#ef4444'; ctx.lineJoin = 'round';
+            const startY = tempBaseY - (tempIn - (tempIn+tempOut)/2) * tempScaleY;
+            ctx.moveTo(20, startY);
+            const surfInY = tempBaseY - (calculations.interfaces[0].temp - (tempIn+tempOut)/2) * tempScaleY;
+            ctx.lineTo(WALL_START_X, surfInY);
+            calculations.layerData.forEach((l, idx) => {
+                const tempAtInterface = calculations.interfaces[idx+1].temp;
+                const y = tempBaseY - (tempAtInterface - (tempIn+tempOut)/2) * tempScaleY;
+                ctx.lineTo(l.visualXStart + l.visualWidth, y);
+            });
+            const endY = tempBaseY - (tempOut - (tempIn+tempOut)/2) * tempScaleY;
+            ctx.lineTo(CANVAS_WIDTH - 20, endY); ctx.stroke();
+
+            calculations.layerData.forEach((l, idx) => {
+                const temp = calculations.interfaces[idx+1].temp;
+                const x = l.visualXStart + l.visualWidth;
+                const y = tempBaseY - (temp - (tempIn+tempOut)/2) * tempScaleY;
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.font = "bold 11px sans-serif"; ctx.fillText(temp.toFixed(1) + "°C", x, y - 12);
+            });
+        };
+
+        const addLayer = () => {
+            const newId = Math.max(...layers.map(l => l.id), 0) + 1;
+            setLayers([...layers, { id: newId, type: "絕熱棉 (Insulation)", d: 50 }]);
+        };
+        const removeLayer = (id) => { if (layers.length <= 1) return; setLayers(layers.filter(l => l.id !== id)); };
+        const updateLayer = (id, field, value) => {
+            let safeValue = value; if (field === 'd') safeValue = Math.max(0, value);
+            setLayers(layers.map(l => l.id === id ? { ...l, [field]: safeValue } : l));
+        };
+
+        useEffect(() => { draw(); }, [calculations]);
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-4 h-14 flex items-center justify-between shrink-0 shadow-lg">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-orange-600 p-1.5 rounded-lg"><i data-lucide="thermometer-snowflake" className="w-5 h-5 text-white"></i></div>
+                        <h1 className="text-lg font-bold tracking-tight">多層牆體 U值 計算器</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-orange-400 border border-slate-700 uppercase">DSE Physics: Heat Transfer</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-4 overflow-hidden">
+                    <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        <div className="absolute top-4 left-4 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-700 text-[10px] text-slate-500 uppercase font-black tracking-widest">實時溫度梯度分佈 (Temperature Gradient)</div>
+                    </div>
+
+                    <aside className="lg:col-span-1 bg-slate-900 flex flex-col h-full overflow-y-auto border-l border-slate-800 custom-scroll">
+                        <div className="p-5 bg-slate-800/50 border-b border-slate-700 sticky top-0 z-10 backdrop-blur shadow-md">
+                            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">絕熱性能指標</h3>
+                            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 shadow-inner ring-1 ring-white/5">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">總 U 值 (傳熱係數)</div>
+                                <div className="text-4xl font-mono font-black text-emerald-400 leading-none mb-1">{calculations.uValue.toFixed(3)}</div>
+                                <div className="text-[10px] text-slate-600 font-bold">W / m²K</div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-4">
+                                <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                    <div className="text-[9px] text-slate-500 font-black uppercase">總熱阻 R</div>
+                                    <div className="font-mono font-bold text-blue-400">{calculations.totalR.toFixed(2)}</div>
+                                </div>
+                                <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                    <div className="text-[9px] text-slate-500 font-black uppercase">熱損耗功率</div>
+                                    <div className="font-mono font-bold text-rose-400">{(calculations.uValue * Math.abs(tempIn - tempOut)).toFixed(1)} <span className="text-[8px]">W/m²</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 space-y-6">
+                            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">牆體構造層級</h3>
+                                <button onClick={addLayer} className="bg-indigo-600 hover:bg-indigo-500 text-white p-1.5 rounded-lg shadow-lg shadow-indigo-900/40 transition-all"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                            </div>
+
+                            <div className="space-y-4">
+                                {layers.map((layer, index) => (
+                                    <div key={layer.id} className="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-xl group relative ring-1 ring-white/5">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-[10px] font-black text-slate-500 uppercase bg-slate-900 px-2 py-0.5 rounded-full border border-slate-700">層級 {index + 1}</span>
+                                            <button onClick={() => removeLayer(layer.id)} className="text-slate-600 hover:text-red-400 transition-colors"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <select value={layer.type} onChange={(e) => updateLayer(layer.id, "type", e.target.value)} className="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded-xl p-2.5 font-bold outline-none focus:ring-1 focus:ring-indigo-500">
+                                                {MATERIALS.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+                                            </select>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 flex items-center">
+                                                    <input type="number" min="0" value={layer.d} onChange={(e) => updateLayer(layer.id, "d", Number(e.target.value))} className="w-full bg-transparent text-sm text-white font-mono font-bold outline-none" />
+                                                    <span className="text-[10px] text-slate-600 font-black">mm</span>
+                                                </div>
+                                                <div className="text-[9px] text-right text-slate-500 font-mono italic">R = {(layer.d / 1000 / MATERIALS.find(m => m.name === layer.type).k).toFixed(2)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-700">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">外部環境條件</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700 shadow-inner">
+                                        <label className="text-[10px] text-slate-500 block mb-1 uppercase font-bold">室內溫 (°C)</label>
+                                        <input type="number" value={tempIn} onChange={(e) => setTempIn(Number(e.target.value))} className="w-full bg-transparent text-lg font-mono font-black text-rose-400 outline-none"/>
+                                    </div>
+                                    <div className="bg-slate-800 p-3 rounded-2xl border border-slate-700 shadow-inner">
+                                        <label className="text-[10px] text-slate-500 block mb-1 uppercase font-bold">室外溫 (°C)</label>
+                                        <input type="number" value={tempOut} onChange={(e) => setTempOut(Number(e.target.value))} className="w-full bg-transparent text-lg font-mono font-black text-blue-400 outline-none"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
