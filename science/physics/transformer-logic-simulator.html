@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>變壓器原理模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+        }
+        .thumb-blue::-webkit-slider-thumb { background: #3b82f6; }
+        .thumb-red::-webkit-slider-thumb { background: #ef4444; }
+        .thumb-indigo::-webkit-slider-thumb { background: #6366f1; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 450;
+    const CORE_X = 250;
+    const CORE_Y = 225;
+    const CORE_W = 300;
+    const CORE_H = 200;
+    const CORE_THICK = 40;
+
+    const App = () => {
+        const [vp, setVp] = useState(120); 
+        const [np, setNp] = useState(10);  
+        const [ns, setNs] = useState(20);  
+        const [isRunning, setIsRunning] = useState(true);
+        const [showFlux, setShowFlux] = useState(true);
+
+        const vs = (ns / np) * vp;
+        const ratio = ns / np;
+        let type = "隔離變壓 (Isolation)";
+        if (ratio > 1) type = "升壓變壓 (Step-Up)";
+        if (ratio < 1) type = "降壓變壓 (Step-Down)";
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const timeRef = useRef(0);
+        
+        const loop = (timestamp) => {
+            if (!isRunning) return;
+            timeRef.current += 0.05;
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            if (isRunning) requestRef.current = requestAnimationFrame(loop);
+            else { cancelAnimationFrame(requestRef.current); draw(); }
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isRunning, vp, np, ns, showFlux]);
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            const t = timeRef.current;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 鐵芯 (Iron Core)
+            ctx.lineJoin = 'round'; ctx.lineWidth = CORE_THICK; ctx.strokeStyle = '#475569';
+            ctx.strokeRect(CORE_X - CORE_W/2, CORE_Y - CORE_H/2, CORE_W, CORE_H);
+            ctx.lineWidth = CORE_THICK - 4; ctx.strokeStyle = '#64748b';
+            ctx.strokeRect(CORE_X - CORE_W/2, CORE_Y - CORE_H/2, CORE_W, CORE_H);
+
+            // 2. 磁通量視覺化 (Magnetic Flux)
+            if (showFlux) {
+                const fluxAlpha = Math.min(1, vp / 240 + 0.2); 
+                const fluxDir = Math.sin(t); 
+                const fluxOffset = (t * 20) % 20;
+                ctx.lineWidth = 2; ctx.strokeStyle = `rgba(250, 204, 21, ${Math.abs(fluxDir) * fluxAlpha})`;
+                ctx.setLineDash([10, 10]); ctx.lineDashOffset = -fluxOffset * Math.sign(fluxDir);
+                const inset = 15;
+                ctx.strokeRect(CORE_X - CORE_W/2 + inset, CORE_Y - CORE_H/2 + inset, CORE_W - inset*2, CORE_H - inset*2);
+                ctx.setLineDash([]);
+            }
+
+            // 3. 原、副線圈 (Coils)
+            const leftX = CORE_X - CORE_W/2;
+            drawCoil(ctx, leftX, CORE_Y, np, '#3b82f6', true); 
+            const rightX = CORE_X + CORE_W/2;
+            drawCoil(ctx, rightX, CORE_Y, ns, '#ef4444', false); 
+
+            // 4. 接線端子與標籤
+            drawTerminals(ctx, leftX, CORE_Y, true, vp);
+            drawTerminals(ctx, rightX, CORE_Y, false, vs);
+            
+            // 5. 示波器圖表 (Oscilloscope)
+            drawScope(ctx, 600, 100, 180, 100, vp, '#3b82f6', '輸入電壓 Vp');
+            drawScope(ctx, 600, 300, 180, 100, vs, '#ef4444', '輸出電壓 Vs');
+        };
+
+        const drawCoil = (ctx, cx, cy, turns, color, isLeft) => {
+            const h = CORE_H - 40; const step = h / (turns + 1); const startY = cy - h/2;
+            ctx.lineWidth = 4; ctx.strokeStyle = color; ctx.lineCap = 'round';
+            for (let i = 0; i < turns; i++) {
+                const y = startY + step * (i + 0.5);
+                ctx.beginPath(); ctx.moveTo(cx - 25, y - 5);
+                ctx.quadraticCurveTo(cx, y + 10, cx + 25, y - 5);
+                ctx.stroke();
+            }
+            ctx.lineWidth = 2; ctx.beginPath();
+            ctx.moveTo(cx - 25, startY); ctx.lineTo(isLeft ? cx - 80 : cx + 80, startY);
+            ctx.moveTo(cx - 25, startY + h); ctx.lineTo(isLeft ? cx - 80 : cx + 80, startY + h);
+            ctx.stroke();
+        };
+        
+        const drawTerminals = (ctx, x, y, isLeft, voltageVal) => {
+            const h = CORE_H - 40; const termX = isLeft ? x - 80 : x + 80; const topY = y - h/2;
+            ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(termX, topY, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(termX, topY + 160, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = 'white'; ctx.font = 'bold 16px JetBrains Mono'; ctx.textAlign = isLeft ? 'right' : 'left';
+            ctx.fillText(voltageVal.toFixed(0) + " V", isLeft ? termX - 15 : termX + 15, y);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
+            ctx.fillText((isLeft ? np : ns) + " 匝 (Turns)", isLeft ? termX - 15 : termX + 15, y + 20);
+        };
+
+        const drawScope = (ctx, x, y, w, h, amp, color, label) => {
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+            ctx.beginPath(); ctx.moveTo(x, y + h/2); ctx.lineTo(x + w, y + h/2); ctx.stroke();
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+            const scaleY = 0.15; const t = timeRef.current;
+            for (let i = 0; i < w; i++) {
+                const phase = (i / 50) - t * 5; const val = amp * Math.sin(phase);
+                const waveY = y + h/2 - val * scaleY;
+                if (waveY < y || waveY > y + h) continue;
+                if (i === 0) ctx.moveTo(x + i, waveY); else ctx.lineTo(x + i, waveY);
+            }
+            ctx.stroke();
+            ctx.fillStyle = color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(label, x + 5, y + 15);
+        };
+
+        const reset = () => { setVp(120); setNp(10); setNs(20); };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-lg h-16 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-600 p-2 rounded-lg"><i data-lucide="zap" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">變壓器原理模擬器</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-indigo-400 border border-slate-700 uppercase">DSE Physics: Electromagnetism</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                    <div className="lg:col-span-8 bg-slate-950 relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        <div className="absolute top-4 left-4 flex gap-2">
+                            <div className={`px-4 py-1.5 rounded-xl border font-black text-[10px] uppercase tracking-widest shadow-xl ${ratio > 1 ? 'bg-emerald-900/80 border-emerald-500 text-emerald-400' : ratio < 1 ? 'bg-orange-900/80 border-orange-500 text-orange-400' : 'bg-slate-800 border-slate-600 text-slate-300'}`}>
+                                {type}
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-4 bg-slate-900 p-6 flex flex-col gap-6 overflow-y-auto custom-scroll border-l border-slate-800">
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <i data-lucide="sliders" className="w-4 h-4 text-indigo-400"></i> 實驗參數設定
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="flex justify-between text-[11px] font-black text-blue-400 uppercase tracking-wider mb-2"><span>原線圈電壓 (Vp)</span><span className="font-mono text-sm">{vp} V</span></label>
+                                    <input type="range" min="10" max="240" step="10" value={vp} onChange={(e)=>setVp(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-[11px] font-black text-blue-400 uppercase tracking-wider mb-2"><span>原線圈匝數 (Np)</span><span className="font-mono text-sm">{np} T</span></label>
+                                    <input type="range" min="5" max="50" step="5" value={np} onChange={(e)=>setNp(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-[11px] font-black text-red-400 uppercase tracking-wider mb-2"><span>副線圈匝數 (Ns)</span><span className="font-mono text-sm">{ns} T</span></label>
+                                    <input type="range" min="5" max="50" step="5" value={ns} onChange={(e)=>setNs(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-red" />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center border-t border-slate-700 pt-6">
+                                <label className="flex items-center gap-2 cursor-pointer bg-slate-900/50 px-3 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 transition">
+                                    <input type="checkbox" checked={showFlux} onChange={()=>setShowFlux(!showFlux)} className="w-4 h-4 rounded text-yellow-500 bg-slate-900 border-slate-600 focus:ring-0" />
+                                    <span className="text-[10px] font-black uppercase text-slate-400">顯示磁通量</span>
+                                </label>
+                                <div className="flex gap-2">
+                                    <button onClick={()=>setIsRunning(!isRunning)} className={`p-3 rounded-xl shadow-lg transition-all ${isRunning ? 'bg-slate-700 text-slate-400 border border-slate-600' : 'bg-emerald-600 text-white shadow-emerald-900/20'}`}><i data-lucide={isRunning ? "pause" : "play"} className="w-4 h-4"></i></button>
+                                    <button onClick={reset} className="p-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-white transition-colors border border-slate-600"><i data-lucide="rotate-ccw" className="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                                <i data-lucide="calculator" className="w-5 h-5 text-indigo-400"></i> 輸出數據分析
+                            </h2>
+                            <div className="space-y-4">
+                                <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-center ring-1 ring-white/5 shadow-inner">
+                                    <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">副線圈電壓 (Vs)</div>
+                                    <div className="text-4xl font-mono font-black text-white">{vs.toFixed(0)} <span className="text-lg text-slate-600">V</span></div>
+                                    <div className="text-[10px] text-indigo-500 mt-2 font-bold italic">匝數比率 {ratio.toFixed(2)} : 1</div>
+                                </div>
+                                <div className="p-4 rounded-xl bg-indigo-900/10 border border-indigo-500/20 font-mono text-[11px] text-slate-400 space-y-2">
+                                    <div className="flex justify-between border-b border-indigo-500/10 pb-1 uppercase font-black"><span>變壓公式</span><span>Vs / Vp = Ns / Np</span></div>
+                                    <div className="flex justify-between"><span>輸入端</span><span className="text-blue-400">{vp} V / {np} T</span></div>
+                                    <div className="flex justify-between"><span>輸出端</span><span className="text-red-400">{vs.toFixed(0)} V / {ns} T</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-900/5 text-[11px] text-slate-400 leading-relaxed font-medium italic">
+                            <i data-lucide="lightbulb" className="w-4 h-4 text-yellow-400 mb-2"></i>
+                            <strong>運作機制：</strong> 原線圈的交流電產生變化的磁場，透過鐵芯引導，穿過副線圈誘發電動勢。注意：變壓器<strong>無法</strong>改變直流電 (DC) 的電壓。
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
