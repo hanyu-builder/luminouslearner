@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luminous Learner - DSE 2026 倒數器</title>
+    <style>
+        :root { --primary: #2563eb; --secondary: #64748b; --accent: #ef4444; }
+        body { font-family: -apple-system, sans-serif; line-height: 1.6; padding: 20px; background: #f8fafc; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .summary-card { background: #eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid var(--primary); }
+        .subject-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 20px 0; }
+        .subject-item { border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; cursor: pointer; text-align: center; transition: 0.3s; }
+        .subject-item.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .countdown-list { margin-top: 20px; }
+        .countdown-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f1f5f9; align-items: center; }
+        .days-left { font-weight: bold; color: var(--accent); font-size: 1.2em; }
+        .label { font-size: 0.9em; color: var(--secondary); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🕯️ Luminous Learner 倒數器</h2>
+    
+    <div id="summary">
+        <div class="summary-card">
+            <div>距離 2026 DSE 首科 (VA) 還有： <span id="first-exam" class="days-left">-</span> 天</div>
+            <div style="margin-top:10px;">距離首門主科 (中文) 還有： <span id="first-core" class="days-left">-</span> 天</div>
+        </div>
+    </div>
+
+    <h3>選擇你的應考科目：</h3>
+    <div class="subject-grid" id="selector"></div>
+
+    <h3>我的考試倒數：</h3>
+    <div id="my-countdowns" class="countdown-list"></div>
+</div>
+
+<script>
+    // 根據 PDF 數據整理的科目表 
+    const examData = [
+        { id: 'chi', name: '中國語文', date: '2026-04-09', isCore: true },
+        { id: 'eng', name: '英國語文', date: '2026-04-10', isCore: true },
+        { id: 'math', name: '數學必修', date: '2026-04-13', isCore: true },
+        { id: 'cs', name: '公民與社會', date: '2026-04-14', isCore: true },
+        { id: 'chem', name: '化學 (Chem)', date: '2026-04-16', isCore: false },
+        { id: 'bio', name: '生物 (Bio)', date: '2026-04-20', isCore: false },
+        { id: 'phy', name: '物理 (Phy)', date: '2026-04-22', isCore: false },
+        { id: 'econ', name: '經濟 (Econ)', date: '2026-05-04', isCore: false }
+    ];
+
+    const STORAGE_KEY = 'luminous_user_subjects';
+    let selectedSubjects = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi', 'eng', 'math', 'cs'];
+
+    function calculateDays(targetDate) {
+        const diff = new Date(targetDate) - new Date();
+        return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+    }
+
+    function render() {
+        // 更新總覽
+        document.getElementById('first-exam').innerText = calculateDays('2026-04-08'); // Visual Arts 
+        document.getElementById('first-core').innerText = calculateDays('2026-04-09'); // Chinese 
+
+        // 渲染選擇器
+        const selectorEl = document.getElementById('selector');
+        selectorEl.innerHTML = examData.map(s => `
+            <div class="subject-item ${selectedSubjects.includes(s.id) ? 'active' : ''}" 
+                 onclick="toggleSubject('${s.id}')">
+                ${s.name}
+            </div>
+        `).join('');
+
+        // 渲染個人倒數列表
+        const listEl = document.getElementById('my-countdowns');
+        const filtered = examData.filter(s => selectedSubjects.includes(s.id));
+        listEl.innerHTML = filtered.map(s => `
+            <div class="countdown-item">
+                <div>
+                    <strong>${s.name}</strong><br>
+                    <span class="label">${s.date}</span>
+                </div>
+                <div class="days-left">${calculateDays(s.date)} Days</div>
+            </div>
+        `).join('');
+    }
+
+    window.toggleSubject = function(id) {
+        if (selectedSubjects.includes(id)) {
+            selectedSubjects = selectedSubjects.filter(sid => sid !== id);
+        } else {
+            selectedSubjects.push(id);
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedSubjects));
+        render();
+    };
+
+    render();
+</script>
+</body>
+</html>
