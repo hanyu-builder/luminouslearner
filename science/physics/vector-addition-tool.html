@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>向量加法模擬工具 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        canvas { touch-action: none; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const VectorAdditionTool = () => {
+        // --- 狀態設定 ---
+        const [vectors, setVectors] = useState([
+            { id: 1, x: 80, y: 320, dx: 120, dy: -120, color: '#3b82f6', label: 'A' },
+            { id: 2, x: 280, y: 320, dx: 160, dy: 0, color: '#10b981', label: 'B' }
+        ]);
+        const [mode, setMode] = useState('free'); 
+        const [showResultant, setShowResultant] = useState(true);
+        const [showComponents, setShowComponents] = useState(false);
+        const [showGrid, setShowGrid] = useState(true);
+        const [dragging, setDragging] = useState(null); 
+
+        const canvasRef = useRef(null);
+        const GRID_SIZE = 40;
+        const SNAP_DIST = 15;
+
+        // --- 數學助手 ---
+        const getMousePos = (e) => {
+            const rect = canvasRef.current.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        };
+
+        const getMagnitude = (dx, dy) => Math.sqrt(dx * dx + dy * dy);
+        const getAngle = (dx, dy) => {
+            let angle = Math.atan2(-dy, dx) * (180 / Math.PI); 
+            if (angle < 0) angle += 360;
+            return angle;
+        };
+
+        // --- 交互處理 ---
+        const handleMouseDown = (e) => {
+            const { x, y } = getMousePos(e);
+            for (let i = vectors.length - 1; i >= 0; i--) {
+                const v = vectors[i];
+                const headX = v.x + v.dx; const headY = v.y + v.dy;
+                if (Math.hypot(x - headX, y - headY) < 15) {
+                    setDragging({ id: v.id, type: 'head', offsetX: x - headX, offsetY: y - headY }); return;
+                }
+                if (Math.hypot(x - v.x, y - v.y) < 15) {
+                    setDragging({ id: v.id, type: 'body', offsetX: x - v.x, offsetY: y - v.y }); return;
+                }
+            }
+        };
+
+        const handleMouseMove = (e) => {
+            if (!dragging) return;
+            const { x, y } = getMousePos(e);
+            setVectors(prev => prev.map(v => {
+                if (v.id !== dragging.id) return v;
+                if (dragging.type === 'body') {
+                    if (mode === 'chain' && v.id !== prev[0].id) return v;
+                    let newX = x - dragging.offsetX; let newY = y - dragging.offsetY;
+                    if (Math.abs(newX % GRID_SIZE) < SNAP_DIST) newX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
+                    if (Math.abs(newY % GRID_SIZE) < SNAP_DIST) newY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
+                    return { ...v, x: newX, y: newY };
+                } else {
+                    let newDx = x - dragging.offsetX - v.x; let newDy = y - dragging.offsetY - v.y;
+                    const absHeadX = v.x + newDx; const absHeadY = v.y + newDy;
+                    if (Math.abs(absHeadX % GRID_SIZE) < SNAP_DIST) newDx = Math.round(absHeadX / GRID_SIZE) * GRID_SIZE - v.x;
+                    if (Math.abs(absHeadY % GRID_SIZE) < SNAP_DIST) newDy = Math.round(absHeadY / GRID_SIZE) * GRID_SIZE - v.y;
+                    return { ...v, dx: newDx, dy: newDy };
+                }
+            }));
+        };
+
+        const addVector = () => {
+            const colors = ['#8b5cf6', '#f59e0b', '#ec4899', '#6366f1'];
+            const color = colors[vectors.length % colors.length];
+            setVectors([...vectors, { 
+                id: Date.now(), x: 120, y: 320, dx: 80, dy: -80, color, 
+                label: String.fromCharCode(67 + (vectors.length % 24)) 
+            }]);
+        };
+
+        // --- 繪圖邏輯 ---
+        useEffect(() => {
+            const canvas = canvasRef.current; const ctx = canvas.getContext('2d');
+            const { width, height } = canvas;
+            ctx.clearRect(0, 0, width, height);
+
+            if (showGrid) {
+                ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1; ctx.beginPath();
+                for (let x = 0; x <= width; x += GRID_SIZE) { ctx.moveTo(x, 0); ctx.lineTo(x, height); }
+                for (let y = 0; y <= height; y += GRID_SIZE) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
+                ctx.stroke();
+            }
+
+            let renderVectors = [...vectors];
+            if (mode === 'chain' && renderVectors.length > 0) {
+                let curX = renderVectors[0].x; let curY = renderVectors[0].y;
+                renderVectors = renderVectors.map((v, i) => {
+                    if (i === 0) return v;
+                    const chained = { ...v, x: curX, y: curY };
+                    curX += v.dx; curY += v.dy;
+                    return chained;
+                });
+            }
+
+            const drawArrow = (fX, fY, dx, dy, color, label, isR = false) => {
+                const tX = fX + dx; const tY = fY + dy;
+                const ang = Math.atan2(dy, dx);
+                ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color;
+                ctx.lineWidth = isR ? 5 : 3;
+                if (isR) ctx.setLineDash([8, 4]);
+                ctx.beginPath(); ctx.moveTo(fX, fY); ctx.lineTo(tX, tY); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(tX, tY);
+                ctx.lineTo(tX - 12 * Math.cos(ang - Math.PI / 6), tY - 12 * Math.sin(ang - Math.PI / 6));
+                ctx.lineTo(tX - 12 * Math.cos(ang + Math.PI / 6), tY - 12 * Math.sin(ang + Math.PI / 6));
+                ctx.fill();
+                if (label) {
+                    ctx.font = 'bold 15px Inter'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 4;
+                    ctx.strokeText(label, fX + dx/2 + 12, fY + dy/2 - 12);
+                    ctx.fillText(label, fX + dx/2 + 12, fY + dy/2 - 12);
+                }
+                if (showComponents && !isR) {
+                    ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.strokeStyle = `${color}90`;
+                    ctx.beginPath(); ctx.moveTo(fX, fY); ctx.lineTo(fX + dx, fY); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(fX + dx, fY); ctx.lineTo(tX, tY); ctx.stroke();
+                }
+                ctx.restore();
+            };
+
+            renderVectors.forEach(v => drawArrow(v.x, v.y, v.dx, v.dy, v.color, v.label));
+
+            if (showResultant && renderVectors.length > 0) {
+                let sumX = 0; let sumY = 0;
+                renderVectors.forEach(v => { sumX += v.dx; sumY += v.dy; });
+                drawArrow(renderVectors[0].x, renderVectors[0].y, sumX, sumY, '#ef4444', '合向量 R', true);
+            }
+        }, [vectors, mode, showResultant, showComponents, showGrid]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 h-16 flex items-center justify-between shadow-lg shrink-0 z-20">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-600 p-2 rounded-lg"><i data-lucide="arrow-right" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">向量加法模擬工具</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-indigo-400 border border-slate-700 uppercase">DSE Physics: Mechanics</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                    <div className="lg:col-span-8 bg-slate-950 relative border-r border-slate-800">
+                        <div className="absolute top-4 left-4 flex gap-2 z-10">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${mode === 'chain' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                                {mode === 'chain' ? '🔗 首尾相連模式' : '🔓 自由編輯模式'}
+                            </span>
+                        </div>
+                        <canvas ref={canvasRef} width={800} height={600} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={() => setDragging(null)} onMouseLeave={() => setDragging(null)} className="w-full h-full cursor-crosshair" />
+                    </div>
+
+                    <aside className="lg:col-span-4 bg-slate-900 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-800 custom-scroll">
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={() => setMode(mode === 'free' ? 'chain' : 'free')} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border transition-all ${mode === 'chain' ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>模式切換</button>
+                            <button onClick={addVector} className="flex-1 py-3 rounded-xl font-bold text-xs bg-blue-600 text-white hover:bg-blue-500 uppercase tracking-widest transition-all">新增向量</button>
+                        </div>
+
+                        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-4">
+                            <h3 className="text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"><i data-lucide="eye" className="w-4 h-4 text-indigo-400"></i> 視覺化設定</h3>
+                            <label className="flex items-center justify-between cursor-pointer group"><span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200">顯示合向量 (Resultant)</span><input type="checkbox" checked={showResultant} onChange={() => setShowResultant(!showResultant)} className="w-4 h-4 rounded border-slate-600 text-red-600 bg-slate-900 focus:ring-0" /></label>
+                            <label className="flex items-center justify-between cursor-pointer group"><span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200">顯示正交分量 (Components)</span><input type="checkbox" checked={showComponents} onChange={() => setShowComponents(!showComponents)} className="w-4 h-4 rounded border-slate-600 text-emerald-600 bg-slate-900 focus:ring-0" /></label>
+                            <label className="flex items-center justify-between cursor-pointer group"><span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200">顯示坐標網格</span><input type="checkbox" checked={showGrid} onChange={() => setShowGrid(!showGrid)} className="w-4 h-4 rounded border-slate-600 text-slate-500 bg-slate-900 focus:ring-0" /></label>
+                        </div>
+
+                        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2"><i data-lucide="list" className="w-4 h-4 text-slate-500"></i> 向量數據詳情</h2>
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scroll">
+                                {vectors.map((v, i) => (
+                                    <div key={v.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px]">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <div className="flex items-center font-bold text-white"><div className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: v.color}}></div>向量 {v.label}</div>
+                                            {vectors.length > 1 && <button onClick={() => setVectors(vectors.filter(x => x.id !== v.id))} className="text-slate-600 hover:text-red-400"><i data-lucide="trash-2" className="w-3 h-3"></i></button>}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-y-2 font-mono text-slate-400">
+                                            <div>大小: <span className="text-white">{getMagnitude(v.dx, v.dy).toFixed(1)}</span></div>
+                                            <div>方向: <span className="text-white">{getAngle(v.dx, v.dy).toFixed(1)}°</span></div>
+                                            <div>X-分量: <span className="text-blue-400">{v.dx.toFixed(0)}</span></div>
+                                            <div>Y-分量: <span className="text-blue-400">{(-v.dy).toFixed(0)}</span></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {showResultant && (
+                            <div className="bg-red-900/10 border border-red-500/20 p-5 rounded-2xl shadow-inner">
+                                <h3 className="text-red-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><i data-lucide="maximize" className="w-4 h-4"></i> 合向量 (R) 分析</h3>
+                                {(() => {
+                                    let rx = 0; let ry = 0; vectors.forEach(v => { rx += v.dx; ry += v.dy; });
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4 font-mono">
+                                            <div><div className="text-[9px] text-red-500 font-black uppercase">大小 |R|</div><div className="text-2xl font-black text-white">{getMagnitude(rx, ry).toFixed(1)}</div></div>
+                                            <div><div className="text-[9px] text-red-500 font-black uppercase">角度 θ</div><div className="text-2xl font-black text-white">{getAngle(rx, ry).toFixed(1)}°</div></div>
+                                            <div className="col-span-2 pt-3 border-t border-red-500/10 text-[10px] text-red-400 italic font-bold text-center">R = ({rx.toFixed(0)}, {(-ry).toFixed(0)})</div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-900/5 text-[10px] text-slate-400 leading-relaxed font-medium italic">
+                            <i data-lucide="lightbulb" className="w-4 h-4 text-yellow-400 mb-2"></i>
+                            <strong>操作指引：</strong> 拖動向量的<strong>箭頭頭部</strong>可改變大小與方向；拖動<strong>尾部</strong>可移動位置。開啟「首尾相連模式」可幫助你更清晰地理解多個力的合成。
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<VectorAdditionTool />);
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
