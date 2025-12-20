@@ -3,104 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Luminous Learner | 2026 DSE 實時倒數</title>
+    <title>Luminous Learner | 2026 DSE 全科目分類計時器</title>
     <style>
-        :root {
-            --primary: #4f46e5;
-            --bg: #f8fafc;
-            --danger: #ef4444;
-        }
-        /* 修正 1: 全局盒模型與滾動修復 */
-        * { box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, system-ui, sans-serif; 
-            background: var(--bg); 
-            margin: 0; padding: 10px;
-            overflow-x: hidden; /* 防止水平溢出 */
-        }
-        .container { 
-            width: 100%; 
-            max-width: 800px; 
-            margin: 0 auto; 
-        }
+        :root { --primary: #4f46e5; --bg: #f1f5f9; --danger: #e11d48; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; padding: 12px; overflow-x: hidden; }
+        .container { width: 100%; max-width: 800px; margin: 0 auto; }
 
-        /* 修正 2: 響應式主倒數卡片 */
+        /* 頂部英雄卡片：修復 Mobile 出界 */
         .hero-card {
-            background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
-            color: white; padding: 20px 10px; border-radius: 20px; text-align: center;
-            margin-bottom: 20px; width: 100%;
+            background: linear-gradient(135deg, #1e40af 0%, #7e22ce 100%);
+            color: white; padding: 25px 10px; border-radius: 20px; text-align: center;
+            margin-bottom: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
         }
-        .timer-grid { 
-            display: flex; justify-content: center; gap: 5px; /* 縮小手機間距 */
-            flex-wrap: nowrap; /* 確保不換行 */
-        }
-        .unit-box { 
-            background: rgba(255,255,255,0.2); 
-            padding: 8px 5px; border-radius: 10px; 
-            flex: 1; max-width: 75px; 
-        }
-        .unit-num { display: block; font-size: 1.5rem; font-weight: 800; } /* 縮小手機字體 */
-        .unit-label { font-size: 0.65rem; opacity: 0.8; }
+        .timer-grid { display: flex; justify-content: center; gap: 6px; }
+        .unit-box { background: rgba(255,255,255,0.2); padding: 10px 5px; border-radius: 12px; flex: 1; max-width: 75px; backdrop-filter: blur(4px); }
+        .unit-num { display: block; font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .unit-label { font-size: 0.65rem; opacity: 0.9; }
 
-        /* 修正 3: Scroll Down List (多選選單) */
-        .selector-section { 
-            background: white; padding: 15px; border-radius: 15px; 
-            margin-bottom: 20px; border: 1px solid #e2e8f0; 
-        }
-        .select-wrapper { width: 100%; position: relative; }
+        /* 分類下拉選單 */
+        .selector-box { background: white; padding: 20px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         select {
-            width: 100%; padding: 12px; border-radius: 10px;
-            border: 2px solid #e2e8f0; font-size: 1rem;
-            appearance: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 10px center;
+            width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #e2e8f0;
+            font-size: 1rem; background: #fff; cursor: pointer; outline: none;
         }
+        optgroup { font-weight: bold; color: var(--primary); background: #f8fafc; }
 
-        /* 修正 4: 雙欄列表 (手機端自動轉單欄) */
-        .schedule-grid { 
-            display: grid; 
-            grid-template-columns: repeat(2, 1fr); 
-            gap: 12px; 
-            width: 100%;
-        }
-        @media (max-width: 600px) {
-            .schedule-grid { grid-template-columns: 1fr; } /* 手機轉單欄 */
-            .unit-num { font-size: 1.3rem; }
-        }
+        /* 2-Column 列表 */
+        .schedule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        @media (max-width: 600px) { .schedule-grid { grid-template-columns: 1fr; } }
 
-        .subject-card {
-            background: white; padding: 15px; border-radius: 15px;
-            border-left: 5px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .live-timer { 
-            color: var(--danger); font-weight: bold; 
-            font-family: monospace; font-size: 0.95rem; margin-top: 8px;
-        }
+        .card { background: white; padding: 16px; border-radius: 15px; border-left: 5px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card.is-active { border-left-color: #10b981; }
+        .subject-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color: #1e293b; }
+        .subject-time { font-size: 0.75rem; color: #64748b; margin-bottom: 10px; }
+        .live-timer { font-family: 'Courier New', monospace; color: var(--danger); font-weight: 800; font-size: 0.9rem; }
+        
+        .chip { background:#e0e7ff; color:#4338ca; padding:5px 12px; border-radius:20px; font-size:0.8rem; cursor:pointer; margin:4px; display:inline-block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="hero-card">
-        <div style="font-size: 0.9rem; margin-bottom: 10px;">距離 2026 DSE 首科 (VA) 還有</div>
+        <div style="font-size: 0.95rem; font-weight: 600; margin-bottom: 15px;">距離 2026 DSE 首科 (視覺藝術) 還有</div>
         <div class="timer-grid">
             <div class="unit-box"><span class="unit-num" id="h-d">--</span><span class="unit-label">天</span></div>
             <div class="unit-box"><span class="unit-num" id="h-h">--</span><span class="unit-label">時</span></div>
             <div class="unit-box"><span class="unit-num" id="h-m">--</span><span class="unit-label">分</span></div>
             <div class="unit-box"><span class="unit-num" id="h-s">--</span><span class="unit-label">秒</span></div>
         </div>
-        <div style="font-size: 0.7rem; margin-top: 10px; opacity: 0.7;">目標時間：2026年4月8日 08:30</div>
+        <div style="font-size: 0.7rem; margin-top: 15px; opacity: 0.8;">目標：2026年4月8日 08:30</div>
     </div>
 
-    <div class="selector-section">
-        <label style="display:block; margin-bottom: 8px; font-weight: 600;">➕ 添加/移除考試科目：</label>
-        <div class="select-wrapper">
-            <select id="subject-dropdown" onchange="handleAddSubject(this)">
-                <option value="">-- 請選擇科目 --</option>
-                </select>
-        </div>
-        <div id="active-chips" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;"></div>
+    <div class="selector-box">
+        <label style="font-weight:700; display:block; margin-bottom:10px;">🔍 添加應考科目 (已分類)：</label>
+        <select id="sub-select" onchange="addSubject(this)">
+            <option value="">-- 請按分類選擇 --</option>
+            <optgroup label="核心及語言科目">
+                <option value="chi">中國語文</option>
+                <option value="eng12">英國語文 (一)及(二)</option>
+                <option value="eng3">英國語文 (三) (聆聽)</option>
+                <option value="math">數學必修部分</option>
+                <option value="cs">公民與社會發展</option>
+                <option value="eng_s">英國語文 (口試)</option>
+            </optgroup>
+            <optgroup label="理科 (Science)">
+                <option value="chem">化學</option>
+                <option value="bio">生物</option>
+                <option value="phy">物理</option>
+                <option value="ict">資訊及通訊科技</option>
+                <option value="dat">設計與應用科技</option>
+                <option value="math_ext">數學延伸部分 (M1/M2)</option>
+            </optgroup>
+            <optgroup label="文科 (Arts/Hum)">
+                <option value="chi_hist">中國歷史</option>
+                <option value="hist">歷史</option>
+                <option value="chi_lit">中國文學</option>
+                <option value="eng_lit">英語文學</option>
+                <option value="va">視覺藝術 (一)及(二)</option>
+                <option value="geog">地理</option>
+            </optgroup>
+            <optgroup label="商科及社會科學">
+                <option value="econ">經濟</option>
+                <option value="bafs">企業、會計與財務概論</option>
+                <option value="ths">旅遊與款待</option>
+                <option value="ers">倫理與宗教</option>
+                <option value="hmsc">健康管理與社會關懷</option>
+            </optgroup>
+            <optgroup label="其他及實習">
+                <option value="pe_p">體育 (實習)</option>
+                <option value="mu_p">音樂 (實習)</option>
+                <option value="pe_w">體育 (筆試)</option>
+                <option value="mu_w">音樂 (筆試)</option>
+                <option value="tl">科技與生活</option>
+            </optgroup>
+        </select>
+        <div id="chips" style="margin-top:10px;"></div>
     </div>
 
-    <h3 style="padding-left: 5px; font-size: 1.1rem;">📅 我的倒數清單</h3>
+    <h3 style="margin-left:5px; font-size:1.1rem;">📅 我的倒數清單 (實時跳動)</h3>
     <div class="schedule-grid" id="my-list"></div>
 </div>
 
@@ -108,80 +110,79 @@
     const fullData = [
         { id: 'pe_p', name: '體育 (實習)', date: '2026-02-25T08:00:00' },
         { id: 'mu_p', name: '音樂 (實習)', date: '2026-03-02T09:00:00' },
-        { id: 'eng_s', name: '英文口試', date: '2026-03-10T17:00:00' },
-        { id: 'va', name: '視覺藝術', date: '2026-04-08T08:30:00' },
+        { id: 'eng_s', name: '英國語文 (口試)', date: '2026-03-10T17:00:00' },
+        { id: 'va', name: '視覺藝術 (一)及(二)', date: '2026-04-08T08:30:00' },
         { id: 'chi', name: '中國語文', date: '2026-04-09T08:30:00' },
-        { id: 'eng_12', name: '英國語文 (1&2)', date: '2026-04-10T08:30:00' },
-        { id: 'eng_3', name: '英國語文 (3)', date: '2026-04-11T09:15:00' },
-        { id: 'math', name: '數學必修', date: '2026-04-13T08:30:00' },
-        { id: 'cs', name: '公民與社會', date: '2026-04-14T08:30:00' },
+        { id: 'eng12', name: '英國語文 (一)及(二)', date: '2026-04-10T08:30:00' },
+        { id: 'eng3', name: '英國語文 (三) (聆聽)', date: '2026-04-11T09:15:00' },
+        { id: 'math', name: '數學必修部分', date: '2026-04-13T08:30:00' },
+        { id: 'cs', name: '公民與社會發展', date: '2026-04-14T08:30:00' },
+        { id: 'ers', name: '倫理與宗教', date: '2026-04-15T08:30:00' },
         { id: 'chem', name: '化學', date: '2026-04-16T08:30:00' },
+        { id: 'dat', name: '設計與應用科技', date: '2026-04-17T08:30:00' },
+        { id: 'eng_lit', name: '英語文學', date: '2026-04-17T08:30:00' },
+        { id: 'hmsc', name: '健康管理與社會關懷', date: '2026-04-18T08:30:00' },
         { id: 'bio', name: '生物', date: '2026-04-20T08:30:00' },
+        { id: 'chi_lit', name: '中國文學', date: '2026-04-21T08:30:00' },
+        { id: 'tl', name: '科技與生活', date: '2026-04-21T08:30:00' },
         { id: 'phy', name: '物理', date: '2026-04-22T08:30:00' },
+        { id: 'geog', name: '地理', date: '2026-04-23T08:30:00' },
         { id: 'ict', name: '資訊及通訊科技', date: '2026-04-24T08:30:00' },
-        { id: 'econ', name: '經濟', date: '2026-05-04T08:30:00' }
-        // ... 其他 PDF 數據
+        { id: 'hist', name: '歷史', date: '2026-04-25T08:30:00' },
+        { id: 'bafs', name: '企會財 (BAFS)', date: '2026-04-27T08:30:00' },
+        { id: 'pe_w', name: '體育 (筆試)', date: '2026-04-28T08:30:00' },
+        { id: 'chi_hist', name: '中國歷史', date: '2026-04-29T08:30:00' },
+        { id: 'math_ext', name: '數學延伸 (M1/M2)', date: '2026-04-30T08:30:00' },
+        { id: 'ths', name: '旅遊與款待', date: '2026-05-02T08:30:00' },
+        { id: 'econ', name: '經濟', date: '2026-05-04T08:30:00' },
+        { id: 'mu_w', name: '音樂 (筆試)', date: '2026-05-05T08:30:00' }
     ];
 
-    const STORAGE_KEY = 'luminous_v5';
-    let userChoices = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi','eng_12','math','cs'];
+    const STORAGE_KEY = 'luminous_v6';
+    let userList = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi','eng12','math','cs'];
 
-    function initDropdown() {
-        const select = document.getElementById('subject-dropdown');
-        fullData.forEach(item => {
-            const opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = item.name;
-            select.appendChild(opt);
-        });
-    }
-
-    function handleAddSubject(select) {
-        const id = select.value;
-        if (!id) return;
-        if (!userChoices.includes(id)) {
-            userChoices.push(id);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
+    function addSubject(sel) {
+        if (sel.value && !userList.includes(sel.value)) {
+            userList.push(sel.value);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(userList));
             render();
         }
-        select.value = ""; // 重置選單
+        sel.value = "";
     }
 
-    function removeSubject(id) {
-        userChoices = userChoices.filter(i => i !== id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
+    function removeSub(id) {
+        userList = userList.filter(i => i !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(userList));
         render();
     }
 
     function render() {
-        // 渲染已選科目的「移除標籤」
-        const chipCont = document.getElementById('active-chips');
-        chipCont.innerHTML = userChoices.map(id => {
+        const chipCont = document.getElementById('chips');
+        chipCont.innerHTML = userList.map(id => {
             const s = fullData.find(d => d.id === id);
-            return `<span onclick="removeSubject('${id}')" style="background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:15px; font-size:0.75rem; cursor:pointer;">${s.name} ✕</span>`;
+            return `<span class="chip" onclick="removeSub('${id}')">${s.name} ✕</span>`;
         }).join('');
 
-        // 渲染 2-Column 列表
-        const sorted = fullData.filter(d => userChoices.includes(d.id)).sort((a,b) => Date.parse(a.date) - Date.parse(b.date));
+        const sorted = fullData.filter(d => userList.includes(d.id)).sort((a,b) => Date.parse(a.date) - Date.parse(b.date));
         document.getElementById('my-list').innerHTML = sorted.map(d => `
-            <div class="subject-card">
-                <div style="font-weight:700; font-size:0.95rem;">${d.name}</div>
-                <div style="font-size:0.75rem; color:#64748b;">🗓️ ${d.date.replace('T', ' ').substring(0, 16)}</div>
+            <div class="card ${Date.parse(d.date) > Date.now() ? 'is-active' : ''}">
+                <div class="subject-title">${d.name}</div>
+                <div class="subject-time">🗓️ ${d.date.replace('T', ' ').substring(0, 16)}</div>
                 <div class="live-timer" id="timer-${d.id}">--:--:--</div>
             </div>
         `).join('');
     }
 
     function updateTick() {
-        const main = Date.parse('2026-04-08T08:30:00') - Date.now();
-        if (main > 0) {
-            document.getElementById('h-d').innerText = Math.floor(main / 86400000);
-            document.getElementById('h-h').innerText = Math.floor((main / 3600000) % 24).toString().padStart(2,'0');
-            document.getElementById('h-m').innerText = Math.floor((main / 60000) % 60).toString().padStart(2,'0');
-            document.getElementById('h-s').innerText = Math.floor((main / 1000) % 60).toString().padStart(2,'0');
+        const first = Date.parse('2026-04-08T08:30:00') - Date.now();
+        if (first > 0) {
+            document.getElementById('h-d').innerText = Math.floor(first / 86400000);
+            document.getElementById('h-h').innerText = Math.floor((first / 3600000) % 24).toString().padStart(2,'0');
+            document.getElementById('h-m').innerText = Math.floor((first / 60000) % 60).toString().padStart(2,'0');
+            document.getElementById('h-s').innerText = Math.floor((first / 1000) % 60).toString().padStart(2,'0');
         }
 
-        userChoices.forEach(id => {
+        userList.forEach(id => {
             const item = fullData.find(d => d.id === id);
             const diff = Date.parse(item.date) - Date.now();
             const el = document.getElementById(`timer-${id}`);
@@ -192,14 +193,11 @@
                     const m = Math.floor((diff / 60000) % 60);
                     const s = Math.floor((diff / 1000) % 60);
                     el.innerText = `${d}天 ${h}時 ${m}分 ${s}秒`;
-                } else {
-                    el.innerText = "已開考";
-                }
+                } else { el.innerText = "已開考"; }
             }
         });
     }
 
-    initDropdown();
     render();
     setInterval(updateTick, 1000);
     updateTick();
