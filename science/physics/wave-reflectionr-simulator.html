@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>波的反射模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff; background: #06b6d4;
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 500;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+
+    const App = () => {
+        const [barrierType, setBarrierType] = useState('flat'); 
+        const [angle, setAngle] = useState(45); 
+        const [isRunning, setIsRunning] = useState(true);
+        const [showRays, setShowRays] = useState(true);
+        const [showNormal, setShowNormal] = useState(true);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const wavesRef = useRef([]); 
+        const frameCountRef = useRef(0);
+
+        const resetSim = () => {
+            wavesRef.current = [];
+            frameCountRef.current = 0;
+        };
+
+        const loop = () => {
+            if (!isRunning) return;
+            frameCountRef.current++;
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 背景網格
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1; ctx.beginPath();
+            for(let x=0; x<CANVAS_WIDTH; x+=40) { ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); }
+            for(let y=0; y<CANVAS_HEIGHT; y+=40) { ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); }
+            ctx.stroke();
+
+            // 2. 繪製反射面 (Barrier)
+            const rad = angle * Math.PI / 180;
+            ctx.strokeStyle = '#facc15'; ctx.lineWidth = 5;
+
+            if (barrierType === 'flat') {
+                ctx.beginPath();
+                const len = 300;
+                const dx = len/2 * Math.sin(rad); const dy = len/2 * Math.cos(rad);
+                ctx.moveTo(CENTER_X - dx, CENTER_Y - dy); ctx.lineTo(CENTER_X + dx, CENTER_Y + dy);
+                ctx.stroke();
+                if (showNormal) {
+                    ctx.save(); ctx.translate(CENTER_X, CENTER_Y); ctx.rotate(Math.PI/2 - rad);
+                    ctx.strokeStyle = '#ef4444'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-100, 0); ctx.stroke();
+                    ctx.restore();
+                }
+            } else if (barrierType === 'concave') {
+                ctx.beginPath(); ctx.arc(CENTER_X + 50, CENTER_Y, 150, Math.PI - 0.7, Math.PI + 0.7); ctx.stroke();
+                if (showNormal) {
+                     ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(CENTER_X + 50 - 75, CENTER_Y, 4, 0, Math.PI*2); ctx.fill();
+                     ctx.font = 'bold 12px Inter'; ctx.fillText('焦點 F', CENTER_X + 50 - 75, CENTER_Y - 15);
+                }
+            } else if (barrierType === 'convex') {
+                ctx.beginPath(); ctx.arc(CENTER_X - 50, CENTER_Y, 150, -0.7, 0.7); ctx.stroke();
+            }
+
+            // 3. 繪製波陣面 (Ray Tracing Logic)
+            const numRays = 20; const raySpacing = 15; const waveSpeed = 2;
+            const t = frameCountRef.current * waveSpeed;
+            const launchInterval = 60; const maxDist = CANVAS_WIDTH + CANVAS_HEIGHT;
+
+            for (let dist = t % launchInterval; dist < maxDist; dist += launchInterval) {
+                ctx.beginPath();
+                for (let i = -numRays/2; i <= numRays/2; i++) {
+                    const rayY = CENTER_Y + i * raySpacing;
+                    let hitDist = 9999; let hitX = 0; let hitY = 0; let reflected = false;
+                    
+                    if (barrierType === 'flat') {
+                        if (Math.abs(Math.cos(rad)) > 0.01) {
+                            const s = (rayY - CENTER_Y) / Math.cos(rad);
+                            if (Math.abs(s) < 150) { hitX = CENTER_X + s * Math.sin(rad); hitY = rayY; hitDist = hitX; reflected = true; }
+                        } else {
+                            if (Math.abs(rayY - CENTER_Y) < 150) { hitX = CENTER_X; hitY = rayY; hitDist = hitX; reflected = true; }
+                        }
+                    } else if (barrierType === 'concave') {
+                        const dy = rayY - CENTER_Y;
+                        if (Math.abs(dy) < 140) {
+                            const dx = Math.sqrt(150*150 - dy*dy); hitX = (CENTER_X + 50) - dx; hitY = rayY; hitDist = hitX; reflected = true;
+                        }
+                    } else if (barrierType === 'convex') {
+                         const dy = rayY - CENTER_Y;
+                         if (Math.abs(dy) < 140) {
+                             const dx = Math.sqrt(150*150 - dy*dy); hitX = (CENTER_X - 50) + dx; hitY = rayY; hitDist = hitX; reflected = true;
+                         }
+                    }
+
+                    let waveX, waveY;
+                    if (dist < hitDist) {
+                        waveX = dist; waveY = rayY;
+                        if (showRays && dist % (launchInterval*2) < 5) {
+                            ctx.fillStyle = 'rgba(6, 182, 212, 0.05)'; ctx.fillRect(0, rayY, hitDist, 1);
+                        }
+                    } else {
+                        if (!reflected) { waveX = dist; waveY = rayY; }
+                        else {
+                            const remainDist = dist - hitDist;
+                            let nx, ny;
+                            if (barrierType === 'flat') { nx = -Math.cos(rad); ny = Math.sin(rad); }
+                            else if (barrierType === 'concave') {
+                                const angle = Math.atan2(hitY - CENTER_Y, hitX - (CENTER_X+50)); nx = -Math.cos(angle); ny = -Math.sin(angle);
+                            } else { 
+                                const angle = Math.atan2(hitY - CENTER_Y, hitX - (CENTER_X-50)); nx = Math.cos(angle); ny = Math.sin(angle);
+                            }
+                            const dot = 1 * nx + 0 * ny;
+                            const rx = 1 - 2 * dot * nx; const ry = 0 - 2 * dot * ny;
+                            waveX = hitX + rx * remainDist; waveY = hitY + ry * remainDist;
+                        }
+                    }
+                    if (i === -numRays/2) ctx.moveTo(waveX, waveY);
+                    else {
+                         ctx.fillStyle = dist < hitDist ? '#06b6d4' : '#ef4444';
+                         ctx.fillRect(waveX, waveY, 2, 2);
+                    }
+                }
+            }
+        };
+
+        useEffect(() => {
+            if (isRunning) requestRef.current = requestAnimationFrame(loop);
+            else cancelAnimationFrame(requestRef.current);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isRunning, barrierType, angle, showRays, showNormal]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-lg h-16 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-600 p-2 rounded-lg"><i data-lucide="waves" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">波的反射模擬實驗室</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-cyan-400 border border-slate-700 uppercase">DSE Physics: Wave Optics</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                    <div className="lg:col-span-9 bg-black relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
+                            <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-cyan-500/50 text-[10px] font-black text-cyan-300 uppercase tracking-widest">入射波陣面 (Incident)</div>
+                            <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-red-500/50 text-[10px] font-black text-red-300 uppercase tracking-widest">反射波陣面 (Reflected)</div>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-3 bg-slate-900 p-6 flex flex-col gap-6 overflow-y-auto custom-scroll border-l border-slate-800">
+                        <div className="space-y-4">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><i data-lucide="settings" className="w-4 h-4 text-slate-500"></i> 反射面設定</h2>
+                            <div className="grid grid-cols-1 gap-2">
+                                {[{id:'flat', n:'平面鏡'}, {id:'concave', n:'凹面鏡'}, {id:'convex', n:'凸面鏡'}].map(t => (
+                                    <button key={t.id} onClick={() => { setBarrierType(t.id); resetSim(); }} className={`py-3 rounded-xl font-bold text-xs transition-all border ${barrierType === t.id ? 'bg-yellow-600 border-yellow-400 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>{t.n}</button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className={`space-y-4 transition-all ${barrierType !== 'flat' ? 'opacity-20 pointer-events-none' : ''}`}>
+                            <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>障礙物角度 (Angle)</span><span className="text-cyan-400">{angle}°</span></div>
+                            <input type="range" min="0" max="60" step="5" value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                        </div>
+
+                        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 space-y-4">
+                            <h3 className="text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"><i data-lucide="eye" className="w-4 h-4 text-indigo-400"></i> 視覺化設定</h3>
+                            <label className="flex items-center justify-between cursor-pointer group"><span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200 transition-colors">顯示法線 (Normal)</span><input type="checkbox" checked={showNormal} onChange={() => setShowNormal(!showNormal)} className="w-4 h-4 rounded border-slate-600 text-cyan-600 bg-slate-900 focus:ring-0" /></label>
+                            <label className="flex items-center justify-between cursor-pointer group"><span className="text-[11px] font-bold text-slate-400 group-hover:text-slate-200 transition-colors">顯示光線軌跡 (Rays)</span><input type="checkbox" checked={showRays} onChange={() => setShowRays(!showRays)} className="w-4 h-4 rounded border-slate-600 text-cyan-600 bg-slate-900 focus:ring-0" /></label>
+                        </div>
+
+                        <div className="mt-auto space-y-3">
+                            <button onClick={() => setIsRunning(!isRunning)} className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] shadow-lg transition-all flex items-center justify-center gap-2 ${isRunning ? 'bg-slate-700 text-slate-400 border border-slate-600' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}><i data-lucide={isRunning ? "pause" : "play"} className="w-4 h-4"></i> {isRunning ? '暫停運行' : '啟動模擬'}</button>
+                        </div>
+
+                        <div className="p-4 bg-indigo-900/10 border border-indigo-500/20 rounded-xl">
+                            <h3 className="text-indigo-400 font-black text-[10px] uppercase mb-2 flex items-center gap-2"><i data-lucide="lightbulb" className="w-3 h-3"></i> 物理小提示</h3>
+                            <p className="text-[10px] text-slate-400 leading-relaxed font-medium italic">反射定律指出入射角等於反射角 (i=r)。在凹面反射中，平行波會向內彎曲並通過「焦點 F」。</p>
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
