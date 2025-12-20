@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電路構建模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+        }
+        .thumb-yellow::-webkit-slider-thumb { background: #facc15; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 450;
+    const BULB_RESISTANCE = 10; 
+
+    const App = () => {
+        const [tab, setTab] = useState('series'); 
+        const [layout, setLayout] = useState({ rows: 1, cols: 2 }); 
+
+        const [voltage, setVoltage] = useState(9.0); 
+        const [isSwitchClosed, setIsSwitchClosed] = useState(true);
+        
+        const [totalCurrent, setTotalCurrent] = useState(0);
+        const [totalResistance, setTotalResistance] = useState(0);
+        const [bulbStats, setBulbStats] = useState({ v: 0, i: 0, p: 0 });
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const electronOffsetRef = useRef(0);
+
+        const setSeriesConfig = (n) => {
+            setLayout({ rows: 1, cols: n });
+            setTab('series');
+        };
+
+        const setParallelConfig = (rows, cols) => {
+            setLayout({ rows, cols });
+            setTab('parallel');
+        };
+
+        const reset = () => {
+            setVoltage(9.0);
+            setIsSwitchClosed(true);
+        };
+
+        useEffect(() => {
+            if (!isSwitchClosed) {
+                setTotalCurrent(0); setTotalResistance(Infinity);
+                setBulbStats({ v: 0, i: 0, p: 0 });
+                return;
+            }
+            const { rows, cols } = layout;
+            const R_branch = cols * BULB_RESISTANCE;
+            const R_eq = R_branch / rows;
+            const I_total = voltage / R_eq;
+            const I_branch = I_total / rows;
+            const V_bulb = I_branch * BULB_RESISTANCE;
+            const P_bulb = V_bulb * I_branch;
+
+            setTotalResistance(R_eq);
+            setTotalCurrent(I_total);
+            setBulbStats({ v: V_bulb, i: I_branch, p: P_bulb });
+        }, [layout, voltage, isSwitchClosed]);
+
+        const loop = () => {
+            const speed = Math.min(10, totalCurrent * 2); 
+            electronOffsetRef.current = (electronOffsetRef.current - speed) % 20; 
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        });
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const batteryX = 100; const batteryY = CANVAS_HEIGHT / 2;
+            const wireColor = '#fbbf24'; const offColor = '#334155';
+            const activeColor = isSwitchClosed ? wireColor : offColor;
+            const circuitLeft = 100; const circuitRight = 700; const circuitTop = 60; const circuitBottom = 390;
+
+            drawBattery(ctx, batteryX, batteryY, voltage);
+
+            ctx.lineWidth = 4; ctx.strokeStyle = activeColor;
+            ctx.beginPath();
+            ctx.moveTo(batteryX, batteryY - 30); ctx.lineTo(batteryX, circuitTop); ctx.lineTo(circuitLeft + 50, circuitTop);
+            ctx.stroke();
+
+            ctx.beginPath(); ctx.moveTo(circuitLeft + 50, circuitTop);
+            if (isSwitchClosed) ctx.lineTo(circuitLeft + 100, circuitTop);
+            else { ctx.moveTo(circuitLeft + 50, circuitTop); ctx.lineTo(circuitLeft + 90, circuitTop - 30); }
+            ctx.stroke();
+
+            ctx.beginPath(); ctx.moveTo(circuitLeft + 100, circuitTop);
+            
+            if (layout.rows === 1) {
+                drawSeriesVisuals(ctx, circuitLeft + 100, circuitTop, circuitRight, circuitBottom, batteryX, batteryY);
+            } else {
+                drawParallelVisuals(ctx, circuitLeft + 100, circuitTop, circuitRight, circuitBottom, batteryX, batteryY);
+            }
+
+            if (isSwitchClosed && totalCurrent > 0) {
+                 drawElectronsOnLine(ctx, batteryX, circuitBottom, batteryX, batteryY + 30, totalCurrent);
+            }
+        };
+
+        const drawSeriesVisuals = (ctx, startX, startY, endX, endY, batX, batY) => {
+            const count = layout.cols;
+            const step = (endX - startX) / (count + 1);
+            ctx.beginPath(); ctx.moveTo(startX, startY);
+            for (let i = 0; i < count; i++) {
+                const bx = startX + step * (i + 1);
+                ctx.lineTo(bx - 20, startY); ctx.stroke(); 
+                drawBulb(ctx, bx, startY, bulbStats.p);
+                ctx.beginPath(); ctx.moveTo(bx + 20, startY);
+            }
+            ctx.lineTo(endX, startY); ctx.lineTo(endX, endY); ctx.lineTo(batX, endY); ctx.lineTo(batX, batY + 30);
+            ctx.stroke();
+            if (isSwitchClosed && totalCurrent > 0) {
+                drawElectronsOnLine(ctx, startX, startY, endX, startY, totalCurrent);
+                drawElectronsOnLine(ctx, endX, startY, endX, endY, totalCurrent);
+                drawElectronsOnLine(ctx, endX, endY, batX, endY, totalCurrent);
+            }
+        };
+
+        const drawParallelVisuals = (ctx, startX, startY, endX, endY, batX, batY) => {
+            const rows = layout.rows; const cols = layout.cols;
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, startY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(batX, endY); ctx.lineTo(endX, endY); ctx.stroke();
+            const step = (endX - startX) / rows;
+            for(let i=0; i<rows; i++) {
+                const bx = startX + step * i + step/2;
+                ctx.beginPath(); ctx.moveTo(bx, startY); ctx.lineTo(bx, endY); ctx.stroke();
+                const vStep = (endY - startY) / (cols + 1);
+                for (let j=0; j<cols; j++) {
+                    const by = startY + vStep * (j + 1);
+                    ctx.clearRect(bx - 18, by - 18, 36, 36);
+                    ctx.fillStyle = '#0f172a'; ctx.fillRect(bx - 18, by - 18, 36, 36);
+                    drawBulb(ctx, bx, by, bulbStats.p);
+                }
+                if (isSwitchClosed && bulbStats.i > 0) drawElectronsOnLine(ctx, bx, startY, bx, endY, bulbStats.i);
+            }
+            if (isSwitchClosed && totalCurrent > 0) {
+                drawElectronsOnLine(ctx, startX, startY, endX, startY, totalCurrent);
+                drawElectronsOnLine(ctx, endX, endY, batX, endY, totalCurrent);
+            }
+        };
+
+        const drawBattery = (ctx, x, y, volts) => {
+            ctx.lineWidth = 4; ctx.strokeStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(x - 20, y - 10); ctx.lineTo(x + 20, y - 10); ctx.stroke();
+            ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x - 10, y + 10); ctx.lineTo(x + 10, y + 10); ctx.stroke();
+            ctx.fillStyle = '#facc15'; ctx.font = 'bold 16px JetBrains Mono'; ctx.textAlign = 'right';
+            ctx.fillText(`${volts}V`, x - 35, y + 5);
+        };
+
+        const drawBulb = (ctx, x, y, power) => {
+            if (power > 0) {
+                const glow = 20 + Math.min(60, power * 5); 
+                const grad = ctx.createRadialGradient(x, y, 10, x, y, glow);
+                grad.addColorStop(0, 'rgba(253, 224, 71, 0.6)'); grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, glow, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.strokeStyle = power > 0 ? '#fde047' : '#4b5563';
+            ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x - 8, y + 10); ctx.lineTo(x - 4, y - 5); ctx.lineTo(x + 4, y - 5); ctx.lineTo(x + 8, y + 10);
+            ctx.strokeStyle = power > 0 ? '#facc15' : '#4b5563'; ctx.stroke();
+            if (power > 0) {
+                ctx.fillStyle = '#facc15'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
+                ctx.fillText(`${power.toFixed(1)}W`, x, y + 32);
+            }
+        };
+
+        const drawElectronsOnLine = (ctx, x1, y1, x2, y2, current) => {
+            if (current < 0.01) return;
+            const dist = Math.hypot(x2 - x1, y2 - y1); const angle = Math.atan2(y2 - y1, x2 - x1);
+            const speed = Math.min(5, current * 2); ctx.fillStyle = '#fef08a';
+            const spacing = 30; const offset = (electronOffsetRef.current * (speed/2)) % spacing;
+            for (let d = offset; d < dist; d += spacing) {
+                const ex = x2 - d * Math.cos(angle); const ey = y2 - d * Math.sin(angle);
+                ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, Math.PI*2); ctx.fill();
+            }
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-lg h-16 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-yellow-500 p-2 rounded-lg"><i data-lucide="zap" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">電路構建模擬實驗室</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-yellow-400 border border-slate-700 uppercase">DSE Physics: Electricity</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                    <div className="lg:col-span-8 bg-slate-950 relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        
+                        <div className="absolute top-4 left-4 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 text-xs shadow-2xl space-y-2">
+                            <div className="flex justify-between gap-6 border-b border-slate-700 pb-1.5"><span className="text-slate-500 font-bold uppercase tracking-widest">總電流 (Total I)</span><span className="text-yellow-400 font-mono font-black">{totalCurrent.toFixed(2)} A</span></div>
+                            <div className="flex justify-between gap-6"><span className="text-slate-500 font-bold uppercase tracking-widest">總電阻 (Total R)</span><span className="text-blue-400 font-mono font-black">{isSwitchClosed ? totalResistance.toFixed(1) + ' Ω' : '斷路'}</span></div>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-4 bg-slate-900 p-6 flex flex-col gap-6 overflow-y-auto custom-scroll border-l border-slate-800">
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                            <div className="flex items-center gap-4 mb-2 border-b border-slate-700 pb-3">
+                                <button onClick={() => setSeriesConfig(2)} className={`text-xs font-black uppercase tracking-[0.2em] pb-2 transition-all ${tab === 'series' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`}>串聯模式</button>
+                                <button onClick={() => setParallelConfig(2, 1)} className={`text-xs font-black uppercase tracking-[0.2em] pb-2 transition-all ${tab === 'parallel' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'text-slate-500 hover:text-slate-300'}`}>並聯模式</button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                {tab === 'series' ? (
+                                    [1,2,3,4].map(n => <button key={n} onClick={()=>setSeriesConfig(n)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${layout.cols===n ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>{n} 燈泡</button>)
+                                ) : (
+                                    <>
+                                        <button onClick={()=>setParallelConfig(2,1)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${layout.rows===2 && layout.cols===1 ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>2 分支</button>
+                                        <button onClick={()=>setParallelConfig(3,1)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${layout.rows===3 && layout.cols===1 ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>3 分支</button>
+                                        <button onClick={()=>setParallelConfig(4,1)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${layout.rows===4 && layout.cols===1 ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>4 分支</button>
+                                        <button onClick={()=>setParallelConfig(2,2)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${layout.rows===2 && layout.cols===2 ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>混聯 (2x2)</button>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-700/50">
+                                <div className="flex justify-between text-[11px] font-black text-yellow-400 uppercase mb-3"><span>電池電壓 (Voltage)</span><span className="text-white">{voltage} V</span></div>
+                                <input type="range" min="1" max="24" step="1" value={voltage} onChange={(e) => setVoltage(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-yellow" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 pt-2">
+                                <button onClick={() => setIsSwitchClosed(!isSwitchClosed)} className={`py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${isSwitchClosed ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}`}><i data-lucide="power" className="w-4 h-4"></i> {isSwitchClosed ? "開關：接通" : "開關：斷路"}</button>
+                                <button onClick={reset} className="bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-slate-600"><i data-lucide="rotate-ccw" className="w-4 h-4"></i> 重置</button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2"><i data-lucide="info" className="w-4 h-4 text-indigo-400"></i> 單個燈泡實測數據</h2>
+                            <div className="grid grid-cols-2 gap-4 text-[11px]">
+                                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800"><div className="text-slate-500 mb-1 font-bold uppercase tracking-tighter">分段電壓 (V)</div><div className="text-white font-mono font-black">{bulbStats.v.toFixed(2)} V</div></div>
+                                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800"><div className="text-slate-500 mb-1 font-bold uppercase tracking-tighter">分支電流 (I)</div><div className="text-white font-mono font-black">{bulbStats.i.toFixed(2)} A</div></div>
+                                <div className="col-span-2 bg-slate-950 p-3 rounded-xl border border-slate-800 ring-1 ring-yellow-500/20"><div className="text-slate-500 mb-1 font-bold uppercase tracking-tighter">消耗功率 (P) / 亮度</div><div className="text-xl font-black text-yellow-400 font-mono">{bulbStats.p.toFixed(1)} W</div></div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-900/5 text-[10px] text-slate-400 leading-relaxed font-medium italic">
+                            <i data-lucide="lightbulb" className="w-4 h-4 text-yellow-400 mb-2"></i>
+                            <strong>電學重點：</strong> 串聯時總電阻增加，電流減少；並聯時增加分支會減小總電阻，提升電池輸出的總電流。觀察電子流動速度，它與總電流的大小直接相關。
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
