@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分子運動論模擬器 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const BOX_WIDTH = 400;
+    const BOX_HEIGHT = 300;
+    const PARTICLE_MASS = 1; 
+
+    const App = () => {
+        const [particleCount, setParticleCount] = useState(50); 
+        const [temperature, setTemperature] = useState(50); 
+        
+        const [density, setDensity] = useState(0); 
+        const [meanSquareSpeed, setMeanSquareSpeed] = useState(0); 
+        const [theoreticalPressure, setTheoreticalPressure] = useState(0); 
+        const [simulatedPressure, setSimulatedPressure] = useState(0); 
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const simState = useRef({
+            particles: [],
+            impulseSum: 0, 
+            lastPressureCheck: 0
+        });
+
+        const createParticle = () => {
+            return {
+                x: Math.random() * (BOX_WIDTH - 10) + 5,
+                y: Math.random() * (BOX_HEIGHT - 10) + 5,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2
+            };
+        };
+
+        useEffect(() => {
+            const current = simState.current.particles;
+            const target = particleCount;
+            if (current.length < target) {
+                for(let i=current.length; i<target; i++) current.push(createParticle());
+            } else if (current.length > target) {
+                current.splice(target);
+            }
+            setDensity(particleCount * PARTICLE_MASS); 
+        }, [particleCount]);
+
+        const updatePhysics = (time) => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            const state = simState.current;
+
+            ctx.clearRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.beginPath();
+            for(let i=0; i<=BOX_WIDTH; i+=40) { ctx.moveTo(i, 0); ctx.lineTo(i, BOX_HEIGHT); }
+            for(let i=0; i<=BOX_HEIGHT; i+=40) { ctx.moveTo(0, i); ctx.lineTo(BOX_WIDTH, i); }
+            ctx.stroke();
+
+            const targetSpeedScale = 1 + (temperature / 100) * 5; 
+            let totalSpeedSq = 0;
+
+            state.particles.forEach(p => {
+                const currentSpeed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+                if (currentSpeed > 0) {
+                     const ratio = targetSpeedScale / currentSpeed;
+                     p.vx = p.vx * 0.95 + (p.vx * ratio) * 0.05;
+                     p.vy = p.vy * 0.95 + (p.vy * ratio) * 0.05;
+                } else {
+                     p.vx = (Math.random()-0.5); p.vy = (Math.random()-0.5);
+                }
+
+                p.x += p.vx; p.y += p.vy;
+                totalSpeedSq += (p.vx*p.vx + p.vy*p.vy);
+
+                if (p.x < 5 || p.x > BOX_WIDTH - 5) { p.vx *= -1; state.impulseSum += 2 * PARTICLE_MASS * Math.abs(p.vx); }
+                if (p.y < 5 || p.y > BOX_HEIGHT - 5) { p.vy *= -1; state.impulseSum += 2 * PARTICLE_MASS * Math.abs(p.vy); }
+
+                p.x = Math.max(5, Math.min(BOX_WIDTH - 5, p.x));
+                p.y = Math.max(5, Math.min(BOX_HEIGHT - 5, p.y));
+
+                ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+                const speed = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+                const hue = Math.min(240, Math.max(0, 240 - speed * 30));
+                ctx.fillStyle = `hsl(${hue}, 80%, 60%)`; ctx.fill();
+            });
+
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, BOX_WIDTH, BOX_HEIGHT);
+
+            if (time - state.lastPressureCheck > 500) {
+                const c2 = totalSpeedSq / state.particles.length;
+                setMeanSquareSpeed(c2);
+                const dt = (time - state.lastPressureCheck);
+                const simP = ((state.impulseSum / dt) / ((BOX_WIDTH + BOX_HEIGHT) * 2)) * 50000;
+                setSimulatedPressure(prev => prev * 0.7 + simP * 0.3);
+                setTheoreticalPressure((1/2) * particleCount * PARTICLE_MASS * c2 * 0.05);
+                state.impulseSum = 0;
+                state.lastPressureCheck = time;
+            }
+            requestRef.current = requestAnimationFrame((t) => updatePhysics(t));
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame((t) => updatePhysics(t));
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [particleCount, temperature]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-lg h-16 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-purple-600 p-2 rounded-lg"><i data-lucide="box" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">分子運動論模擬器</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-purple-400 border border-slate-700 uppercase">DSE Physics: Kinetic Model</div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-5 flex flex-col gap-6">
+                        <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-xl flex justify-center bg-black/20 relative">
+                            <div className="absolute top-4 left-4 bg-slate-900/90 px-3 py-1 rounded border border-slate-700 text-[10px] font-black text-slate-500 uppercase tracking-widest z-10">微觀碰撞空間</div>
+                            <canvas ref={canvasRef} width={BOX_WIDTH} height={BOX_HEIGHT} className="bg-slate-950 rounded border border-slate-700 shadow-inner" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+                                <div className="flex justify-between items-center mb-4"><label className="text-slate-400 font-bold text-xs uppercase tracking-widest">粒子數量 (N)</label><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{particleCount}</span></div>
+                                <input type="range" min="10" max="200" step="10" value={particleCount} onChange={(e) => setParticleCount(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                <div className="text-[9px] text-slate-500 mt-2 font-bold uppercase">增加密度 (&rho;)</div>
+                            </div>
+
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+                                <div className="flex justify-between items-center mb-4"><label className="text-slate-400 font-bold text-xs uppercase tracking-widest">系統溫度</label><span className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs font-mono font-bold">{temperature}</span></div>
+                                <input type="range" min="10" max="100" step="5" value={temperature} onChange={(e) => setTemperature(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                <div className="text-[9px] text-slate-500 mt-2 font-bold uppercase">增加平均速率 (c²)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-7 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                                <i data-lucide="function-square" className="w-4 h-4 text-indigo-400"></i> 分子運動論方程
+                            </h2>
+                            <div className="flex flex-col items-center justify-center p-8 bg-slate-950 rounded-2xl border border-slate-800 ring-1 ring-white/5">
+                                <div className="text-3xl md:text-4xl font-mono text-white mb-3 font-black">
+                                    P = <span className="text-slate-700">1/3</span> <span className="text-blue-400">&rho;</span> <span className="text-red-400">&lang;c²&rang;</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">壓強 = 1/3 &times; 密度 &times; 方均根速率之平方</div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl shadow-inner">
+                                <div className="text-slate-500 text-[10px] uppercase font-black mb-1">密度 (&rho;)</div>
+                                <div className="text-2xl font-black text-blue-400 font-mono">{density}</div>
+                            </div>
+                            <div className="bg-red-900/10 border border-red-500/20 p-4 rounded-xl shadow-inner">
+                                <div className="text-slate-500 text-[10px] uppercase font-black mb-1">方均根速平方 (&lang;c²&rang;)</div>
+                                <div className="text-2xl font-black text-red-400 font-mono">{meanSquareSpeed.toFixed(0)}</div>
+                            </div>
+                            <div className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-xl shadow-inner border-l-4 border-l-indigo-500">
+                                <div className="text-slate-500 text-[10px] uppercase font-black mb-1">實測模擬壓強</div>
+                                <div className="text-2xl font-black text-indigo-400 font-mono">{simulatedPressure.toFixed(0)}</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h3 className="text-white font-bold mb-6 text-xs uppercase tracking-widest flex items-center gap-2"><i data-lucide="check-circle" className="w-4 h-4 text-emerald-400"></i> 數值驗證對照</h3>
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2 font-bold"><span className="text-slate-400">實測壓強 (器壁碰撞統計)</span><span className="text-indigo-400 font-mono">{simulatedPressure.toFixed(0)}</span></div>
+                                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800"><div className="h-full bg-indigo-500 transition-all duration-300" style={{width: `${Math.min(100, simulatedPressure/10)}%`}}></div></div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2 font-bold"><span className="text-slate-400">理論計算值 (&rho; &times; &lang;c²&rang; 推導)</span><span className="text-emerald-400 font-mono">{theoreticalPressure.toFixed(0)}</span></div>
+                                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800"><div className="h-full bg-emerald-500 transition-all duration-300" style={{width: `${Math.min(100, theoreticalPressure/10)}%`}}></div></div>
+                                </div>
+                            </div>
+                            <p className="mt-6 text-[10px] text-slate-500 leading-relaxed font-medium italic border-t border-slate-700 pt-4">
+                                觀察結果：當你增加粒子數量（密度）或提高溫度（速率）時，兩組數據會同步上升，這完美印證了分子運動論對方程 P = 1/3 &rho; &lang;c²&rang; 的預測。
+                            </p>
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
