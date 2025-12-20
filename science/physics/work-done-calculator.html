@@ -1,0 +1,319 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Hammer, Calculator, BatteryCharging, Lightbulb, RotateCcw } from 'lucide-react';
+
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 400;
+const GROUND_Y = 300;
+const BOX_SIZE = 60;
+const MAX_DISTANCE = 10; 
+const PIXELS_PER_METER = 60;
+
+const App = () => {
+    // --- State ---
+    const [force, setForce] = useState(50); // Newtons
+    const [angle, setAngle] = useState(30); // Degrees
+    const [displacement, setDisplacement] = useState(0); // Meters
+    const [isDragging, setIsDragging] = useState(false);
+    
+    // Calculated
+    const workDone = force * displacement * Math.cos(angle * Math.PI / 180);
+    const effectiveForce = force * Math.cos(angle * Math.PI / 180); 
+
+    const canvasRef = useRef(null);
+    const boxRef = useRef({ x: 50 }); 
+
+    // --- Interaction ---
+    const handleMouseDown = (e) => {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        if (x > boxRef.current.x && x < boxRef.current.x + BOX_SIZE &&
+            y > GROUND_Y - BOX_SIZE && y < GROUND_Y) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        let x = e.clientX - rect.left - BOX_SIZE/2;
+        
+        const minX = 50;
+        const maxX = CANVAS_WIDTH - 100;
+        if (x < minX) x = minX;
+        if (x > maxX) x = maxX;
+        
+        boxRef.current.x = x;
+        const d = (x - 50) / PIXELS_PER_METER;
+        setDisplacement(Math.max(0, d));
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const reset = () => {
+        setDisplacement(0);
+        boxRef.current.x = 50;
+        setForce(50);
+        setAngle(30);
+    };
+
+    // --- Rendering ---
+    useEffect(() => {
+        const ctx = canvasRef.current?.getContext('2d');
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // 1. 環境背景
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // 地面
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_Y);
+        
+        // 刻度尺
+        ctx.strokeStyle = '#64748b';
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 10px monospace';
+        ctx.lineWidth = 1;
+        for(let m=0; m<=MAX_DISTANCE; m++) {
+            const x = 50 + m * PIXELS_PER_METER;
+            ctx.beginPath(); ctx.moveTo(x, GROUND_Y); ctx.lineTo(x, GROUND_Y + 10); ctx.stroke();
+            ctx.fillText(`${m}m`, x - 5, GROUND_Y + 25);
+        }
+
+        // 2. 位移箭頭
+        if (displacement > 0.1) {
+            const startX = 50 + BOX_SIZE/2;
+            const endX = boxRef.current.x + BOX_SIZE/2;
+            const y = GROUND_Y + 45;
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, y);
+            ctx.lineTo(endX, y);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            ctx.beginPath();
+            ctx.moveTo(endX, y);
+            ctx.lineTo(endX - 5, y - 3);
+            ctx.lineTo(endX - 5, y + 3);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fill();
+            
+            ctx.font = 'bold 11px Inter';
+            ctx.fillText(`位移 s = ${displacement.toFixed(2)}m`, (startX + endX)/2 - 35, y + 15);
+        }
+
+        // 3. 繪製物體 (方塊)
+        const bx = boxRef.current.x;
+        const by = GROUND_Y - BOX_SIZE;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(bx + 4, by + 4, BOX_SIZE, BOX_SIZE);
+        
+        ctx.fillStyle = isDragging ? '#60a5fa' : '#3b82f6';
+        ctx.fillRect(bx, by, BOX_SIZE, BOX_SIZE);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, BOX_SIZE, BOX_SIZE);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("質量 m", bx + BOX_SIZE/2, by + BOX_SIZE/2 + 5);
+
+        // 4. 繪製力矢量
+        const centerX = bx + BOX_SIZE/2;
+        const centerY = by + BOX_SIZE/2;
+        const rad = -angle * Math.PI / 180; 
+        const vecLen = force * 1.5; 
+
+        // 主施力 (F)
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + vecLen * Math.cos(rad), centerY + vecLen * Math.sin(rad));
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        const fx = centerX + vecLen * Math.cos(rad);
+        const fy = centerY + vecLen * Math.sin(rad);
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(fx - 10 * Math.cos(rad - Math.PI/6), fy - 10 * Math.sin(rad - Math.PI/6));
+        ctx.lineTo(fx - 10 * Math.cos(rad + Math.PI/6), fy - 10 * Math.sin(rad + Math.PI/6));
+        ctx.fillStyle = '#a855f7';
+        ctx.fill();
+        ctx.font = 'bold 13px JetBrains Mono';
+        ctx.textAlign = 'left';
+        ctx.fillText(`F = ${force}N`, fx + 10, fy - 5);
+
+        // 角度標註
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 30, rad, 0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '10px Inter';
+        ctx.fillText(`${angle}°`, centerX + 35, centerY - 5);
+
+        // 水平分力 (有效功分量)
+        if (angle > 0 && angle < 90) {
+            const effLen = vecLen * Math.cos(rad);
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + effLen, centerY);
+            ctx.strokeStyle = 'rgba(168, 85, 247, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            ctx.fillStyle = 'rgba(168, 85, 247, 0.9)';
+            ctx.font = 'italic 11px sans-serif';
+            ctx.fillText(`F cosθ`, centerX + effLen/2 - 15, centerY + 15);
+        }
+
+    }, [force, angle, displacement, isDragging]);
+
+    return (
+        <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12"
+             onMouseMove={handleMouseMove}
+             onMouseUp={handleMouseUp}
+             onMouseLeave={handleMouseUp}
+        >
+            <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-lg">
+                <div className="flex items-center space-x-3">
+                    <div className="bg-purple-600 p-2 rounded-lg">
+                        <Hammer className="w-6 h-6 text-white" />
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight">作功量計算模擬器</h1>
+                </div>
+                <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-purple-400 border border-slate-700 uppercase">DSE Physics: Energy</div>
+            </nav>
+
+            <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* 模擬視窗 */}
+                <div className="lg:col-span-8 flex flex-col gap-4">
+                    <div className="bg-slate-800 rounded-2xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[400px]">
+                        <canvas 
+                            ref={canvasRef} 
+                            width={CANVAS_WIDTH} 
+                            height={CANVAS_HEIGHT}
+                            onMouseDown={handleMouseDown}
+                            className="w-full h-full object-contain bg-slate-950 rounded-xl cursor-move"
+                        />
+                        <div className="absolute top-4 left-4 bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-[10px] font-black text-slate-400 uppercase tracking-widest z-10">
+                            操作提示：在畫面上點擊並左右拖動方塊
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-wrap gap-8 items-center shadow-xl">
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="flex justify-between text-[11px] font-black text-slate-400 uppercase tracking-wider mb-3">
+                                <span>施加拉力 (F)</span>
+                                <span className="text-purple-400 font-mono text-sm">{force} N</span>
+                            </label>
+                            <input 
+                                type="range" min="0" max="100" step="5"
+                                value={force}
+                                onChange={(e) => setForce(Number(e.target.value))}
+                                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb slider-thumb-purple"
+                            />
+                        </div>
+
+                        <div className="flex-1 min-w-[200px]">
+                            <label className="flex justify-between text-[11px] font-black text-slate-400 uppercase tracking-wider mb-3">
+                                <span>拉力角度 (θ)</span>
+                                <span className="text-yellow-400 font-mono text-sm">{angle}°</span>
+                            </label>
+                            <input 
+                                type="range" min="0" max="90" step="1"
+                                value={angle}
+                                onChange={(e) => setAngle(Number(e.target.value))}
+                                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                            />
+                            <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-bold uppercase">
+                                <span>0° (最大作功)</span>
+                                <span>90° (零功)</span>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={reset}
+                            className="px-6 py-4 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg border border-slate-600 flex items-center gap-2"
+                        >
+                            <RotateCcw className="w-4 h-4" /> 重置
+                        </button>
+                    </div>
+                </div>
+
+                {/* 數據面板 */}
+                <aside className="lg:col-span-4 space-y-6">
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                        <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                            <Calculator className="w-4 h-4 text-indigo-400" /> 數值計算過程
+                        </h2>
+                        
+                        <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 font-mono text-xs space-y-4 shadow-inner ring-1 ring-white/5">
+                            <div className="text-slate-500 uppercase font-black tracking-widest mb-1">// 物理方程</div>
+                            <div className="text-sm text-white font-bold mb-4">W = F &times; s &times; cos(&theta;)</div>
+                            
+                            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                                <span className="text-purple-400 font-bold uppercase">施力 (F)</span>
+                                <span className="text-white">{force} N</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                                <span className="text-blue-400 font-bold uppercase">位移 (s)</span>
+                                <span className="text-white">{displacement.toFixed(2)} m</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                                <span className="text-yellow-400 font-bold uppercase">cos({angle}°)</span>
+                                <span className="text-white">{Math.cos(angle * Math.PI / 180).toFixed(3)}</span>
+                            </div>
+                            
+                            <div className="pt-3">
+                                <div className="text-slate-500 text-[10px] uppercase font-black mb-1">總作功量 Total Work</div>
+                                <div className="text-4xl font-black text-emerald-400 tracking-tighter">
+                                    {workDone.toFixed(1)} <span className="text-sm text-slate-600 font-medium tracking-normal">J</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-2xl shadow-inner">
+                        <h3 className="text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                            <BatteryCharging className="w-4 h-4" /> 能量轉移監測
+                        </h3>
+                        <div className="w-full bg-slate-800 h-3 rounded-full overflow-hidden mb-3 border border-slate-700">
+                            <div 
+                                className="h-full bg-gradient-to-r from-emerald-600 to-teal-400 transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                                style={{width: `${Math.min(100, workDone / 5)}%`}}
+                            ></div>
+                        </div>
+                        <div className="flex justify-between text-[9px] font-black text-slate-500 uppercase">
+                            <span>0 J</span>
+                            <span>500 J (參考極限)</span>
+                        </div>
+                    </div>
+
+                    <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-900/5 text-[11px] text-slate-400 leading-relaxed font-medium italic">
+                        <Lightbulb className="w-4 h-4 text-yellow-400 mb-2" />
+                        <strong>小知識：</strong> 如果角度為 90°（垂直向上拉），不論你水平走多遠，作功量永遠為零！這是因為力的方向與位移方向完全垂直，沒有任何能量轉移到水平運動中。
+                    </div>
+                </aside>
+            </main>
+        </div>
+    );
+};
+
+export default App;
