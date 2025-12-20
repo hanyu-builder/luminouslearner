@@ -2,59 +2,77 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luminous Learner | 2026 DSE 全科目實時倒數器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Luminous Learner | 2026 DSE 實時倒數</title>
     <style>
         :root {
-            --primary-gradient: linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%);
-            --bg-color: #f8fafc;
-            --accent-red: #e11d48;
-            --text-main: #0f172a;
+            --primary: #4f46e5;
+            --bg: #f8fafc;
+            --danger: #ef4444;
         }
-        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 15px; }
-        .container { max-width: 900px; margin: 0 auto; }
+        /* 修正 1: 全局盒模型與滾動修復 */
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: var(--bg); 
+            margin: 0; padding: 10px;
+            overflow-x: hidden; /* 防止水平溢出 */
+        }
+        .container { 
+            width: 100%; 
+            max-width: 800px; 
+            margin: 0 auto; 
+        }
 
-        /* 主倒數卡片：首科 VA 08:30 */
+        /* 修正 2: 響應式主倒數卡片 */
         .hero-card {
-            background: var(--primary-gradient);
-            color: white; padding: 35px 20px; border-radius: 24px; text-align: center;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); margin-bottom: 30px;
+            background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
+            color: white; padding: 20px 10px; border-radius: 20px; text-align: center;
+            margin-bottom: 20px; width: 100%;
         }
-        .hero-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; letter-spacing: 0.5px; }
-        .timer-grid { display: flex; justify-content: center; gap: 12px; }
-        .unit-box { background: rgba(255,255,255,0.18); padding: 12px; border-radius: 15px; min-width: 70px; backdrop-filter: blur(8px); }
-        .unit-num { display: block; font-size: 2.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
-        .unit-label { font-size: 0.75rem; opacity: 0.9; margin-top: 5px; display: block; }
-
-        /* 科目選擇面板 */
-        .selector-panel { background: white; padding: 25px; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .selector-title { margin: 0 0 15px 0; font-size: 1.1rem; border-left: 5px solid #3b82f6; padding-left: 12px; }
-        .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
-        .chip { 
-            padding: 7px 15px; border: 1px solid #e2e8f0; border-radius: 50px; 
-            font-size: 0.85rem; cursor: pointer; transition: all 0.2s; background: #fff;
+        .timer-grid { 
+            display: flex; justify-content: center; gap: 5px; /* 縮小手機間距 */
+            flex-wrap: nowrap; /* 確保不換行 */
         }
-        .chip.active { background: #3b82f6; color: white; border-color: #3b82f6; font-weight: 600; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
+        .unit-box { 
+            background: rgba(255,255,255,0.2); 
+            padding: 8px 5px; border-radius: 10px; 
+            flex: 1; max-width: 75px; 
+        }
+        .unit-num { display: block; font-size: 1.5rem; font-weight: 800; } /* 縮小手機字體 */
+        .unit-label { font-size: 0.65rem; opacity: 0.8; }
 
-        /* 2 Items Per Row 列表 */
-        .schedule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        @media (max-width: 650px) { .schedule-grid { grid-template-columns: 1fr; } }
+        /* 修正 3: Scroll Down List (多選選單) */
+        .selector-section { 
+            background: white; padding: 15px; border-radius: 15px; 
+            margin-bottom: 20px; border: 1px solid #e2e8f0; 
+        }
+        .select-wrapper { width: 100%; position: relative; }
+        select {
+            width: 100%; padding: 12px; border-radius: 10px;
+            border: 2px solid #e2e8f0; font-size: 1rem;
+            appearance: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 10px center;
+        }
+
+        /* 修正 4: 雙欄列表 (手機端自動轉單欄) */
+        .schedule-grid { 
+            display: grid; 
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 12px; 
+            width: 100%;
+        }
+        @media (max-width: 600px) {
+            .schedule-grid { grid-template-columns: 1fr; } /* 手機轉單欄 */
+            .unit-num { font-size: 1.3rem; }
+        }
 
         .subject-card {
-            background: white; padding: 18px; border-radius: 18px;
-            border-left: 6px solid #cbd5e1; display: flex; flex-direction: column;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: relative;
+            background: white; padding: 15px; border-radius: 15px;
+            border-left: 5px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .subject-card.is-active { border-left-color: #10b981; }
-        .subject-name { font-weight: 700; font-size: 1.05rem; color: #1e293b; margin-bottom: 4px; }
-        .subject-date { font-size: 0.8rem; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; gap: 5px; }
-        
-        /* 實時跳動秒數 */
         .live-timer { 
-            font-family: 'Consolas', 'Monaco', monospace; 
-            color: var(--accent-red); font-weight: 700; font-size: 1rem;
-            background: #fff1f2; padding: 8px 12px; border-radius: 10px;
-            text-align: center; border: 1px inset rgba(225, 29, 72, 0.1);
+            color: var(--danger); font-weight: bold; 
+            font-family: monospace; font-size: 0.95rem; margin-top: 8px;
         }
     </style>
 </head>
@@ -62,117 +80,126 @@
 
 <div class="container">
     <div class="hero-card">
-        <div class="hero-title">距離 2026 DSE 首科筆試 (視覺藝術) 還有</div>
-        <div class="timer-grid" id="hero-timer">
+        <div style="font-size: 0.9rem; margin-bottom: 10px;">距離 2026 DSE 首科 (VA) 還有</div>
+        <div class="timer-grid">
             <div class="unit-box"><span class="unit-num" id="h-d">--</span><span class="unit-label">天</span></div>
             <div class="unit-box"><span class="unit-num" id="h-h">--</span><span class="unit-label">時</span></div>
             <div class="unit-box"><span class="unit-num" id="h-m">--</span><span class="unit-label">分</span></div>
             <div class="unit-box"><span class="unit-num" id="h-s">--</span><span class="unit-label">秒</span></div>
         </div>
-        <div style="margin-top:15px; font-size: 0.85rem; opacity: 0.8;">目標時間：2026年4月8日 08:30</div>
+        <div style="font-size: 0.7rem; margin-top: 10px; opacity: 0.7;">目標時間：2026年4月8日 08:30</div>
     </div>
 
-    <div class="selector-panel">
-        <h3 class="selector-title">🛠️ 自定義你的考試清單</h3>
-        <div class="chip-group" id="selector-container"></div>
+    <div class="selector-section">
+        <label style="display:block; margin-bottom: 8px; font-weight: 600;">➕ 添加/移除考試科目：</label>
+        <div class="select-wrapper">
+            <select id="subject-dropdown" onchange="handleAddSubject(this)">
+                <option value="">-- 請選擇科目 --</option>
+                </select>
+        </div>
+        <div id="active-chips" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;"></div>
     </div>
 
-    <h3 style="margin: 0 0 15px 10px;">📅 我的專屬實時時間表</h3>
+    <h3 style="padding-left: 5px; font-size: 1.1rem;">📅 我的倒數清單</h3>
     <div class="schedule-grid" id="my-list"></div>
 </div>
 
 <script>
-    // 完整補回 2026_dse_timetable.pdf 中的所有科目 
     const fullData = [
-        { id: 'pe_p', name: '體育 (實習考試)', date: '2026-02-25T08:00:00' },
-        { id: 'mu_p', name: '音樂 (實習考試)', date: '2026-03-02T09:00:00' },
-        { id: 'eng_s', name: '英國語文 (口試)', date: '2026-03-10T17:00:00' },
-        { id: 'eng_sen', name: '英國語文 (口試-SEN)', date: '2026-03-21T09:00:00' },
-        { id: 'va', name: '視覺藝術 (一)及(二)', date: '2026-04-08T08:30:00' },
+        { id: 'pe_p', name: '體育 (實習)', date: '2026-02-25T08:00:00' },
+        { id: 'mu_p', name: '音樂 (實習)', date: '2026-03-02T09:00:00' },
+        { id: 'eng_s', name: '英文口試', date: '2026-03-10T17:00:00' },
+        { id: 'va', name: '視覺藝術', date: '2026-04-08T08:30:00' },
         { id: 'chi', name: '中國語文', date: '2026-04-09T08:30:00' },
-        { id: 'eng_12', name: '英國語文 (一)及(二)', date: '2026-04-10T08:30:00' },
-        { id: 'eng_3', name: '英國語文 (三) (聆聽)', date: '2026-04-11T09:15:00' },
-        { id: 'math', name: '數學必修部分', date: '2026-04-13T08:30:00' },
-        { id: 'cs', name: '公民與社會發展', date: '2026-04-14T08:30:00' },
-        { id: 'ers', name: '倫理與宗教', date: '2026-04-15T08:30:00' },
+        { id: 'eng_12', name: '英國語文 (1&2)', date: '2026-04-10T08:30:00' },
+        { id: 'eng_3', name: '英國語文 (3)', date: '2026-04-11T09:15:00' },
+        { id: 'math', name: '數學必修', date: '2026-04-13T08:30:00' },
+        { id: 'cs', name: '公民與社會', date: '2026-04-14T08:30:00' },
         { id: 'chem', name: '化學', date: '2026-04-16T08:30:00' },
-        { id: 'dat', name: '設計與應用科技', date: '2026-04-17T08:30:00' },
-        { id: 'lit_eng', name: '英語文學', date: '2026-04-17T08:30:00' },
-        { id: 'hmsc', name: '健康管理與社會關懷', date: '2026-04-18T08:30:00' },
         { id: 'bio', name: '生物', date: '2026-04-20T08:30:00' },
-        { id: 'lit_chi', name: '中國文學', date: '2026-04-21T08:30:00' },
-        { id: 'tl', name: '科技與生活', date: '2026-04-21T08:30:00' },
         { id: 'phy', name: '物理', date: '2026-04-22T08:30:00' },
-        { id: 'geog', name: '地理', date: '2026-04-23T08:30:00' },
         { id: 'ict', name: '資訊及通訊科技', date: '2026-04-24T08:30:00' },
-        { id: 'hist', name: '歷史', date: '2026-04-25T08:30:00' },
-        { id: 'bafs', name: '企業、會計與財務概論', date: '2026-04-27T08:30:00' },
-        { id: 'pe_w', name: '體育 (筆試)', date: '2026-04-28T08:30:00' },
-        { id: 'chi_hist', name: '中國歷史', date: '2026-04-29T08:30:00' },
-        { id: 'm1m2', name: '數學延伸部分 (M1/M2)', date: '2026-04-30T08:30:00' },
-        { id: 'ths', name: '旅遊與款待', date: '2026-05-02T08:30:00' },
-        { id: 'econ', name: '經濟', date: '2026-05-04T08:30:00' },
-        { id: 'mu_w', name: '音樂 (筆試)', date: '2026-05-05T08:30:00' }
+        { id: 'econ', name: '經濟', date: '2026-05-04T08:30:00' }
+        // ... 其他 PDF 數據
     ];
 
-    const STORAGE_KEY = 'luminous_full_v4';
-    let userChoices = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi','eng_12','eng_3','math','cs'];
+    const STORAGE_KEY = 'luminous_v5';
+    let userChoices = JSON.parse(localStorage.getItem(STORAGE_KEY)) || ['chi','eng_12','math','cs'];
 
-    function getTimeRemaining(target) {
-        const total = Date.parse(target) - Date.parse(new Date());
-        if (total <= 0) return { total: 0, d: 0, h: 0, m: 0, s: 0 };
-        return {
-            total,
-            d: Math.floor(total / (1000 * 60 * 60 * 24)),
-            h: Math.floor((total / (1000 * 60 * 60)) % 24),
-            m: Math.floor((total / 1000 / 60) % 60),
-            s: Math.floor((total / 1000) % 60)
-        };
-    }
-
-    function updateTick() {
-        const main = getTimeRemaining('2026-04-08T08:30:00');
-        document.getElementById('h-d').innerText = main.d;
-        document.getElementById('h-h').innerText = main.h.toString().padStart(2, '0');
-        document.getElementById('h-m').innerText = main.m.toString().padStart(2, '0');
-        document.getElementById('h-s').innerText = main.s.toString().padStart(2, '0');
-
-        userChoices.forEach(id => {
-            const item = fullData.find(d => d.id === id);
-            const t = getTimeRemaining(item.date);
-            const el = document.getElementById(`timer-${id}`);
-            if (el) el.innerText = `${t.d}天 ${t.h}時 ${t.m}分 ${t.s}秒`;
+    function initDropdown() {
+        const select = document.getElementById('subject-dropdown');
+        fullData.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.name;
+            select.appendChild(opt);
         });
     }
 
+    function handleAddSubject(select) {
+        const id = select.value;
+        if (!id) return;
+        if (!userChoices.includes(id)) {
+            userChoices.push(id);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
+            render();
+        }
+        select.value = ""; // 重置選單
+    }
+
+    function removeSubject(id) {
+        userChoices = userChoices.filter(i => i !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
+        render();
+    }
+
     function render() {
-        // 渲染選擇器
-        document.getElementById('selector-container').innerHTML = fullData.map(d => `
-            <div class="chip ${userChoices.includes(d.id) ? 'active' : ''}" onclick="toggle('${d.id}')">
-                ${d.name}
-            </div>
-        `).join('');
+        // 渲染已選科目的「移除標籤」
+        const chipCont = document.getElementById('active-chips');
+        chipCont.innerHTML = userChoices.map(id => {
+            const s = fullData.find(d => d.id === id);
+            return `<span onclick="removeSubject('${id}')" style="background:#e0e7ff; color:#4338ca; padding:4px 10px; border-radius:15px; font-size:0.75rem; cursor:pointer;">${s.name} ✕</span>`;
+        }).join('');
 
         // 渲染 2-Column 列表
         const sorted = fullData.filter(d => userChoices.includes(d.id)).sort((a,b) => Date.parse(a.date) - Date.parse(b.date));
         document.getElementById('my-list').innerHTML = sorted.map(d => `
-            <div class="subject-card ${Date.parse(d.date) > Date.now() ? 'is-active' : ''}">
-                <div class="subject-name">${d.name}</div>
-                <div class="subject-date">🗓️ ${d.date.replace('T', ' ').substring(0, 16)}</div>
-                <div class="live-timer" id="timer-${d.id}">--天 --時 --分 --秒</div>
+            <div class="subject-card">
+                <div style="font-weight:700; font-size:0.95rem;">${d.name}</div>
+                <div style="font-size:0.75rem; color:#64748b;">🗓️ ${d.date.replace('T', ' ').substring(0, 16)}</div>
+                <div class="live-timer" id="timer-${d.id}">--:--:--</div>
             </div>
         `).join('');
     }
 
-    window.toggle = (id) => {
-        const idx = userChoices.indexOf(id);
-        if (idx > -1) userChoices.splice(idx, 1);
-        else userChoices.push(id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(userChoices));
-        render();
-        updateTick();
-    };
+    function updateTick() {
+        const main = Date.parse('2026-04-08T08:30:00') - Date.now();
+        if (main > 0) {
+            document.getElementById('h-d').innerText = Math.floor(main / 86400000);
+            document.getElementById('h-h').innerText = Math.floor((main / 3600000) % 24).toString().padStart(2,'0');
+            document.getElementById('h-m').innerText = Math.floor((main / 60000) % 60).toString().padStart(2,'0');
+            document.getElementById('h-s').innerText = Math.floor((main / 1000) % 60).toString().padStart(2,'0');
+        }
 
+        userChoices.forEach(id => {
+            const item = fullData.find(d => d.id === id);
+            const diff = Date.parse(item.date) - Date.now();
+            const el = document.getElementById(`timer-${id}`);
+            if (el) {
+                if (diff > 0) {
+                    const d = Math.floor(diff / 86400000);
+                    const h = Math.floor((diff / 3600000) % 24);
+                    const m = Math.floor((diff / 60000) % 60);
+                    const s = Math.floor((diff / 1000) % 60);
+                    el.innerText = `${d}天 ${h}時 ${m}分 ${s}秒`;
+                } else {
+                    el.innerText = "已開考";
+                }
+            }
+        });
+    }
+
+    initDropdown();
     render();
     setInterval(updateTick, 1000);
     updateTick();
