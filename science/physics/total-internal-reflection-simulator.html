@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全反射與光纖模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+        }
+        .thumb-cyan::-webkit-slider-thumb { background: #06b6d4; }
+        .thumb-blue::-webkit-slider-thumb { background: #3b82f6; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 500;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2 + 50;
+    const BLOCK_RADIUS = 150;
+
+    const MATERIALS = {
+        '水 (Water)': 1.33,
+        '玻璃 (Glass)': 1.50,
+        '鑽石 (Diamond)': 2.42
+    };
+
+    const App = () => {
+        const [mode, setMode] = useState('block'); 
+        const [n1, setN1] = useState(1.50); 
+        const [n2, setN2] = useState(1.00); 
+        const [angle, setAngle] = useState(30); 
+        
+        const [criticalAngle, setCriticalAngle] = useState(null);
+        const [isTIR, setIsTIR] = useState(false);
+        const [refractedAngle, setRefractedAngle] = useState(0);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+
+        useEffect(() => {
+            if (n1 > n2) {
+                const cRad = Math.asin(n2 / n1);
+                setCriticalAngle(cRad * 180 / Math.PI);
+            } else {
+                setCriticalAngle(null);
+            }
+
+            const theta1Rad = angle * Math.PI / 180;
+            const sinTheta2 = (n1 / n2) * Math.sin(theta1Rad);
+
+            if (Math.abs(sinTheta2) > 1.0) {
+                setIsTIR(true);
+                setRefractedAngle(null);
+            } else {
+                setIsTIR(false);
+                setRefractedAngle(Math.asin(sinTheta2) * 180 / Math.PI);
+            }
+        }, [n1, n2, angle]);
+
+        const loop = (time) => {
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [mode, n1, n2, angle, isTIR, refractedAngle, criticalAngle]);
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            if (mode === 'block') drawBlockMode(ctx);
+            else drawFiberMode(ctx);
+        };
+
+        const drawBlockMode = (ctx) => {
+            ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, BLOCK_RADIUS, 0, Math.PI); 
+            ctx.closePath();
+            ctx.fillStyle = `rgba(6, 182, 212, ${0.1 + (n1-1)*0.2})`;
+            ctx.fill();
+            ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.stroke();
+            
+            ctx.beginPath(); ctx.moveTo(CENTER_X - 200, CENTER_Y); ctx.lineTo(CENTER_X + 200, CENTER_Y);
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.stroke();
+
+            ctx.setLineDash([5, 5]); ctx.beginPath();
+            ctx.moveTo(CENTER_X, CENTER_Y - 150); ctx.lineTo(CENTER_X, CENTER_Y + 150);
+            ctx.strokeStyle = '#64748b'; ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, 180, Math.PI, 2*Math.PI); ctx.stroke();
+            
+            if (criticalAngle) {
+                const cRad = criticalAngle * Math.PI / 180;
+                const cx = CENTER_X + 180 * Math.sin(cRad);
+                const cy = CENTER_Y - 180 * Math.cos(cRad);
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 10px Inter';
+                ctx.fillText(`θc`, cx, cy - 8);
+                ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+            }
+
+            const rayLen = 250;
+            const theta1Rad = angle * Math.PI / 180;
+            const startX = CENTER_X - rayLen * Math.sin(theta1Rad);
+            const startY = CENTER_Y + rayLen * Math.cos(theta1Rad);
+            drawLaser(ctx, startX, startY, CENTER_X, CENTER_Y, '#ef4444', 1.0);
+
+            const reflX = CENTER_X + rayLen * Math.sin(theta1Rad);
+            const reflY = CENTER_Y + rayLen * Math.cos(theta1Rad);
+            drawLaser(ctx, CENTER_X, CENTER_Y, reflX, reflY, '#ef4444', isTIR ? 1.0 : 0.3);
+
+            if (!isTIR && refractedAngle !== null) {
+                const theta2Rad = refractedAngle * Math.PI / 180;
+                const refrX = CENTER_X + rayLen * Math.sin(theta2Rad);
+                const refrY = CENTER_Y - rayLen * Math.cos(theta2Rad);
+                drawLaser(ctx, CENTER_X, CENTER_Y, refrX, refrY, '#ef4444', 0.8);
+                drawAngleArc(ctx, CENTER_X, CENTER_Y, -90, -90 + refractedAngle, 60, '#fcd34d', `${refractedAngle.toFixed(0)}°`);
+            }
+
+            drawAngleArc(ctx, CENTER_X, CENTER_Y, 90, 90 + angle, 40, '#fcd34d', `${angle}°`);
+            
+            if (isTIR) {
+                ctx.font = 'black 22px Inter'; ctx.fillStyle = '#ef4444'; ctx.textAlign = 'center';
+                ctx.fillText("發生全反射 (TIR)", CENTER_X, CENTER_Y - 100);
+            }
+        };
+
+        const drawFiberMode = (ctx) => {
+            const fiberY = CENTER_Y - 50; const coreWidth = 60;
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, fiberY - 20, CANVAS_WIDTH, coreWidth + 40);
+            ctx.fillStyle = `rgba(6, 182, 212, ${0.1 + (n1-1)*0.2})`; ctx.fillRect(0, fiberY, CANVAS_WIDTH, coreWidth);
+            ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, fiberY); ctx.lineTo(CANVAS_WIDTH, fiberY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, fiberY+coreWidth); ctx.lineTo(CANVAS_WIDTH, fiberY+coreWidth); ctx.stroke();
+
+            const axisAngle = (90 - angle) * Math.PI / 180;
+            let dx = Math.cos(axisAngle); let dy = Math.sin(axisAngle); 
+            ctx.beginPath(); ctx.moveTo(0, fiberY + coreWidth / 2);
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 3; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 10;
+            
+            let x = 0; let y = fiberY + coreWidth / 2; let count = 0;
+            while (x < CANVAS_WIDTH && count < 50) {
+                let distToWallY = dy > 0 ? (fiberY + coreWidth) - y : y - fiberY;
+                let stepX = distToWallY / Math.abs(Math.tan(axisAngle));
+                if (stepX > CANVAS_WIDTH) stepX = CANVAS_WIDTH;
+                let nextX = x + stepX; let nextY = dy > 0 ? fiberY + coreWidth : fiberY;
+                ctx.lineTo(nextX, nextY);
+                x = nextX; y = nextY;
+                if (isTIR) dy = -dy; 
+                else {
+                    ctx.stroke(); ctx.beginPath(); ctx.strokeStyle = 'rgba(239, 68, 68, 0.2)';
+                    ctx.moveTo(x, y); ctx.lineTo(x + 40, y + (dy > 0 ? 30 : -30)); ctx.stroke();
+                    break;
+                }
+                count++;
+            }
+            ctx.stroke(); ctx.shadowBlur = 0;
+            ctx.fillStyle = 'white'; ctx.font = 'bold 12px Inter';
+            ctx.fillText("纖芯 Core (n₁)", 10, fiberY + 20); ctx.fillText("包層 Cladding (n₂)", 10, fiberY - 10);
+        };
+
+        const drawLaser = (ctx, x1, y1, x2, y2, color, alpha) => {
+            ctx.save(); ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = 4;
+            ctx.shadowColor = color; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+            ctx.restore();
+        };
+
+        const drawAngleArc = (ctx, x, y, startDeg, endDeg, radius, color, label) => {
+            const startRad = startDeg * Math.PI / 180; const endRad = endDeg * Math.PI / 180;
+            ctx.beginPath(); ctx.arc(x, y, radius, startRad, endRad);
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+            const midRad = (startRad + endRad) / 2;
+            const tx = x + (radius + 20) * Math.cos(midRad); const ty = y + (radius + 20) * Math.sin(midRad);
+            ctx.fillStyle = color; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center'; ctx.fillText(label, tx, ty);
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 flex flex-col overflow-hidden">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-lg h-16 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-600 p-2 rounded-lg"><i data-lucide="gem" className="w-6 h-6 text-white"></i></div>
+                        <h1 className="text-xl font-bold tracking-tight">全反射與光纖模擬器</h1>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-950 px-3 py-1 rounded-full text-cyan-400 border border-slate-700 uppercase">DSE Physics: Optics</div>
+                </nav>
+
+                <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                    <div className="lg:col-span-8 bg-black relative border-r border-slate-800">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        
+                        <div className="absolute top-4 left-4 flex gap-2">
+                            <button onClick={() => setMode('block')} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode==='block' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/40' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'}`}>半圓塊實驗</button>
+                            <button onClick={() => setMode('fiber')} className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode==='fiber' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'}`}>光纖傳輸模式</button>
+                        </div>
+
+                        <div className="absolute bottom-4 left-4 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 text-xs shadow-2xl">
+                            <span className="text-slate-500 font-bold uppercase tracking-tighter">臨界角 Critical Angle (θc): </span>
+                            <span className="font-mono text-emerald-400 font-black text-sm">
+                                {criticalAngle ? `${criticalAngle.toFixed(1)}°` : '無法發生 (n1 < n2)'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <aside className="lg:col-span-4 bg-slate-900 p-6 flex flex-col gap-6 overflow-y-auto custom-scroll border-l border-slate-800">
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <i data-lucide="sliders" className="w-4 h-4 text-indigo-400"></i> 介質參數設定
+                            </h2>
+
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center"><label className="text-[11px] font-black text-cyan-400 uppercase tracking-tighter">內部介質 (n₁)</label><span className="text-white font-mono font-bold text-sm">{n1.toFixed(2)}</span></div>
+                                <input type="range" min="1.0" max="3.0" step="0.01" value={n1} onChange={(e) => setN1(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-cyan" />
+                                <div className="flex flex-wrap gap-1.5">
+                                    {Object.keys(MATERIALS).map(m => <button key={m} onClick={() => setN1(MATERIALS[m])} className="px-3 py-1 text-[10px] font-bold bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition-all border border-slate-600">{m.split(' ')[0]}</button>)}
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center"><label className="text-[11px] font-black text-blue-400 uppercase tracking-tighter">外部介質 (n₂)</label><span className="text-white font-mono font-bold text-sm">{n2.toFixed(2)}</span></div>
+                                <input type="range" min="1.0" max="3.0" step="0.01" value={n2} onChange={(e) => setN2(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+                            <h2 className="text-white font-black text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                <i data-lucide="move" className="w-4 h-4 text-rose-400"></i> 入射角度控制
+                            </h2>
+                            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 text-center ring-1 ring-white/5">
+                                <div className="text-4xl font-mono font-black text-white mb-3">{angle}°</div>
+                                <input type="range" min="0" max="85" step="1" value={angle} onChange={(e) => setAngle(Number(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-black uppercase tracking-tighter"><span>0° (正交入射)</span><span>90° (平行介面)</span></div>
+                            </div>
+                            <div className={`text-center text-[10px] font-black uppercase py-2.5 rounded-xl border tracking-widest ${isTIR ? 'bg-red-900/30 border-red-500/50 text-red-400' : 'bg-emerald-900/30 border-emerald-500/50 text-emerald-400'}`}>
+                                {isTIR ? "⚠️ 僅反射 (發生全反射)" : "折射 + 部分反射"}
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-5 rounded-2xl shadow-inner">
+                            <h3 className="text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><i data-lucide="calculator" className="w-4 h-4"></i> 斯涅爾定律檢測</h3>
+                            <div className="font-mono text-[11px] space-y-3 text-slate-400">
+                                <div className="flex justify-between items-center"><span>n₁ sin θ₁</span><span className="text-white font-bold">{(n1 * Math.sin(angle * Math.PI / 180)).toFixed(3)}</span></div>
+                                <div className="flex justify-between items-center border-t border-indigo-500/20 pt-2"><span>n₂ sin θ₂</span><span className="text-white font-bold">{isTIR ? <span className="text-red-500 italic">無定義</span> : (n2 * Math.sin(refractedAngle * Math.PI / 180)).toFixed(3)}</span></div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-900/5 text-[11px] text-slate-400 leading-relaxed font-medium italic">
+                            <i data-lucide="lightbulb" className="w-4 h-4 text-yellow-400 mb-2"></i>
+                            <strong>光纖原理：</strong> 在光纖模式中，纖芯 (n₁) 比包層 (n₂) 密。只要光線擊中壁的角度大於臨界角，光就會被困在內部傳輸，這就是現代光纖通訊的核心。
+                        </div>
+                    </aside>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 150);
+</script>
+</body>
+</html>
