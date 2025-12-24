@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>橫波與縱波比較實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .thumb-rose::-webkit-slider-thumb { border-color: #f43f5e; box-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 180; 
+    const PARTICLE_COUNT = 50;
+    const SPACING = CANVAS_WIDTH / PARTICLE_COUNT;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [frequency, setFrequency] = useState(1.0); 
+        const [amplitude, setAmplitude] = useState(35); 
+        const [isRunning, setIsRunning] = useState(true);
+        const [showHighlight, setShowHighlight] = useState(true);
+
+        const tCanvasRef = useRef(null); 
+        const lCanvasRef = useRef(null); 
+        const requestRef = useRef();
+        const timeRef = useRef(0);
+
+        // --- 模擬邏輯 ---
+        const loop = (t) => {
+            if (isRunning) {
+                timeRef.current += 0.02;
+            }
+            draw(timeRef.current);
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const draw = (t) => {
+            drawTransverse(t);
+            drawLongitudinal(t);
+        };
+
+        const drawTransverse = (t) => {
+            const ctx = tCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            // 基準線
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(0, CANVAS_HEIGHT/2); ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT/2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            const k = (2 * Math.PI) / 300; 
+            const w = 2 * Math.PI * frequency;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const x0 = i * SPACING + SPACING/2;
+                const phase = k * x0 - w * t;
+                const y = CANVAS_HEIGHT/2 + amplitude * Math.sin(phase);
+                const isHighlight = showHighlight && i === 12;
+
+                ctx.beginPath();
+                ctx.arc(x0, y, isHighlight ? 7 : 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = isHighlight ? '#ef4444' : '#6366f1';
+                ctx.fill();
+                if (isHighlight) {
+                    ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+                    // 顯示振動路徑引導線
+                    ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+                    ctx.setLineDash([2, 2]);
+                    ctx.beginPath(); ctx.moveTo(x0, CANVAS_HEIGHT/2 - amplitude); ctx.lineTo(x0, CANVAS_HEIGHT/2 + amplitude); ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+        };
+
+        const drawLongitudinal = (t) => {
+            const ctx = lCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const k = (2 * Math.PI) / 300; 
+            const w = 2 * Math.PI * frequency;
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const x0 = i * SPACING + SPACING/2;
+                const phase = k * x0 - w * t;
+                const displacement = amplitude * Math.sin(phase);
+                const x = x0 + displacement;
+                const isHighlight = showHighlight && i === 12;
+
+                // 繪製垂直條紋代表空氣層（疏密波感更強）
+                ctx.globalAlpha = isHighlight ? 1.0 : 0.6;
+                ctx.fillStyle = isHighlight ? '#ef4444' : '#10b981';
+                ctx.fillRect(x - 2, 40, 4, CANVAS_HEIGHT - 80);
+                
+                if (isHighlight) {
+                    ctx.beginPath();
+                    ctx.arc(x, CANVAS_HEIGHT/2, 7, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ef4444'; ctx.fill();
+                    ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+                }
+                ctx.globalAlpha = 1.0;
+            }
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isRunning, frequency, amplitude, showHighlight]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                            <i data-lucide="waves"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">橫波與縱波比較實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                        主題：波動學 (Wave Motion)
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        {/* 橫波圖表 */}
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-1 shadow-2xl relative">
+                            <div className="absolute top-4 left-4 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-lg text-[10px] font-bold text-indigo-300 uppercase tracking-widest backdrop-blur-md">
+                                橫波 (Transverse Wave) - 例如：光、弦波
+                            </div>
+                            <canvas ref={tCanvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-auto bg-slate-950 rounded-2xl" />
+                        </div>
+
+                        {/* 縱波圖表 */}
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-1 shadow-2xl relative">
+                            <div className="absolute top-4 left-4 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg text-[10px] font-bold text-emerald-300 uppercase tracking-widest backdrop-blur-md">
+                                縱波 (Longitudinal Wave) - 例如：聲波
+                            </div>
+                            <canvas ref={lCanvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-auto bg-slate-950 rounded-2xl" />
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 border-b border-slate-700 pb-4">
+                                <i data-lucide="settings-2" className="w-5 h-5 text-indigo-400"></i> 波源設定
+                            </h2>
+                            
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-slate-500 uppercase mb-3">
+                                    <span>頻率 (f)</span>
+                                    <span className="text-indigo-400">{frequency.toFixed(1)} Hz</span>
+                                </label>
+                                <input type="range" min="0.5" max="2.5" step="0.1" value={frequency} onChange={(e) => setFrequency(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                            </div>
+
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-slate-500 uppercase mb-3">
+                                    <span>振幅 (A)</span>
+                                    <span className="text-rose-400">{amplitude} px</span>
+                                </label>
+                                <input type="range" min="10" max="60" step="1" value={amplitude} onChange={(e) => setAmplitude(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-rose" />
+                            </div>
+
+                            <label className="flex items-center justify-between p-4 rounded-2xl bg-slate-900/50 border border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors">
+                                <span className="text-sm font-bold text-slate-300">追蹤單一質點</span>
+                                <input type="checkbox" checked={showHighlight} onChange={() => setShowHighlight(!showHighlight)} className="w-5 h-5 rounded border-slate-500 text-indigo-600 focus:ring-0 cursor-pointer" />
+                            </label>
+
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setIsRunning(!isRunning)} className={`flex-1 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${isRunning ? 'bg-slate-700 text-slate-400' : 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'}`}>
+                                    <i data-lucide={isRunning ? "pause" : "play"}></i> {isRunning ? "暫停" : "開始"}
+                                </button>
+                                <button onClick={() => { timeRef.current = 0; setIsRunning(false); draw(0); }} className="px-6 py-4 bg-slate-700 text-white rounded-2xl font-bold hover:bg-slate-600 transition-colors">
+                                    <i data-lucide="rotate-ccw"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl space-y-4">
+                            <h3 className="text-indigo-300 font-bold text-sm flex items-center gap-2"><i data-lucide="lightbulb" className="w-4 h-4"></i> 教學提示</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                留意 <strong>紅色質點</strong>：在橫波中，它上下振動；在縱波中，它左右振動。但不論哪種波，質點都沒有隨波向右移動。這說明波只傳遞 <b>能量</b> 而非 <b>物質</b>。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
