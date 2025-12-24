@@ -1,0 +1,444 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Rainbow, 
+  Settings2, 
+  Info, 
+  Maximize2, 
+  MoveHorizontal, 
+  Zap,
+  Calculator,
+  ChevronRight,
+  HelpCircle
+} from 'lucide-react';
+
+// --- 常數與物理輔助函式 ---
+
+const CANVAS_WIDTH = 1200; 
+const GEOM_HEIGHT = 400;   
+const SCREEN_VIEW_HEIGHT = 180; 
+const TOTAL_HEIGHT = GEOM_HEIGHT + SCREEN_VIEW_HEIGHT + 40; 
+
+/**
+ * 將波長（奈米）轉換為用於視覺化的 RGB 物件
+ */
+const nmToRGB = (wavelength) => {
+  let r, g, b;
+  if (wavelength >= 380 && wavelength < 440) {
+    r = -(wavelength - 440) / (440 - 380); g = 0; b = 1;
+  } else if (wavelength >= 440 && wavelength < 490) {
+    r = 0; g = (wavelength - 440) / (490 - 440); b = 1;
+  } else if (wavelength >= 490 && wavelength < 510) {
+    r = 0; g = 1; b = -(wavelength - 510) / (510 - 490);
+  } else if (wavelength >= 510 && wavelength < 580) {
+    r = (wavelength - 510) / (580 - 510); g = 1; b = 0;
+  } else if (wavelength >= 580 && wavelength < 645) {
+    r = 1; g = -(wavelength - 645) / (645 - 580); b = 0;
+  } else if (wavelength >= 645 && wavelength <= 750) {
+    r = 1; g = 0; b = 0;
+  } else {
+    r = 0; g = 0; b = 0;
+  }
+  
+  let factor;
+  if (wavelength >= 380 && wavelength < 420) factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
+  else if (wavelength >= 420 && wavelength < 701) factor = 1.0;
+  else if (wavelength >= 701 && wavelength <= 750) factor = 0.3 + 0.7 * (750 - wavelength) / (750 - 701);
+  else factor = 0.0;
+
+  return {
+    r: Math.floor(r * factor * 255),
+    g: Math.floor(g * factor * 255),
+    b: Math.floor(b * factor * 255)
+  };
+};
+
+const rgbToHex = ({r, g, b}) => `rgb(${r}, ${g}, ${b})`;
+
+export default function App() {
+  // --- 模擬狀態 ---
+  const [mode, setMode] = useState('mono'); // 'mono' 單色光或 'white' 白光
+  const [wavelength, setWavelength] = useState(532); // 單位：nm
+  const [linesPerMm, setLinesPerMm] = useState(300); // 單位：條/mm (N)
+  const [distanceToScreen, setDistanceToScreen] = useState(1.2); // 單位：公尺 (L)
+  
+  const canvasRef = useRef(null);
+
+  // --- 物理計算 ---
+  const d_spacing = 1e-3 / linesPerMm; // 狹縫間距，單位：公尺 (d)
+  
+  // 計算當前設置下的繞射階數
+  const orders = useMemo(() => {
+    const list = [{ n: 0, theta: 0 }];
+    const limitN = 5; 
+    const currentLambda = mode === 'mono' ? wavelength * 1e-9 : 700 * 1e-9; 
+    
+    for (let n = 1; n <= limitN; n++) {
+      const sinTheta = (n * currentLambda) / d_spacing;
+      if (sinTheta < 0.98) { 
+        list.push({ n, theta: Math.asin((n * (mode === 'mono' ? wavelength * 1e-9 : 550 * 1e-9)) / d_spacing) });
+      }
+    }
+    return list;
+  }, [mode, wavelength, d_spacing]);
+
+  // --- 繪圖邏輯 ---
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    const w = CANVAS_WIDTH;
+    const h = TOTAL_HEIGHT;
+    const gratingX = 80;
+    const screenX = w - 80;
+    const centerY = GEOM_HEIGHT / 2;
+    const scaleFactor = (screenX - gratingX); 
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 1. 俯視圖 (幾何結構)
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, w, GEOM_HEIGHT);
+    
+    // 光軸線
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(w, centerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 光柵圖形
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(gratingX, centerY - 100);
+    ctx.lineTo(gratingX, centerY + 100);
+    ctx.stroke();
+    
+    // 狹縫視覺效果
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    for (let i = -95; i < 95; i += 4) {
+      ctx.beginPath(); ctx.moveTo(gratingX - 4, centerY + i); ctx.lineTo(gratingX + 4, centerY + i); ctx.stroke();
+    }
+
+    // 屏幕邊界
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(screenX, 20); ctx.lineTo(screenX, GEOM_HEIGHT - 20); ctx.stroke();
+
+    // 繪製光線
+    const drawRaySet = (lambda_nm, alpha = 0.5, label = null) => {
+      const lambda_m = lambda_nm * 1e-9;
+      const colorObj = nmToRGB(lambda_nm);
+      const color = rgbToHex(colorObj);
+      
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.moveTo(gratingX, centerY); ctx.lineTo(screenX, centerY); ctx.stroke();
+
+      for (let n = 1; n <= 6; n++) {
+        const sinT = (n * lambda_m) / d_spacing;
+        if (sinT < 1) {
+          const theta = Math.asin(sinT);
+          const dy = Math.tan(theta) * scaleFactor;
+          
+          if (centerY + dy < GEOM_HEIGHT && centerY - dy > 0) {
+             ctx.beginPath(); ctx.moveTo(gratingX, centerY); ctx.lineTo(screenX, centerY - dy); ctx.stroke();
+             ctx.beginPath(); ctx.moveTo(gratingX, centerY); ctx.lineTo(screenX, centerY + dy); ctx.stroke();
+             
+             if (label && n === 1 && lambda_nm === wavelength) {
+               ctx.globalAlpha = 1.0;
+               ctx.fillStyle = color;
+               ctx.font = "12px monospace";
+               ctx.fillText(`θ₁ = ${(theta * 180 / Math.PI).toFixed(1)}°`, screenX - 60, centerY - dy - 10);
+             }
+          }
+        }
+      }
+      ctx.globalAlpha = 1.0;
+    };
+
+    if (mode === 'mono') {
+      drawRaySet(wavelength, 0.6, true);
+    } else {
+      [420, 480, 530, 580, 650, 700].forEach(wl => drawRaySet(wl, 0.25));
+    }
+
+    // 2. 屏幕正視圖 (干涉圖案)
+    const screenTop = GEOM_HEIGHT + 20;
+    const screenCenter = w / 2;
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, screenTop, w, SCREEN_VIEW_HEIGHT);
+    ctx.strokeStyle = '#475569';
+    ctx.strokeRect(0, screenTop, w, SCREEN_VIEW_HEIGHT);
+
+    // 刻度尺
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px Inter';
+    for (let x = -600; x <= 600; x += 50) {
+      const px = screenCenter + x;
+      if (px >= 0 && px <= w) {
+        ctx.fillRect(px, screenTop + SCREEN_VIEW_HEIGHT - 5, 1, 5);
+        if (x % 100 === 0) {
+           const dx_m = (x / scaleFactor) * distanceToScreen;
+           ctx.fillText(`${(dx_m * 100).toFixed(1)}cm`, px - 15, screenTop + SCREEN_VIEW_HEIGHT - 10);
+        }
+      }
+    }
+
+    // 繪製條紋
+    const drawFringe = (lambda_nm, intensity = 1.0) => {
+      const colorObj = nmToRGB(lambda_nm);
+      const lambda_m = lambda_nm * 1e-9;
+      
+      const drawLine = (xPos, wVal, intense) => {
+        if (xPos < 0 || xPos > w) return;
+        const grad = ctx.createLinearGradient(xPos - wVal, 0, xPos + wVal, 0);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.5, `rgba(${colorObj.r}, ${colorObj.g}, ${colorObj.b}, ${intense})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(xPos - wVal, screenTop + 2, wVal * 2, SCREEN_VIEW_HEIGHT - 4);
+      };
+
+      // 中央極大值 (n=0)
+      drawLine(screenCenter, 12, intensity);
+
+      // 高階條紋
+      for (let n = 1; n <= 8; n++) {
+        const sinT = (n * lambda_m) / d_spacing;
+        if (sinT < 1) {
+          const theta = Math.asin(sinT);
+          const dy_px = Math.tan(theta) * scaleFactor;
+          const falloff = intensity / (n * 0.5 + 1);
+          drawLine(screenCenter + dy_px, 6, falloff);
+          drawLine(screenCenter - dy_px, 6, falloff);
+        }
+      }
+    };
+
+    if (mode === 'mono') {
+      drawFringe(wavelength, 1.0);
+    } else {
+      for (let wl = 380; wl <= 750; wl += 2) {
+        drawFringe(wl, 0.15);
+      }
+    }
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 12px Inter";
+    ctx.fillText("屏幕正視圖 (干涉條紋圖案)", 20, screenTop - 5);
+
+  }, [mode, wavelength, linesPerMm, distanceToScreen, orders]);
+
+  return (
+    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-200 font-sans">
+      {/* 導覽列 */}
+      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
+              <Rainbow className="w-6 h-6 text-indigo-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">繞射光柵實驗室</h1>
+              <p className="text-xs text-slate-400 font-medium">量子與波動光學模擬器</p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-400">
+            <span className="flex items-center gap-1.5"><Zap className="w-4 h-4 text-amber-400"/> 互動式操作</span>
+            <span className="flex items-center gap-1.5"><Calculator className="w-4 h-4 text-emerald-400"/> 即時物理計算</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-7xl mx-auto w-full p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* 左側：模擬畫布 */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-3xl blur opacity-30 group-hover:opacity-100 transition duration-1000"></div>
+            <div className="relative bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden">
+              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                <div className="flex items-center gap-2">
+                  <Maximize2 className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">模擬工作區</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] text-slate-400 border border-slate-700">上視圖：光路幾何</span>
+                  <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[10px] text-slate-400 border border-slate-700">下視圖：屏幕成像</span>
+                </div>
+              </div>
+              <div className="w-full overflow-x-auto scrollbar-hide">
+                <canvas 
+                  ref={canvasRef} 
+                  width={CANVAS_WIDTH} 
+                  height={TOTAL_HEIGHT}
+                  className="w-full h-auto min-w-[800px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 理論解析 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-slate-900/50 rounded-2xl border border-slate-800 p-5">
+              <h3 className="text-sm font-bold text-indigo-300 mb-3 flex items-center gap-2">
+                <Info className="w-4 h-4" /> 光柵方程式
+              </h3>
+              <div className="text-sm text-slate-300 space-y-4 leading-relaxed">
+                <p>當相鄰狹縫的光程差為波長的整數倍時，會發生建設性干涉：</p>
+                <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 text-center text-lg font-mono text-white">
+                  {'$n \\lambda = d \\sin \\theta$'}
+                </div>
+                <p className="text-xs text-slate-400 italic">
+                  {'其中 $d$ 是狹縫間距 ($1/N$)，$\\lambda$ 是波長，$n$ 是繞射階數，$\\theta$ 是繞射角。'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/50 rounded-2xl border border-slate-800 p-5">
+              <h3 className="text-sm font-bold text-emerald-300 mb-3 flex items-center gap-2">
+                <MoveHorizontal className="w-4 h-4" /> 觀察現象
+              </h3>
+              <ul className="text-xs text-slate-400 space-y-3">
+                <li className="flex gap-2">
+                  <ChevronRight className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                  <span>增加 <b>光柵密度 $N$</b> 會減小 $d$，導致繞射亮點分得更開。</span>
+                </li>
+                <li className="flex gap-2">
+                  <ChevronRight className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                  <span>波長較長的光（紅光）比短波長的光（藍光）有更 <b>大的繞射角</b>。</span>
+                </li>
+                <li className="flex gap-2">
+                  <ChevronRight className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                  <span>中央極大值（$n=0$）維持白色，因為所有顏色的光都在 {'$\\theta = 0$'} 重疊。</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* 右側：控制面板 */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 shadow-xl sticky top-24">
+            <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+              <Settings2 className="w-5 h-5 text-indigo-400" /> 控制面板
+            </h2>
+
+            <div className="space-y-8">
+              {/* 光源選擇 */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 block">光源類型</label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                  <button 
+                    onClick={() => setMode('mono')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${mode === 'mono' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    單色光 (雷射)
+                  </button>
+                  <button 
+                    onClick={() => setMode('white')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${mode === 'white' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                    白光
+                  </button>
+                </div>
+              </div>
+
+              {/* 波長滑桿 */}
+              {mode === 'mono' && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex justify-between items-end mb-3">
+                    <label className="text-xs font-bold text-slate-300">{'波長 ($\\lambda$)'}</label>
+                    <span className="text-sm font-mono font-bold px-2 py-0.5 bg-slate-800 rounded text-indigo-300" style={{ color: rgbToHex(nmToRGB(wavelength)) }}>
+                      {wavelength} nm
+                    </span>
+                  </div>
+                  <div className="relative h-6 flex items-center">
+                    <div className="absolute inset-0 h-1.5 my-auto rounded-full bg-gradient-to-r from-violet-600 via-green-500 to-red-600 opacity-30"></div>
+                    <input 
+                      type="range" min="400" max="750" step="1" 
+                      value={wavelength}
+                      onChange={(e) => setWavelength(parseInt(e.target.value))}
+                      className="w-full relative z-10 appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 光柵密度 */}
+              <div>
+                <div className="flex justify-between items-end mb-3">
+                  <label className="text-xs font-bold text-slate-300">{'光柵密度 ($N$)'}</label>
+                  <span className="text-sm font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded">
+                    {linesPerMm} 條/mm
+                  </span>
+                </div>
+                <input 
+                  type="range" min="100" max="1000" step="50" 
+                  value={linesPerMm}
+                  onChange={(e) => setLinesPerMm(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+                <div className="flex justify-between mt-2">
+                   <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter italic">{'寬鬆 ($d \\uparrow$)'}</span>
+                   <span className="text-[10px] text-slate-600 font-bold uppercase tracking-tighter italic">{'緊密 ($d \\downarrow$)'}</span>
+                </div>
+              </div>
+
+              {/* 屏幕距離 */}
+              <div>
+                <div className="flex justify-between items-end mb-3">
+                  <label className="text-xs font-bold text-slate-300">{'屏幕距離 ($L$)'}</label>
+                  <span className="text-sm font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded">
+                    {distanceToScreen.toFixed(1)} m
+                  </span>
+                </div>
+                <input 
+                  type="range" min="0.5" max="5.0" step="0.1" 
+                  value={distanceToScreen}
+                  onChange={(e) => setDistanceToScreen(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+              </div>
+
+              {/* 物理參數預覽 */}
+              <div className="pt-6 border-t border-slate-800">
+                <div className="flex items-center gap-2 mb-4">
+                  <Calculator className="w-4 h-4 text-slate-500" />
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">物理參數計算結果</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{'狹縫間距 ($d$)'}</p>
+                    <p className="text-lg font-mono text-white">{(d_spacing * 1e6).toFixed(2)}<span className="text-xs text-slate-500 ml-1">μm</span></p>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{'最大階數 ($n_{max}$)'}</p>
+                    <p className="text-lg font-mono text-white">{Math.floor(d_spacing / (wavelength * 1e-9))}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex gap-3">
+                <HelpCircle className="w-5 h-5 text-indigo-400 shrink-0" />
+                <p className="text-[11px] text-indigo-200/70 leading-relaxed italic">
+                  小技巧：切換到「白光」模式可以觀察到光柵如何將光分散成連續光譜，並看到不同階數的光譜重疊現象。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="mt-auto border-t border-slate-900 bg-slate-950 p-8 text-center">
+        <p className="text-slate-600 text-xs">專為物理教學設計。視覺比例僅供教學示意參考。</p>
+      </footer>
+    </div>
+  );
+}
