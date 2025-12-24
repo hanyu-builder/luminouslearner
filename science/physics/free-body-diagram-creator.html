@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自由體圖繪製器 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .canvas-container { cursor: crosshair; }
+        .btn-force { transition: all 0.2s ease; }
+        .btn-force:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 600;
+    const CANVAS_HEIGHT = 400;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+
+    const SCENARIOS = [
+        {
+            id: 1,
+            title: "水平面上的木塊",
+            description: "一個靜止在桌面上的木塊。",
+            drawBg: (ctx) => {
+                ctx.fillStyle = '#334155';
+                ctx.fillRect(100, CENTER_Y + 40, 400, 10);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(CENTER_X - 40, CENTER_Y - 40, 80, 80);
+            },
+            solution: [
+                { type: 'mg', angle: 90 }, // 重力向下
+                { type: 'N', angle: -90 }  // 正向力向上
+            ]
+        },
+        {
+            id: 2,
+            title: "受推力滑動的木塊",
+            description: "在粗糙地面上向右推動的木塊。",
+            drawBg: (ctx) => {
+                ctx.fillStyle = '#334155';
+                ctx.fillRect(100, CENTER_Y + 40, 400, 10);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(CENTER_X - 40, CENTER_Y - 40, 80, 80);
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 5;
+                ctx.beginPath(); ctx.moveTo(CENTER_X - 70, CENTER_Y); ctx.lineTo(CENTER_X - 45, CENTER_Y); ctx.stroke();
+            },
+            solution: [
+                { type: 'mg', angle: 90 },
+                { type: 'N', angle: -90 },
+                { type: 'F_app', angle: 0 }, // 向右推
+                { type: 'f', angle: 180 }    // 向左摩擦
+            ]
+        },
+        {
+            id: 3,
+            title: "斜面上的木塊",
+            description: "在 30° 粗糙斜面上向下滑動的木塊。",
+            drawBg: (ctx) => {
+                const rad = 30 * Math.PI / 180;
+                ctx.save();
+                ctx.translate(CENTER_X, CENTER_Y);
+                ctx.rotate(rad);
+                ctx.fillStyle = '#334155'; ctx.fillRect(-200, 40, 400, 10);
+                ctx.fillStyle = '#3b82f6'; ctx.fillRect(-40, -40, 80, 80);
+                ctx.restore();
+            },
+            solution: [
+                { type: 'mg', angle: 90 }, // 重力垂直向下
+                { type: 'N', angle: -60 }, // 垂直於斜面 (30度斜面則 N 傾斜 -60)
+                { type: 'f', angle: 210 }  // 沿斜面向上 (180 + 30)
+            ]
+        },
+        {
+            id: 4,
+            title: "單擺運動",
+            description: "一個正在向右擺動的小球。",
+            drawBg: (ctx) => {
+                ctx.fillStyle = '#334155'; ctx.fillRect(CENTER_X - 50, 50, 100, 10);
+                ctx.beginPath(); ctx.moveTo(CENTER_X, 50); ctx.lineTo(CENTER_X + 60, CENTER_Y);
+                ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.beginPath(); ctx.arc(CENTER_X + 60, CENTER_Y, 20, 0, Math.PI*2);
+                ctx.fillStyle = '#ef4444'; ctx.fill();
+            },
+            offsetCenter: { x: 60, y: 0 },
+            solution: [
+                { type: 'mg', angle: 90 },
+                { type: 'T', angle: -120 } // 沿繩索方向
+            ]
+        }
+    ];
+
+    const FORCE_TYPES = [
+        { id: 'mg', label: '重力 (mg)', color: '#94a3b8' },
+        { id: 'N', label: '正向力 (N)', color: '#10b981' },
+        { id: 'f', label: '摩擦力 (f)', color: '#ef4444' },
+        { id: 'T', label: '張力 (T)', color: '#f59e0b' },
+        { id: 'F_app', label: '推力 (F)', color: '#3b82f6' },
+    ];
+
+    const App = () => {
+        const [currentScenarioIdx, setCurrentScenarioIdx] = useState(0);
+        const [userVectors, setUserVectors] = useState([]);
+        const [feedback, setFeedback] = useState(null);
+        const [draggingId, setDraggingId] = useState(null);
+
+        const canvasRef = useRef(null);
+        const scenario = SCENARIOS[currentScenarioIdx];
+
+        const addVector = (type) => {
+            const color = FORCE_TYPES.find(f => f.id === type).color;
+            const angle = Math.random() * 360; 
+            const length = 80;
+            const dx = length * Math.cos(angle * Math.PI / 180);
+            const dy = length * Math.sin(angle * Math.PI / 180);
+
+            setUserVectors([...userVectors, { id: Date.now(), type, dx, dy, color }]);
+            setFeedback(null);
+        };
+
+        const removeVector = (id) => {
+            setUserVectors(userVectors.filter(v => v.id !== id));
+            setFeedback(null);
+        };
+
+        const checkAnswer = () => {
+            if (userVectors.length !== scenario.solution.length) {
+                setFeedback({ type: 'error', msg: `力的人數不正確。應有 ${scenario.solution.length} 個力，你畫了 ${userVectors.length} 個。` });
+                return;
+            }
+
+            let remainingUserVectors = [...userVectors];
+            let allCorrect = true;
+            let errorMsg = "";
+
+            for (let sol of scenario.solution) {
+                const matchIndex = remainingUserVectors.findIndex(uv => {
+                    if (uv.type !== sol.type) return false;
+                    let userAngle = Math.atan2(uv.dy, uv.dx) * (180 / Math.PI);
+                    if (userAngle < 0) userAngle += 360;
+                    let solAngle = sol.angle;
+                    if (solAngle < 0) solAngle += 360;
+                    let diff = Math.abs(userAngle - solAngle);
+                    if (diff > 180) diff = 360 - diff;
+                    return diff < 20; // 容錯率 20 度
+                });
+
+                if (matchIndex === -1) {
+                    allCorrect = false;
+                    const forceName = FORCE_TYPES.find(f => f.id === sol.type).label;
+                    errorMsg = `缺少或方向錯誤：${forceName}`;
+                    break;
+                } else {
+                    remainingUserVectors.splice(matchIndex, 1);
+                }
+            }
+
+            if (allCorrect) setFeedback({ type: 'success', msg: "非常完美！所有的受力與方向皆正確。" });
+            else setFeedback({ type: 'error', msg: errorMsg });
+        };
+
+        const handleMouseDown = (e) => {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const cx = CENTER_X + (scenario.offsetCenter?.x || 0);
+            const cy = CENTER_Y + (scenario.offsetCenter?.y || 0);
+
+            for (let i = userVectors.length - 1; i >= 0; i--) {
+                const v = userVectors[i];
+                if (Math.hypot(x - (cx + v.dx), y - (cy + v.dy)) < 20) {
+                    setDraggingId(v.id);
+                    return;
+                }
+            }
+        };
+
+        const handleMouseMove = (e) => {
+            if (!draggingId) return;
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const cx = CENTER_X + (scenario.offsetCenter?.x || 0);
+            const cy = CENTER_Y + (scenario.offsetCenter?.y || 0);
+
+            const dx = x - cx;
+            const dy = y - cy;
+            const length = Math.hypot(dx, dy);
+            const clampedLength = Math.max(50, Math.min(120, length)); // 限制長度
+            const ratio = clampedLength / length;
+
+            setUserVectors(prev => prev.map(v => 
+                v.id === draggingId ? { ...v, dx: dx * ratio, dy: dy * ratio } : v
+            ));
+        };
+
+        const handleMouseUp = () => setDraggingId(null);
+
+        useEffect(() => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            ctx.globalAlpha = 0.3;
+            scenario.drawBg(ctx);
+            ctx.globalAlpha = 1.0;
+
+            const cx = CENTER_X + (scenario.offsetCenter?.x || 0);
+            const cy = CENTER_Y + (scenario.offsetCenter?.y || 0);
+            ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fillStyle = 'white'; ctx.fill();
+            ctx.strokeStyle = 'black'; ctx.stroke();
+
+            userVectors.forEach(v => {
+                const toX = cx + v.dx;
+                const toY = cy + v.dy;
+                const angle = Math.atan2(v.dy, v.dx);
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(toX, toY);
+                ctx.strokeStyle = v.color; ctx.lineWidth = 4; ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(toX, toY);
+                ctx.lineTo(toX - 12 * Math.cos(angle - Math.PI/6), toY - 12 * Math.sin(angle - Math.PI/6));
+                ctx.lineTo(toX - 12 * Math.cos(angle + Math.PI/6), toY - 12 * Math.sin(angle + Math.PI/6));
+                ctx.fillStyle = v.color; ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(v.type, cx + v.dx/2 - 10, cy + v.dy/2);
+            });
+
+            if (window.lucide) window.lucide.createIcons();
+        }, [userVectors, scenario]);
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                            <i data-lucide="pencil-ruler"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">自由體圖繪製器</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Forces (Mechanics)
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 space-y-4">
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-2 shadow-2xl relative overflow-hidden h-[420px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} className="w-full h-full object-contain bg-slate-950 rounded-2xl canvas-container touch-none" />
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 shadow-xl backdrop-blur-md">
+                                <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1">場景 {scenario.id}</div>
+                                <div className="text-lg font-bold text-white">{scenario.title}</div>
+                                <div className="text-xs text-slate-400 mt-1">{scenario.description}</div>
+                            </div>
+                            {feedback && (
+                                <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 px-8 py-4 rounded-2xl border font-bold shadow-2xl animate-bounce flex items-center gap-3 ${feedback.type === 'success' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-red-600 border-red-400 text-white'}`}>
+                                    <i data-lucide={feedback.type === 'success' ? "check-circle" : "alert-circle"}></i>
+                                    {feedback.msg}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bg-slate-800 p-4 rounded-3xl border border-slate-700 flex justify-between items-center shadow-lg">
+                            <div className="flex gap-3">
+                                <button onClick={() => { setUserVectors([]); setFeedback(null); }} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-white font-bold transition-all active:scale-95 flex items-center gap-2">
+                                    <i data-lucide="rotate-ccw" className="w-4 h-4"></i> 清除畫布
+                                </button>
+                                <button onClick={checkAnswer} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white font-bold transition-all shadow-lg active:scale-95">
+                                    檢查答案
+                                </button>
+                            </div>
+                            <button onClick={() => { setCurrentScenarioIdx(p => (p + 1) % SCENARIOS.length); setUserVectors([]); setFeedback(null); }} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-bold transition-all flex items-center gap-2 active:scale-95">
+                                下一個場景 <i data-lucide="arrow-right" className="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="plus-circle" className="w-5 h-5 text-indigo-400"></i> 添加作用力
+                            </h2>
+                            <p className="text-xs text-slate-400 italic">點擊下方按鈕添加受力，並拖動箭頭頂端來改變方向。</p>
+                            <div className="space-y-3">
+                                {FORCE_TYPES.map(f => (
+                                    <button key={f.id} onClick={() => addVector(f.id)} className="w-full p-4 rounded-2xl border border-slate-700 bg-slate-900/50 hover:bg-slate-700 transition-all flex items-center justify-between group btn-force">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-3 h-3 rounded-full shadow-[0_0_8px_currentColor]" style={{background: f.color, color: f.color}}></div>
+                                            <span className="font-bold text-slate-200">{f.label}</span>
+                                        </div>
+                                        <i data-lucide="plus" className="w-4 h-4 text-slate-500 group-hover:text-white"></i>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/20 border border-indigo-500/20 p-6 rounded-3xl shadow-inner">
+                            <h3 className="text-indigo-300 font-bold text-sm mb-3 flex items-center gap-2">
+                                <i data-lucide="lightbulb" className="w-4 h-4"></i> 繪圖技巧
+                            </h3>
+                            <ul className="text-xs text-slate-400 space-y-3 leading-relaxed">
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></div> 重力 mg 永遠指向地心（垂直向下）。</li>
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></div> 正向力 N 永遠與接觸面垂直。</li>
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></div> 摩擦力 f 永遠與運動趨勢方向相反。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
