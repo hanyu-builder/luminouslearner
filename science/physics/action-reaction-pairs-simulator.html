@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作用力與反作用力實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .slider-thumb-red::-webkit-slider-thumb { border-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+        .slider-thumb-blue::-webkit-slider-thumb { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 350;
+    const TRACK_Y = 250;
+    const CART_WIDTH = 80;
+    const CART_HEIGHT = 50;
+    const PIXELS_PER_METER = 50; 
+    const SPRING_IMPULSE = 10; 
+
+    const App = () => {
+        const [massA, setMassA] = useState(2.0); 
+        const [massB, setMassB] = useState(1.0); 
+        const [simState, setSimState] = useState('ready'); 
+        const [posA, setPosA] = useState(-50); 
+        const [posB, setPosB] = useState(50);  
+        const [velA, setVelA] = useState(0);
+        const [velB, setVelB] = useState(0);
+        const [time, setTime] = useState(0);
+
+        const requestRef = useRef();
+        const physicsRef = useRef({ xA: -50, xB: 50, vA: 0, vB: 0 });
+        const canvasRef = useRef(null);
+
+        const startExplosion = () => {
+            if (simState !== 'ready') return;
+            
+            // 動量守恆： mA*vA + mB*vB = 0
+            // 衝量 J = mA*|vA| = mB*|vB|
+            const vA = -SPRING_IMPULSE / massA;
+            const vB = SPRING_IMPULSE / massB;
+
+            physicsRef.current = { 
+                xA: -50, xB: 50, 
+                vA: vA * PIXELS_PER_METER, 
+                vB: vB * PIXELS_PER_METER 
+            };
+
+            setSimState('pushing');
+            setTimeout(() => {
+                setSimState('moving');
+                loop();
+            }, 800);
+        };
+
+        const resetSim = () => {
+            setSimState('ready');
+            cancelAnimationFrame(requestRef.current);
+            setPosA(-50); setPosB(50);
+            setVelA(0); setVelB(0);
+            setTime(0);
+            physicsRef.current = { xA: -50, xB: 50, vA: 0, vB: 0 };
+        };
+
+        const loop = () => {
+            const dt = 0.016;
+            physicsRef.current.xA += physicsRef.current.vA * dt;
+            physicsRef.current.xB += physicsRef.current.vB * dt;
+
+            const limit = CANVAS_WIDTH / 2 - CART_WIDTH;
+            if (physicsRef.current.xA < -limit || physicsRef.current.xB > limit) {
+                setSimState('finished');
+                return;
+            }
+
+            setPosA(physicsRef.current.xA);
+            setPosB(physicsRef.current.xB);
+            setVelA(physicsRef.current.vA / PIXELS_PER_METER);
+            setVelB(physicsRef.current.vB / PIXELS_PER_METER);
+            setTime(t => t + dt);
+
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            const CX = CANVAS_WIDTH / 2;
+
+            // 1. 繪製軌道
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, TRACK_Y, CANVAS_WIDTH, 12);
+            ctx.fillStyle = '#334155';
+            for(let x = 0; x <= CANVAS_WIDTH; x+=50) ctx.fillRect(x, TRACK_Y, 2, 12);
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(CX - 1, TRACK_Y - 15, 2, 30);
+
+            // 2. 繪製滑車
+            const drawPosA = CX + posA - CART_WIDTH/2;
+            const drawPosB = CX + posB - CART_WIDTH/2;
+            drawCart(ctx, drawPosA, TRACK_Y - CART_HEIGHT - 5, massA, '#3b82f6', 'A');
+            drawCart(ctx, drawPosB, TRACK_Y - CART_HEIGHT - 5, massB, '#ef4444', 'B');
+
+            // 3. 繪製彈簧 (釋放前)
+            if (simState === 'ready' || simState === 'pushing') {
+                drawSpring(ctx, drawPosA + CART_WIDTH, TRACK_Y - 30, drawPosB - (drawPosA + CART_WIDTH), 10);
+            }
+
+            // 4. 繪製作用力向量 (釋放瞬間)
+            if (simState === 'pushing') {
+                drawArrow(ctx, drawPosA + CART_WIDTH, TRACK_Y - 45, -90, '#ef4444', 'F_BA');
+                drawArrow(ctx, drawPosB, TRACK_Y - 45, 90, '#3b82f6', 'F_AB');
+            }
+
+            // 5. 繪製速度向量
+            if (simState === 'moving' || simState === 'finished') {
+                drawArrow(ctx, drawPosA + CART_WIDTH/2, TRACK_Y - 75, velA * 25, '#93c5fd', `vA = ${velA.toFixed(1)}`);
+                drawArrow(ctx, drawPosB + CART_WIDTH/2, TRACK_Y - 75, velB * 25, '#fca5a5', `vB = ${velB.toFixed(1)}`);
+            }
+        }, [posA, posB, massA, massB, simState, velA, velB]);
+
+        const drawCart = (ctx, x, y, mass, color, label) => {
+            ctx.fillStyle = '#020617';
+            ctx.beginPath(); ctx.arc(x + 18, y + CART_HEIGHT + 4, 8, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + CART_WIDTH - 18, y + CART_HEIGHT + 4, 8, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(x, y, CART_WIDTH, CART_HEIGHT, 6); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(label, x + CART_WIDTH/2, y + 25);
+            ctx.font = '10px JetBrains Mono'; ctx.fillText(`${mass}kg`, x + CART_WIDTH/2, y + 42);
+        };
+
+        const drawSpring = (ctx, x, y, width, coils) => {
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y);
+            for (let i = 1; i <= coils; i++) {
+                ctx.lineTo(x + (width / coils) * i, y + (i % 2 === 0 ? 6 : -6));
+            }
+            ctx.stroke();
+        };
+
+        const drawArrow = (ctx, x, y, len, color, label) => {
+            if (Math.abs(len) < 5) return;
+            const toX = x + len;
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 3;
+            ctx.moveTo(x, y); ctx.lineTo(toX, y); ctx.stroke();
+            const dir = len > 0 ? 1 : -1;
+            ctx.beginPath(); ctx.fillStyle = color;
+            ctx.moveTo(toX, y); ctx.lineTo(toX - 8 * dir, y - 6); ctx.lineTo(toX - 8 * dir, y + 6); ctx.fill();
+            ctx.fillStyle = color; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(label, x + len/2, y - 12);
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-purple-500/20 p-2 rounded-lg text-purple-400">
+                            <i data-lucide="arrow-left-right"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">作用力與反作用力實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Newton's 3rd Law
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-12">
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-2 shadow-2xl relative overflow-hidden h-[380px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain bg-slate-950 rounded-2xl" />
+                            <div className="absolute top-6 left-1/2 -translate-x-1/2 bg-slate-900/80 px-6 py-2 rounded-full border border-slate-700 font-bold text-sm backdrop-blur-md">
+                                {simState === 'ready' ? '等待啟動' : simState === 'pushing' ? '💥 作用力發生中' : `實驗進行時間: ${time.toFixed(2)}s`}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-5 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="settings-2" className="w-5 h-5 text-purple-400"></i> 滑車參數設定
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-xs font-bold text-blue-400 uppercase tracking-widest">滑車 A 質量 (左)</label>
+                                        <span className="font-mono text-white bg-slate-950 px-2 py-0.5 rounded text-sm">{massA} kg</span>
+                                    </div>
+                                    <input type="range" min="0.5" max="5.0" step="0.5" value={massA} onChange={(e) => { setMassA(Number(e.target.value)); resetSim(); }} disabled={simState !== 'ready'} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb slider-thumb-blue" />
+                                </div>
+                                <div>
+                                    <div className="flex justify-between mb-2">
+                                        <label className="text-xs font-bold text-red-400 uppercase tracking-widest">滑車 B 質量 (右)</label>
+                                        <span className="font-mono text-white bg-slate-950 px-2 py-0.5 rounded text-sm">{massB} kg</span>
+                                    </div>
+                                    <input type="range" min="0.5" max="5.0" step="0.5" value={massB} onChange={(e) => { setMassB(Number(e.target.value)); resetSim(); }} disabled={simState !== 'ready'} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb slider-thumb-red" />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button onClick={simState === 'ready' ? startExplosion : resetSim} className={`flex-1 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 ${simState === 'ready' ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}>
+                                    <i data-lucide={simState === 'ready' ? "zap" : "rotate-ccw"}></i>
+                                    {simState === 'ready' ? '釋放彈簧 (啟動)' : '重設實驗'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-7 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl">
+                            <h2 className="text-white font-bold mb-6 flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="bar-chart-3" className="w-5 h-5 text-indigo-400"></i> 即時動力數據分析
+                            </h2>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-blue-500/20 relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                                    <h3 className="text-blue-400 text-[10px] font-bold uppercase tracking-widest mb-3">滑車 A 數據</h3>
+                                    <div className="space-y-3 font-mono">
+                                        <div className="flex justify-between items-center text-xs"><span className="text-slate-500">速度 (v)</span><span className="text-white text-lg font-bold">{velA.toFixed(2)} m/s</span></div>
+                                        <div className="flex justify-between items-center text-xs"><span className="text-slate-500">動量 (p)</span><span className="text-blue-300 font-bold">{(massA * velA).toFixed(2)} kg·m/s</span></div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-red-500/20 relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                                    <h3 className="text-red-400 text-[10px] font-bold uppercase tracking-widest mb-3">滑車 B 數據</h3>
+                                    <div className="space-y-3 font-mono">
+                                        <div className="flex justify-between items-center text-xs"><span className="text-slate-500">速度 (v)</span><span className="text-white text-lg font-bold">+{velB.toFixed(2)} m/s</span></div>
+                                        <div className="flex justify-between items-center text-xs"><span className="text-slate-500">動量 (p)</span><span className="text-red-300 font-bold">+{(massB * velB).toFixed(2)} kg·m/s</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 p-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col items-center">
+                                <h3 className="text-indigo-300 text-xs font-bold uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <i data-lucide="scale" className="w-4 h-4"></i> 系統總動量檢測
+                                </h3>
+                                <div className="flex items-center gap-4 text-2xl font-mono">
+                                    <span className="text-blue-400">{(massA * velA).toFixed(1)}</span>
+                                    <span className="text-slate-500">+</span>
+                                    <span className="text-red-400">{(massB * velB).toFixed(1)}</span>
+                                    <span className="text-slate-500">=</span>
+                                    <span className={`font-black ${Math.abs((massA*velA)+(massB*velB)) < 0.1 ? 'text-emerald-400' : 'text-white'}`}>
+                                        {Math.abs((massA*velA)+(massB*velB)) < 0.01 ? "0.0" : ((massA*velA)+(massB*velB)).toFixed(1)}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-4 italic text-center leading-relaxed">
+                                    即便兩車速度與質量不同，但在「爆炸」過程中受到的衝量大小相等、方向相反。<br/>因此系統總動量始終維持為零，完美符合動量守恆定律。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
