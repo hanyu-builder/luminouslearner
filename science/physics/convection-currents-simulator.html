@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>對流模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #10b981; cursor: pointer; border: 2px solid white;
+        }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 500;
+    const PARTICLE_COUNT = 500;
+    const ROOM_TEMP = 20;
+    const MAX_TEMP = 100;
+    const HEATER_RADIUS = 60;
+    const BUOYANCY_FACTOR = 0.06;
+    const GRAVITY = 0.04;
+
+    const App = () => {
+        const [heaterPos, setHeaterPos] = useState(50); 
+        const [heaterOn, setHeaterOn] = useState(true);
+        const [viscosity, setViscosity] = useState(40);
+        const [showVectors, setShowVectors] = useState(false);
+        
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const particlesRef = useRef([]);
+
+        // 初始化質點
+        useEffect(() => {
+            const initial = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                initial.push({
+                    x: Math.random() * CANVAS_WIDTH,
+                    y: Math.random() * CANVAS_HEIGHT,
+                    vx: 0, vy: 0,
+                    temp: ROOM_TEMP
+                });
+            }
+            particlesRef.current = initial;
+        }, []);
+
+        const updatePhysics = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            // 繪製背景
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const heaterX = (heaterPos / 100) * CANVAS_WIDTH;
+            const heaterY = CANVAS_HEIGHT - 5;
+            const damp = 0.92 + (viscosity / 1000);
+
+            // 繪製加熱器
+            if (heaterOn) {
+                const g = ctx.createRadialGradient(heaterX, heaterY, 10, heaterX, heaterY, HEATER_RADIUS);
+                g.addColorStop(0, 'rgba(239, 68, 68, 0.4)');
+                g.addColorStop(1, 'rgba(239, 68, 68, 0)');
+                ctx.fillStyle = g;
+                ctx.beginPath(); ctx.arc(heaterX, heaterY, HEATER_RADIUS, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#ef4444'; ctx.fillRect(heaterX - 40, CANVAS_HEIGHT - 8, 80, 8);
+            }
+
+            // 繪製頂部冷卻層
+            const cg = ctx.createLinearGradient(0, 0, 0, 30);
+            cg.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
+            cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            ctx.fillStyle = cg; ctx.fillRect(0, 0, CANVAS_WIDTH, 30);
+
+            // 更新與繪製質點
+            particlesRef.current.forEach(p => {
+                // 1. 熱交換
+                if (heaterOn) {
+                    const dist = Math.hypot(p.x - heaterX, p.y - heaterY);
+                    if (dist < HEATER_RADIUS) p.temp = Math.min(MAX_TEMP, p.temp + 1.5);
+                }
+                if (p.y < 40) p.temp = Math.max(ROOM_TEMP, p.temp - 0.5);
+                else p.temp = Math.max(ROOM_TEMP, p.temp - 0.02);
+
+                // 2. 受力分析 (浮力與重力)
+                const buoyancy = (p.temp - ROOM_TEMP) * BUOYANCY_FACTOR * -0.2;
+                p.vy += buoyancy + (GRAVITY * 0.4);
+                p.vx += (Math.random() - 0.5) * 0.15; // 布朗運動模擬
+
+                // 3. 位移
+                p.vx *= damp; p.vy *= damp;
+                p.x += p.vx; p.y += p.vy;
+
+                // 4. 邊界處理
+                if (p.x < 0) { p.x = 0; p.vx *= -0.5; }
+                if (p.x > CANVAS_WIDTH) { p.x = CANVAS_WIDTH; p.vx *= -0.5; }
+                if (p.y < 0) { p.y = 0; p.vy *= -0.5; }
+                if (p.y > CANVAS_HEIGHT) { p.y = CANVAS_HEIGHT; p.vy *= -0.5; }
+
+                // 5. 渲染顏色 (冷藍 -> 熱紅)
+                const ratio = (p.temp - ROOM_TEMP) / (MAX_TEMP - ROOM_TEMP);
+                ctx.fillStyle = `rgb(${Math.floor(ratio*255)}, ${Math.floor(100+ratio*50)}, ${Math.floor(255-ratio*200)})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+
+                if (showVectors && Math.hypot(p.vx, p.vy) > 0.3) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.vx * 4, p.y + p.vy * 4); ctx.stroke();
+                }
+            });
+
+            requestRef.current = requestAnimationFrame(updatePhysics);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(updatePhysics);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [heaterPos, heaterOn, viscosity, showVectors]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 p-4 md:p-8 font-sans">
+                <header className="max-w-6xl mx-auto mb-8 flex items-center gap-4 border-b border-slate-800 pb-6">
+                    <div className="p-3 bg-orange-500/10 rounded-2xl border border-orange-500/20 text-orange-400">
+                        <i data-lucide="wind"></i>
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white tracking-tight">對流模擬實驗室</h1>
+                        <p className="text-slate-400 text-sm">熱與氣體篇 • 流體能量傳遞</p>
+                    </div>
+                </header>
+
+                <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800/50 border border-slate-700 rounded-3xl p-6 shadow-xl space-y-8">
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-slate-500 uppercase mb-3">
+                                    <span>加熱器位置</span>
+                                    <span className="text-orange-400">{heaterPos}%</span>
+                                </label>
+                                <input type="range" min="10" max="90" value={heaterPos} onChange={(e) => setHeaterPos(e.target.value)} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                            </div>
+
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-slate-500 uppercase mb-3">
+                                    <span>流體黏滯力</span>
+                                    <span className="text-blue-400">{viscosity > 60 ? "高" : viscosity < 30 ? "低" : "中"}</span>
+                                </label>
+                                <input type="range" min="10" max="90" value={viscosity} onChange={(e) => setViscosity(e.target.value)} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => setHeaterOn(!heaterOn)} className={`py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${heaterOn ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-slate-700 text-slate-400'}`}>
+                                    <i data-lucide="power" className="w-4 h-4"></i> 加熱器 {heaterOn ? "開啟" : "關閉"}
+                                </button>
+                                <button onClick={() => setShowVectors(!showVectors)} className={`py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${showVectors ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-slate-700 text-slate-400'}`}>
+                                    <i data-lucide="navigation" className="w-4 h-4"></i> 流線向量
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/30 p-6 rounded-3xl border border-slate-700 space-y-4">
+                            <h3 className="text-sm font-bold text-indigo-300 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="help-circle" className="w-4 h-4"></i> 觀察重點</h3>
+                            <ul className="text-xs text-slate-400 space-y-3 leading-relaxed">
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1 shrink-0"></div> 受熱流體膨脹，密度下降，產生向上浮力。</li>
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1 shrink-0"></div> 頂部流體散熱，密度回升，受重力下沉。</li>
+                                <li className="flex gap-2"><div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1 shrink-0"></div> 試著移動加熱器到側邊，觀察對流胞如何轉向。</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-8 bg-slate-950 border border-slate-700 rounded-3xl p-2 relative shadow-2xl overflow-hidden">
+                        <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-auto block" />
+                        <div className="absolute top-6 right-6 bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-700 text-[10px] font-bold text-slate-500 uppercase tracking-widest backdrop-blur-md">
+                            動態對流場 (Dynamic Fluid Field)
+                        </div>
+                        <div className="absolute bottom-6 left-6 flex gap-4 text-[10px] font-bold text-slate-500">
+                            <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-600"></div> 低溫 (下沉)</span>
+                            <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-600"></div> 高溫 (上升)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
