@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>熱傳導速率模擬實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop-types (Required for Recharts) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #10b981; cursor: pointer; border: 2px solid white;
+        }
+        canvas { image-rendering: pixelated; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } = window.Recharts;
+
+    const ROD_LENGTH = 50; 
+    const DT = 0.1; 
+    const DX = 1; 
+    const HOT_TEMP = 100;
+    const ROOM_TEMP = 20;
+    const WAX_MELT_TEMP = 45; 
+
+    const MATERIALS = {
+        "銅 (Copper)": { alpha: 1.1, color: "#d97706" },
+        "鋁 (Aluminum)": { alpha: 0.84, color: "#94a3b8" },
+        "鐵 (Iron)": { alpha: 0.23, color: "#475569" },
+        "鋼 (Steel)": { alpha: 0.13, color: "#334155" },
+        "玻璃 (Glass)": { alpha: 0.0034, color: "#38bdf8" }
+    };
+
+    const App = () => {
+        const [materialA, setMaterialA] = useState("銅 (Copper)");
+        const [materialB, setMaterialB] = useState("鐵 (Iron)");
+        const [isRunning, setIsRunning] = useState(false);
+        const [time, setTime] = useState(0);
+        
+        const tempARef = useRef(new Array(ROD_LENGTH).fill(ROOM_TEMP));
+        const tempBRef = useRef(new Array(ROD_LENGTH).fill(ROOM_TEMP));
+        const [waxA, setWaxA] = useState([true, true, true]);
+        const [waxB, setWaxB] = useState([true, true, true]);
+        const [graphData, setGraphData] = useState([]);
+        const frameCountRef = useRef(0);
+        const requestRef = useRef();
+
+        const solveHeatStep = (tempArray, alpha) => {
+            const r = alpha * DT / (DX * DX);
+            const newTemps = [...tempArray];
+            newTemps[0] = HOT_TEMP; 
+            for (let i = 1; i < ROD_LENGTH - 1; i++) {
+                newTemps[i] = tempArray[i] + r * (tempArray[i+1] - 2*tempArray[i] + tempArray[i-1]);
+            }
+            newTemps[ROD_LENGTH - 1] = newTemps[ROD_LENGTH - 2]; 
+            return newTemps;
+        };
+
+        const animate = () => {
+            if (!isRunning) return;
+
+            tempARef.current = solveHeatStep(tempARef.current, MATERIALS[materialA].alpha);
+            tempBRef.current = solveHeatStep(tempBRef.current, MATERIALS[materialB].alpha);
+
+            const posIndices = [Math.floor(ROD_LENGTH * 0.25), Math.floor(ROD_LENGTH * 0.5), Math.floor(ROD_LENGTH * 0.75)];
+            
+            const updateWax = (temps, setWax) => {
+                setWax(prev => {
+                    let changed = false;
+                    const next = prev.map((isAttached, i) => {
+                        if (isAttached && temps[posIndices[i]] >= WAX_MELT_TEMP) {
+                            changed = true;
+                            return false;
+                        }
+                        return isAttached;
+                    });
+                    return changed ? next : prev;
+                });
+            };
+
+            updateWax(tempARef.current, setWaxA);
+            updateWax(tempBRef.current, setWaxB);
+
+            setTime(t => {
+                const newTime = t + DT;
+                frameCountRef.current++;
+                if (frameCountRef.current % 10 === 0) {
+                    setGraphData(prev => {
+                        const probe = ROD_LENGTH - 5;
+                        const newData = {
+                            time: newTime.toFixed(1),
+                            "棒 A": parseFloat(tempARef.current[probe].toFixed(1)),
+                            "棒 B": parseFloat(tempBRef.current[probe].toFixed(1))
+                        };
+                        return prev.length > 40 ? [...prev.slice(1), newData] : [...prev, newData];
+                    });
+                }
+                return newTime;
+            });
+
+            requestRef.current = requestAnimationFrame(animate);
+        };
+
+        useEffect(() => {
+            if (isRunning) requestRef.current = requestAnimationFrame(animate);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isRunning, materialA, materialB]);
+
+        const handleReset = () => {
+            setIsRunning(false);
+            setTime(0);
+            tempARef.current = new Array(ROD_LENGTH).fill(ROOM_TEMP);
+            tempBRef.current = new Array(ROD_LENGTH).fill(ROOM_TEMP);
+            setGraphData([]);
+            setWaxA([true, true, true]);
+            setWaxB([true, true, true]);
+            frameCountRef.current = 0;
+        };
+
+        const RodVisual = ({ temps, waxState, name }) => {
+            const cRef = useRef(null);
+            useEffect(() => {
+                const ctx = cRef.current.getContext('2d');
+                const w = cRef.current.width;
+                const h = cRef.current.height;
+                const segW = w / ROD_LENGTH;
+                for (let i = 0; i < ROD_LENGTH; i++) {
+                    const ratio = Math.min(1, Math.max(0, (temps[i] - ROOM_TEMP) / (HOT_TEMP - ROOM_TEMP)));
+                    const hue = 240 - (ratio * 240);
+                    ctx.fillStyle = `hsl(${hue}, 80%, ${50 + ratio * 10}%)`;
+                    ctx.fillRect(i * segW, 0, segW + 1, h);
+                }
+            }, [temps]);
+
+            return (
+                <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">
+                        <span>{name}</span>
+                        <span>末端溫度: {temps[ROD_LENGTH-1].toFixed(1)}°C</span>
+                    </div>
+                    <div className="relative w-full h-16 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-inner">
+                        <canvas ref={cRef} width={800} height={64} className="w-full h-full" />
+                        <div className="absolute inset-0 pointer-events-none">
+                            {[0.25, 0.5, 0.75].map((pos, i) => (
+                                <div key={i} className={`absolute top-1/2 w-4 h-4 rounded-full border-2 border-slate-800 shadow-lg transform -translate-y-1/2 -translate-x-1/2 transition-all duration-700 ${waxState[i] ? 'bg-yellow-400 scale-100' : 'bg-transparent opacity-0 translate-y-8 scale-50'}`} style={{ left: `${pos * 100}%` }}>
+                                    {waxState[i] && <div className="w-1 h-1 bg-white absolute top-1 left-1 rounded-full opacity-50"></div>}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="absolute left-0 top-0 h-full w-1.5 bg-red-500 shadow-[0_0_15px_red] animate-pulse"></div>
+                    </div>
+                </div>
+            );
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans">
+                <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                            <i data-lucide="flame" className="w-8 h-8 text-rose-500"></i>
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold text-white tracking-tight">熱傳導速率模擬實驗室</h1>
+                            <p className="text-slate-400 text-sm font-medium">熱與氣體篇 • 材料導熱性質研究</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+                        <i data-lucide="clock" className="w-4 h-4 text-emerald-400"></i>
+                        <span className="font-mono font-bold text-emerald-400 text-lg">{time.toFixed(1)}s</span>
+                    </div>
+                </header>
+
+                <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 border-b border-slate-800 pb-4">
+                                <i data-lucide="settings-2" className="w-5 h-5 text-rose-500"></i> 實驗控制
+                            </h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">棒 A 材料</label>
+                                    <select value={materialA} onChange={(e) => { handleReset(); setMaterialA(e.target.value); }} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all">
+                                        {Object.keys(MATERIALS).map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">棒 B 材料</label>
+                                    <select value={materialB} onChange={(e) => { handleReset(); setMaterialB(e.target.value); }} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all">
+                                        {Object.keys(MATERIALS).map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setIsRunning(!isRunning)} className={`flex-1 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 ${isRunning ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20 hover:bg-emerald-500'}`}>
+                                    <i data-lucide={isRunning ? "pause" : "play"} className="w-5 h-5"></i>
+                                    {isRunning ? "暫停加熱" : "開始加熱"}
+                                </button>
+                                <button onClick={handleReset} className="px-6 py-4 bg-slate-800 text-white rounded-2xl font-bold hover:bg-slate-700 transition-colors">
+                                    <i data-lucide="rotate-ccw" className="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl">
+                            <h3 className="text-indigo-400 font-bold text-sm mb-3 flex items-center gap-2">
+                                <i data-lucide="info" className="w-4 h-4"></i> 實驗提示
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                黃色球體代表「蠟豆」。當該點溫度達到 <b>45°C</b> 時，蠟會熔化並掉落。觀察不同金屬的導熱係數如何影響熱量移動的速度。
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-8 space-y-6">
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+                            <div className="flex justify-between items-center mb-6 px-2">
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">熱力分佈圖 (Heat Map)</span>
+                                <div className="flex gap-4 text-[10px] font-bold text-slate-400">
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-600"></div> 20°C</span>
+                                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-600"></div> 100°C</span>
+                                </div>
+                            </div>
+                            <div className="space-y-8">
+                                <RodVisual temps={tempARef.current} waxState={waxA} name={materialA} />
+                                <RodVisual temps={tempBRef.current} waxState={waxB} name={materialB} />
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl h-80">
+                            <h3 className="text-white font-bold text-sm mb-6 flex items-center gap-2">
+                                <i data-lucide="line-chart" className="w-5 h-5 text-indigo-400"></i> 溫度隨時間變化圖 (探針位置: x=45)
+                            </h3>
+                            <div className="w-full h-56">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={graphData}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                        <XAxis dataKey="time" stroke="#64748b" fontSize={10} label={{ value: '時間 (s)', position: 'insideBottom', offset: -5, fill: '#475569', fontSize: 10 }} />
+                                        <YAxis domain={[20, 100]} stroke="#64748b" fontSize={10} label={{ value: '溫度 (°C)', angle: -90, position: 'insideLeft', fill: '#475569', fontSize: 10 }} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', fontSize: '12px' }} />
+                                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                                        <Line type="monotone" dataKey="棒 A" stroke="#fbbf24" strokeWidth={3} dot={false} isAnimationActive={false} name={`${materialA}`} />
+                                        <Line type="monotone" dataKey="棒 B" stroke="#38bdf8" strokeWidth={3} dot={false} isAnimationActive={false} name={`${materialB}`} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
