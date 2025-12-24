@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打點計時器分析實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .tape-strip {
+            background-image: repeating-linear-gradient(90deg, transparent, transparent 19px, #cbd5e1 20px);
+        }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff; background: #10b981;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const FREQUENCY = 50; // Hz (每秒打 50 個點)
+    const TICKS_PER_STRIP = 5; // 每 5 個點間隔一段 (0.1s)
+    const TIME_PER_DOT = 1 / FREQUENCY; // 0.02s
+    const TIME_PER_STRIP = TICKS_PER_STRIP * TIME_PER_DOT; // 0.1s
+    const PIXELS_PER_CM = 25; // 顯示比例
+
+    const App = () => {
+        // --- 狀態 ---
+        const [acceleration, setAcceleration] = useState(2.0); // m/s^2
+        const [simState, setSimState] = useState('idle'); // idle, running, finished
+        const [dots, setDots] = useState([]); // 點的位置陣列 (cm)
+        const [strips, setStrips] = useState([]); // 處理後的條帶數據
+        
+        // 動畫相關 Refs
+        const requestRef = useRef();
+        const startTimeRef = useRef(0);
+
+        // --- 模擬邏輯 ---
+        const startSimulation = () => {
+            setSimState('running');
+            setDots([]);
+            setStrips([]);
+            startTimeRef.current = Date.now();
+            animate();
+        };
+
+        const animate = () => {
+            const now = Date.now();
+            const elapsed = (now - startTimeRef.current) / 1000; // 秒
+            
+            // 限制最大執行時間 (避免無限跑動)
+            if (elapsed > 1.0) { 
+                setSimState('finished');
+                processTape(elapsed);
+                return;
+            }
+
+            // 根據當前時間生成點
+            const expectedDots = Math.floor(elapsed * FREQUENCY);
+            const newDots = [];
+            for (let i = 0; i <= expectedDots; i++) {
+                const t = i * TIME_PER_DOT;
+                // 位移公式 s = 1/2 * a * t^2 (假設初速為 0)
+                const s = 0.5 * acceleration * t * t * 100; // 轉換為 cm
+                newDots.push(s);
+            }
+            setDots(newDots);
+
+            requestRef.current = requestAnimationFrame(animate);
+        };
+
+        const processTape = (totalTime) => {
+            // 重新計算精確的全程點數據
+            const totalDots = Math.floor(totalTime * FREQUENCY);
+            const finalDots = [];
+            for (let i = 0; i <= totalDots; i++) {
+                const t = i * TIME_PER_DOT;
+                const s = 0.5 * acceleration * t * t * 100;
+                finalDots.push(s);
+            }
+            
+            // 將膠帶剪成 0.1s 的條帶 (Strips)
+            const newStrips = [];
+            for (let i = 0; i + TICKS_PER_STRIP < finalDots.length; i += TICKS_PER_STRIP) {
+                const startPos = finalDots[i];
+                const endPos = finalDots[i + TICKS_PER_STRIP];
+                const length = endPos - startPos;
+                const velocity = length / TIME_PER_STRIP; // 平均速度 cm/s
+                
+                newStrips.push({
+                    id: i,
+                    startTick: i,
+                    endTick: i + TICKS_PER_STRIP,
+                    length: length,
+                    velocity: velocity
+                });
+            }
+            
+            setDots(finalDots);
+            setStrips(newStrips);
+        };
+
+        // 初始化圖標
+        useEffect(() => {
+            if (window.lucide) window.lucide.createIcons();
+        });
+
+        useEffect(() => {
+            return () => cancelAnimationFrame(requestRef.current);
+        }, []);
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                {/* 導覽列 */}
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-emerald-500/20 p-2 rounded-lg">
+                            <i data-lucide="timer" className="w-6 h-6 text-emerald-400"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">打點計時器分析實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                        主題：等加速直線運動 (Kinematics)
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 space-y-8">
+                    
+                    {/* 1. 實驗設置區 */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* 控制面板 */}
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h2 className="text-emerald-400 font-bold mb-4 flex items-center">
+                                <i data-lucide="settings-2" className="w-5 h-5 mr-2"></i> 實驗設置
+                            </h2>
+                            
+                            <div className="mb-8">
+                                <div className="flex justify-between mb-3">
+                                    <label className="text-sm font-bold text-slate-300">設定加速度 (a)</label>
+                                    <span className="font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{acceleration.toFixed(1)} m/s²</span>
+                                </div>
+                                <input 
+                                    type="range" min="0.5" max="5.0" step="0.5"
+                                    value={acceleration}
+                                    onChange={(e) => setAcceleration(Number(e.target.value))}
+                                    disabled={simState === 'running'}
+                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                />
+                                <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-bold uppercase">
+                                    <span>較慢</span>
+                                    <span>較快</span>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={startSimulation}
+                                disabled={simState === 'running'}
+                                className={`w-full py-4 rounded-xl font-bold flex items-center justify-center transition-all ${
+                                    simState === 'running' 
+                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
+                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 active:scale-95'
+                                }`}
+                            >
+                                <i data-lucide={simState === 'running' ? 'loader-2' : 'play'} className={`w-5 h-5 mr-2 ${simState === 'running' ? 'animate-spin' : ''}`}></i>
+                                {simState === 'running' ? '錄製中...' : simState === 'finished' ? '重新進行實驗' : '啟動計時器'}
+                            </button>
+                        </div>
+
+                        {/* 實時模擬視窗 */}
+                        <div className="lg:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 p-6 flex flex-col justify-center relative overflow-hidden shadow-xl">
+                            <div className="absolute top-4 right-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-slate-700 px-2 py-1 rounded">即時預覽 (Live View)</div>
+                            
+                            <div className="relative h-40 w-full mt-6 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                                {/* 計時器本體 */}
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-20 h-20 bg-slate-700 rounded-lg border-2 border-slate-500 z-10 flex items-center justify-center shadow-2xl">
+                                    <div className="flex flex-col items-center">
+                                        <div className={`w-3 h-3 rounded-full bg-red-500 mb-1 ${simState === 'running' ? 'animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]' : ''}`}></div>
+                                        <span className="text-[8px] font-bold text-slate-400">50 Hz</span>
+                                    </div>
+                                </div>
+
+                                {/* 打點膠帶 */}
+                                <div className="absolute left-10 top-1/2 -translate-y-1/2 h-8 bg-white/90 overflow-hidden flex items-center" 
+                                     style={{
+                                         width: simState === 'idle' ? '0px' : '100%',
+                                         transition: 'width 0.1s linear'
+                                     }}>
+                                    {dots.map((pos, i) => (
+                                        <div key={i} className="absolute w-1.5 h-1.5 bg-black rounded-full" 
+                                             style={{ right: `${pos * PIXELS_PER_CM * 0.15}px` }}>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 滑車 */}
+                                <div 
+                                    className="absolute top-1/2 -translate-y-1/2 w-24 h-12 bg-indigo-600 rounded-lg shadow-xl flex items-center justify-center z-20 border-b-4 border-indigo-800 transition-all duration-75 ease-linear"
+                                    style={{ 
+                                        left: simState === 'idle' ? '120px' : `calc(120px + ${dots.length > 0 ? dots[dots.length-1] * PIXELS_PER_CM * 0.15 : 0}px)` 
+                                    }}
+                                >
+                                    <div className="flex gap-1">
+                                        <div className="w-4 h-4 rounded-full bg-slate-800"></div>
+                                        <div className="w-4 h-4 rounded-full bg-slate-800"></div>
+                                    </div>
+                                    <i data-lucide="car-front" className="text-white w-6 h-6 absolute -top-1 opacity-20"></i>
+                                </div>
+                                <div className="absolute bottom-8 left-0 right-0 h-1.5 bg-slate-700"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. 數據分析區 */}
+                    {simState === 'finished' && dots.length > 0 && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                            
+                            <div className="flex items-center gap-4">
+                                <div className="h-px flex-1 bg-slate-700"></div>
+                                <h2 className="text-2xl font-bold text-white flex items-center px-4">
+                                    <i data-lucide="scissors" className="w-6 h-6 mr-2 text-blue-400"></i> 膠帶剪貼分析
+                                </h2>
+                                <div className="h-px flex-1 bg-slate-700"></div>
+                            </div>
+
+                            {/* 原始膠帶展示 */}
+                            <div className="bg-white rounded-2xl p-6 overflow-x-auto border-8 border-slate-800 shadow-2xl relative scrollbar-hide">
+                                <div className="text-[10px] text-slate-400 absolute top-2 left-4 font-bold uppercase tracking-widest">原始打點膠帶 (每點間隔 0.02s)</div>
+                                <div className="h-16 bg-yellow-50 relative min-w-[1200px] border-y border-yellow-200 mt-6 flex items-center">
+                                    {dots.map((pos, i) => (
+                                        <div key={i} className="absolute w-2 h-2 bg-blue-900 rounded-full" style={{ left: `${pos * PIXELS_PER_CM}px` }}>
+                                            {(i % 5 === 0) && (
+                                                <div className="absolute -top-6 -left-2 text-[10px] font-bold text-slate-500 bg-white/80 px-1 rounded">{i}</div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {/* 剪切線 */}
+                                    {strips.map((s, i) => {
+                                        const leftPos = dots[s.startTick];
+                                        return (
+                                            <div key={i} className="absolute top-0 bottom-0 border-l-2 border-dashed border-red-500/40" 
+                                                 style={{ left: `${leftPos * PIXELS_PER_CM}px` }}>
+                                                 <i data-lucide="scissors" className="w-3 h-3 text-red-500 absolute -top-4 -left-1.5"></i>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* 條帶圖 (Tape Chart) */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                
+                                <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl">
+                                    <h3 className="text-blue-300 font-bold mb-8 text-sm flex items-center">
+                                        <i data-lucide="bar-chart-3" className="w-4 h-4 mr-2"></i> 條帶圖：速度-時間關係 (v-t Graph)
+                                    </h3>
+                                    <div className="flex items-end space-x-2 h-72 border-l-2 border-b-2 border-slate-600 pb-2 pl-2 relative">
+                                        <div className="absolute -left-16 top-1/2 -rotate-90 text-[10px] font-bold text-slate-500 uppercase tracking-widest">平均速度 (cm/s)</div>
+                                        
+                                        {strips.map((strip, i) => (
+                                            <div key={i} className="flex-1 flex flex-col justify-end group relative">
+                                                <div 
+                                                    className="w-full bg-gradient-to-t from-blue-600 to-blue-400 hover:from-blue-400 hover:to-blue-300 transition-all rounded-t-lg relative shadow-lg shadow-blue-500/10"
+                                                    style={{ height: `${(strip.velocity / (acceleration * 100 + 50)) * 250}px` }} 
+                                                >
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-slate-900 text-white text-[10px] p-2 rounded-lg border border-slate-700 hidden group-hover:block whitespace-nowrap z-30 shadow-2xl">
+                                                        <p className="font-bold text-blue-400">第 {i+1} 段 (0.1s)</p>
+                                                        <p>長度: {strip.length.toFixed(1)} cm</p>
+                                                        <p>速度: {strip.velocity.toFixed(1)} cm/s</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-[9px] text-slate-500 text-center mt-3 font-bold">
+                                                    {((i + 1) * 0.1).toFixed(1)}s
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-6">時間間隔 (單位：0.1s)</div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl">
+                                        <h3 className="text-white font-bold mb-6 text-sm border-b border-slate-700 pb-4 flex items-center">
+                                            <i data-lucide="calculator" className="w-4 h-4 mr-2 text-emerald-400"></i> 計算加速度 (Step-by-Step)
+                                        </h3>
+                                        {strips.length >= 2 ? (
+                                            <div className="space-y-5 font-mono text-sm">
+                                                <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                                                    <span className="text-slate-400 text-xs">初速 (u)：(第 1 段平均速)</span>
+                                                    <span className="text-white font-bold">{strips[0].velocity.toFixed(1)} cm/s</span>
+                                                </div>
+                                                <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                                                    <span className="text-slate-400 text-xs">末速 (v)：(第 {strips.length} 段平均速)</span>
+                                                    <span className="text-white font-bold">{strips[strips.length-1].velocity.toFixed(1)} cm/s</span>
+                                                </div>
+                                                <div className="flex justify-between items-center p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
+                                                    <span className="text-slate-400 text-xs">時間差 (Δt)：(n-1 個間隔)</span>
+                                                    <span className="text-white font-bold">{((strips.length-1) * 0.1).toFixed(1)} s</span>
+                                                </div>
+                                                
+                                                <div className="bg-emerald-500/10 p-5 rounded-2xl border border-emerald-500/20 mt-4">
+                                                    <p className="text-xs text-emerald-400 font-bold mb-2">加速度公式： a = (v - u) / Δt</p>
+                                                    <div className="flex justify-between items-center font-bold text-xl text-white">
+                                                        <span>計算結果 a：</span>
+                                                        <span className="text-emerald-400">
+                                                            {((strips[strips.length-1].velocity - strips[0].velocity) / ((strips.length-1) * 0.1)).toFixed(1)} cm/s² 
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] text-emerald-500/60 mt-2 italic text-right">即 {(acceleration).toFixed(1)} m/s² (實驗設定值)</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-10">
+                                                <p className="text-slate-500 text-sm">數據不足，請延長實驗時間以產生更多條帶。</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-indigo-500/10 p-6 rounded-3xl border border-indigo-500/20">
+                                        <h4 className="text-indigo-300 font-bold text-xs mb-2 uppercase flex items-center">
+                                            <i data-lucide="info" className="w-3 h-3 mr-1"></i> 物理小知識
+                                        </h4>
+                                        <p className="text-xs text-indigo-200/70 leading-relaxed">
+                                            在條帶圖中，每一條帶的長度代表滑車在 0.1 秒內的位移。由於時間間隔相等，長度的變化量反映了速度的變化。如果各段長度呈等差數列增加，則代表物體正在做<b>等加速度運動</b>。
+                                        </p>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
+
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
