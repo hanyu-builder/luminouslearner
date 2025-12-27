@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水波槽模擬器 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #06b6d4;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        canvas { touch-action: none; image-rendering: pixelated; border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const SIM_WIDTH = 200;
+    const SIM_HEIGHT = 150;
+    const CANVAS_SCALE = 3; 
+
+    const SCENARIOS = {
+        'reflection': { label: '反射 (Reflection)', setup: 'barrier_angle' },
+        'refraction': { label: '折射 (Refraction)', setup: 'shallow_deep' },
+        'diffraction': { label: '繞射 (Single Slit)', setup: 'slit' },
+        'interference': { label: '干涉 (Two Sources)', setup: 'two_sources' },
+        'doppler': { label: '多普勒效應 (Doppler)', setup: 'moving_source' }
+    };
+
+    const App = () => {
+        const [scenario, setScenario] = useState('reflection');
+        const [frequency, setFrequency] = useState(25); 
+        const [damping, setDamping] = useState(0.98); 
+        const [isRunning, setIsRunning] = useState(true);
+        const [mouseInteracting, setMouseInteracting] = useState(false);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const buffer1Ref = useRef(new Float32Array(SIM_WIDTH * SIM_HEIGHT));
+        const buffer2Ref = useRef(new Float32Array(SIM_WIDTH * SIM_HEIGHT));
+        const obstacleRef = useRef(new Uint8Array(SIM_WIDTH * SIM_HEIGHT)); 
+        const frameCountRef = useRef(0);
+        const sourcePosRef = useRef({ x: 20, y: SIM_HEIGHT / 2 });
+
+        const loadScenario = (type) => {
+            const obs = obstacleRef.current;
+            const b1 = buffer1Ref.current;
+            const b2 = buffer2Ref.current;
+            obs.fill(0); b1.fill(0); b2.fill(0);
+            frameCountRef.current = 0;
+            sourcePosRef.current = { x: 25, y: SIM_HEIGHT / 2 };
+
+            if (type === 'reflection') {
+                for (let x = 0; x < SIM_WIDTH; x++) {
+                    for (let y = 0; y < SIM_HEIGHT; y++) {
+                        if (x > 120 && x - 120 > (y - 75) * 0.8) obs[y * SIM_WIDTH + x] = 1;
+                    }
+                }
+            } else if (type === 'refraction') {
+                for (let x = 0; x < SIM_WIDTH; x++) {
+                    for (let y = 0; y < SIM_HEIGHT; y++) {
+                        if (x > 90 + y * 0.25) obs[y * SIM_WIDTH + x] = 2; 
+                    }
+                }
+            } else if (type === 'diffraction') {
+                const slitSize = 7;
+                for (let y = 0; y < SIM_HEIGHT; y++) {
+                    if (Math.abs(y - SIM_HEIGHT/2) > slitSize) {
+                        for(let x=98; x<102; x++) obs[y * SIM_WIDTH + x] = 1;
+                    }
+                }
+            }
+        };
+
+        useEffect(() => { loadScenario(scenario); }, [scenario]);
+
+        const loop = () => {
+            if (!isRunning) return;
+            const w = SIM_WIDTH, h = SIM_HEIGHT;
+            const b1 = buffer1Ref.current, b2 = buffer2Ref.current, obs = obstacleRef.current;
+
+            // 離散波動方程運算
+            for (let i = w; i < w * h - w; i++) {
+                if (obs[i] === 1) continue;
+                let val = (b1[i - 1] + b1[i + 1] + b1[i - w] + b1[i + w]) / 2 - b2[i];
+                val *= damping;
+                if (obs[i] === 2) val *= 0.75; // 模擬淺水區速度降低
+                b2[i] = val;
+            }
+
+            // 波源邏輯
+            frameCountRef.current++;
+            if (!mouseInteracting) {
+                const period = Math.max(2, 60 - frequency);
+                const amp = 600;
+                if (scenario === 'interference') {
+                    if (frameCountRef.current % period === 0) {
+                        b2[(h/2 - 25) * w + 30] = amp;
+                        b2[(h/2 + 25) * w + 30] = amp;
+                    }
+                } else if (scenario === 'doppler') {
+                    if (frameCountRef.current % period === 0) {
+                        sourcePosRef.current.x += 1.2;
+                        if (sourcePosRef.current.x > w - 20) sourcePosRef.current.x = 20;
+                        const idx = Math.floor(sourcePosRef.current.y) * w + Math.floor(sourcePosRef.current.x);
+                        b2[idx] = amp;
+                    }
+                } else {
+                    if (frameCountRef.current % period === 0) {
+                        for(let y=5; y<h-5; y++) b2[y*w + 10] = amp; // 平面波波源
+                    }
+                }
+            }
+
+            renderToCanvas();
+            buffer1Ref.current = b2; buffer2Ref.current = b1;
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const renderToCanvas = () => {
+            const canvas = canvasRef.current;
+            const ctx = canvas?.getContext('2d');
+            if (!ctx) return;
+            const imageData = ctx.getImageData(0, 0, SIM_WIDTH, SIM_HEIGHT);
+            const data = imageData.data;
+            const buf = buffer1Ref.current;
+            const obs = obstacleRef.current;
+
+            for (let i = 0; i < buf.length; i++) {
+                const val = buf[i];
+                const type = obs[i];
+                let r, g, b;
+                if (type === 1) { r = 251; g = 191; b = 36; } // 障礙物
+                else {
+                    const clamp = Math.max(-128, Math.min(127, val));
+                    // 基礎水藍色調處理
+                    r = type === 2 ? 10 + clamp : 14 + clamp;
+                    g = type === 2 ? 40 + clamp : 100 + clamp;
+                    b = type === 2 ? 100 + clamp : 220 + clamp;
+                }
+                const pIdx = i * 4;
+                data[pIdx] = r; data[pIdx+1] = g; data[pIdx+2] = b; data[pIdx+3] = 255;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        };
+
+        const disturb = (e) => {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / CANVAS_SCALE);
+            const y = Math.floor((e.clientY - rect.top) / CANVAS_SCALE);
+            if (x > 1 && x < SIM_WIDTH - 1 && y > 1 && y < SIM_HEIGHT - 1) {
+                buffer2Ref.current[y * SIM_WIDTH + x] = 1500;
+            }
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isRunning, frequency, damping, scenario, mouseInteracting]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400">
+                            <i data-lucide="waves"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">水波槽模擬實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Wave Physics
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 space-y-4">
+                        <div className="bg-black rounded-3xl border border-slate-700 p-1 shadow-2xl relative flex justify-center overflow-hidden">
+                            <canvas ref={canvasRef} width={SIM_WIDTH} height={SIM_HEIGHT} 
+                                style={{ width: SIM_WIDTH * CANVAS_SCALE, height: SIM_HEIGHT * CANVAS_SCALE }}
+                                onMouseDown={(e) => { setMouseInteracting(true); disturb(e); }}
+                                onMouseMove={(e) => mouseInteracting && disturb(e)}
+                                onMouseUp={() => setMouseInteracting(false)}
+                                onMouseLeave={() => setMouseInteracting(false)}
+                                className="cursor-crosshair" 
+                            />
+                            <div className="absolute top-6 left-6 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-700 backdrop-blur-md">
+                                <p className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest mb-1">場景模式</p>
+                                <p className="text-sm font-bold text-white">{SCENARIOS[scenario].label}</p>
+                            </div>
+                        </div>
+                        <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex justify-between items-center px-6">
+                            <div className="flex gap-6">
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-cyan-400 rounded-full"></div><span className="text-xs text-slate-400">水區 (深水)</span></div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-800 rounded-full"></div><span className="text-xs text-slate-400">折射區 (淺水)</span></div>
+                                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-yellow-400 rounded-full"></div><span className="text-xs text-slate-400">障礙物</span></div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 italic">可用滑鼠點擊水面製造擾動</p>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="settings-2" className="w-5 h-5 text-cyan-400"></i> 控制面板
+                            </h2>
+                            
+                            <div className="space-y-4">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">切換實驗場景</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {Object.entries(SCENARIOS).map(([key, val]) => (
+                                        <button key={key} onClick={() => setScenario(key)} className={`text-left px-4 py-3 rounded-xl text-sm font-bold transition-all border ${scenario === key ? 'bg-cyan-600 border-cyan-400 text-white shadow-lg shadow-cyan-900/20' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>
+                                            {val.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-slate-700"></div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-3"><span>波源頻率</span><span className="text-cyan-400">{frequency}</span></label>
+                                    <input type="range" min="5" max="55" step="1" value={frequency} onChange={(e) => setFrequency(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase mb-3"><span>波動衰減</span><span className="text-slate-200">{(damping*100).toFixed(0)}%</span></label>
+                                    <input type="range" min="0.92" max="0.99" step="0.01" value={damping} onChange={(e) => setDamping(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsRunning(!isRunning)} className={`flex-1 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all ${isRunning ? 'bg-slate-700 text-slate-300' : 'bg-emerald-600 text-white shadow-lg'}`}>
+                                    <i data-lucide={isRunning ? "pause" : "play"}></i> {isRunning ? "暫停" : "開始"}
+                                </button>
+                                <button onClick={() => loadScenario(scenario)} className="px-6 py-4 bg-slate-700 text-white rounded-2xl font-bold hover:bg-slate-600 transition-colors">
+                                    <i data-lucide="rotate-ccw"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-cyan-900/20 border border-cyan-500/20 p-6 rounded-3xl">
+                            <h3 className="text-cyan-300 font-bold text-sm mb-3 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="info" className="w-4 h-4"></i> 物理小知識</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                <b>惠更斯原理：</b> 波前上的每一點都可以看作一個新的點波源。這解釋了為什麼波在經過窄縫（繞射場景）後會向外擴散成圓弧狀。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
