@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>牛頓慣性巴士實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 400;
+    const GROUND_Y = 320;
+    const BUS_WIDTH = 400;
+    const BUS_HEIGHT = 180;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [simState, setSimState] = useState('idle'); // idle, moving, braking, finished
+        const [speed, setSpeed] = useState(0); 
+        const [showVectors, setShowVectors] = useState(true);
+        const [playbackSpeed, setPlaybackSpeed] = useState(1.0); 
+
+        // 物理狀態 Refs (動畫循環的單一事實來源)
+        const simStateRef = useRef('idle');
+        const playbackSpeedRef = useRef(1.0);
+        
+        const busRef = useRef({ x: 50, v: 0 });
+        const personARef = useRef({ x: 50, v: 0, state: 'sitting' });
+        const personBRef = useRef({ x: 200, v: 0, state: 'standing' });
+        const ballRef = useRef({ x: 300, v: 0 });
+        const roadOffsetRef = useRef(0);
+        
+        const historyRef = useRef([]); 
+        const timeRef = useRef(0);
+        const requestRef = useRef();
+
+        // --- 常數 ---
+        const CRUISE_SPEED = 8;
+        const BRAKE_DECEL = 0.3;
+        const ACCEL = 0.1;
+        const BUS_START_X = 100;
+
+        useEffect(() => {
+            playbackSpeedRef.current = playbackSpeed;
+        }, [playbackSpeed]);
+
+        // --- 邏輯處理 ---
+        const resetSim = () => {
+            setSimState('idle');
+            simStateRef.current = 'idle';
+            setSpeed(0);
+            busRef.current = { x: BUS_START_X, v: 0 };
+            personARef.current = { x: 50, v: 0, state: 'sitting' };
+            personBRef.current = { x: 200, v_ground: 0, state: 'standing' };
+            ballRef.current = { x: 300, v_ground: 0 };
+            roadOffsetRef.current = 0;
+            timeRef.current = 0;
+            historyRef.current = [];
+            cancelAnimationFrame(requestRef.current);
+            draw(); 
+        };
+
+        const startDriving = () => {
+            if (simState === 'idle') {
+                setSimState('moving');
+                simStateRef.current = 'moving';
+                loop();
+            }
+        };
+
+        const applyBrakes = () => {
+            if (simState === 'moving') {
+                setSimState('braking');
+                simStateRef.current = 'braking';
+            }
+        };
+
+        const loop = () => {
+            const currentState = simStateRef.current;
+            const currentPlaybackSpeed = playbackSpeedRef.current;
+            const dt = 1 * currentPlaybackSpeed;
+            timeRef.current += dt;
+
+            // 1. 巴士物理
+            if (currentState === 'moving') {
+                if (busRef.current.v < CRUISE_SPEED) busRef.current.v += ACCEL * dt;
+            } else if (currentState === 'braking') {
+                if (busRef.current.v > 0) {
+                    busRef.current.v -= BRAKE_DECEL * dt;
+                    if (busRef.current.v < 0) busRef.current.v = 0;
+                }
+            }
+
+            roadOffsetRef.current -= busRef.current.v * dt;
+
+            // 2. 內部物體物理
+            if (currentState === 'moving') {
+                personBRef.current.v_ground = busRef.current.v;
+                ballRef.current.v_ground = busRef.current.v;
+            } else if (currentState === 'braking') {
+                // 牛頓第一定律：鬆散物體相對於地面保持速度不變
+                const dX_B = (personBRef.current.v_ground - busRef.current.v) * dt;
+                personBRef.current.x += dX_B;
+
+                const dX_Ball = (ballRef.current.v_ground - busRef.current.v) * dt;
+                ballRef.current.x += dX_Ball;
+
+                // 碰撞檢測 (撞上巴士前擋風玻璃)
+                if (personBRef.current.x > 330) {
+                    personBRef.current.x = 330;
+                    personBRef.current.v_ground = 0;
+                    personBRef.current.state = 'crashed';
+                }
+                if (ballRef.current.x > 360) {
+                    ballRef.current.x = 360;
+                    ballRef.current.v_ground = 0;
+                }
+            }
+
+            setSpeed(busRef.current.v);
+
+            if (timeRef.current % 5 < 1) {
+                historyRef.current.push({
+                    t: timeRef.current,
+                    vBus: busRef.current.v,
+                    vPerson: personBRef.current.v_ground
+                });
+            }
+
+            draw();
+
+            if (busRef.current.v > 0 || currentState === 'moving' || (currentState === 'braking' && personBRef.current.state !== 'crashed')) {
+                requestRef.current = requestAnimationFrame(loop);
+            } else {
+                setSimState('finished');
+            }
+        };
+
+        const draw = () => {
+            const canvas = document.getElementById('simCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const currentState = simStateRef.current;
+
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 背景與道路
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillStyle = '#334155'; ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 80);
+            
+            ctx.fillStyle = '#ffffff';
+            const stripeOffset = roadOffsetRef.current % 100;
+            for(let i=-2; i<CANVAS_WIDTH/50 + 2; i++) {
+                ctx.fillRect(i * 100 + stripeOffset, GROUND_Y + 35, 40, 6);
+            }
+
+            // 2. 繪製巴士
+            const bx = busRef.current.x, by = GROUND_Y - BUS_HEIGHT - 10;
+            ctx.fillStyle = '#f59e0b'; ctx.fillRect(bx, by, BUS_WIDTH, BUS_HEIGHT);
+            ctx.fillStyle = '#e0f2fe'; ctx.fillRect(bx + 20, by + 20, 80, 60); ctx.fillRect(bx + 120, by + 20, 200, 60);
+            ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(bx + 80, GROUND_Y - 10, 25, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(bx + 320, GROUND_Y - 10, 25, 0, Math.PI*2); ctx.fill();
+
+            // 3. 繪製乘客與物體
+            // 安全小明 (Sam) - 有抓握把
+            drawPerson(ctx, bx + personARef.current.x, by + BUS_HEIGHT - 10, '#10b981', false, false);
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 3; ctx.beginPath();
+            ctx.moveTo(bx + personARef.current.x, by + BUS_HEIGHT - 90); ctx.lineTo(bx + personARef.current.x + 10, by + 10); ctx.stroke();
+
+            // 冒失小王 (Carl) - 未抓握把
+            drawPerson(ctx, bx + personBRef.current.x, by + BUS_HEIGHT - 10, '#ef4444', personBRef.current.state === 'crashed', true);
+
+            // 小球
+            const ballX = bx + ballRef.current.x, ballY = by + BUS_HEIGHT - 10;
+            ctx.beginPath(); ctx.arc(ballX, ballY, 10, 0, Math.PI*2); ctx.fillStyle = '#3b82f6'; ctx.fill();
+
+            // 4. 向量標示
+            if (showVectors && currentState !== 'idle') {
+                drawVector(ctx, bx + BUS_WIDTH/2, by - 30, busRef.current.v * 12, '#f59e0b', 'v_巴士');
+                if (currentState === 'braking') {
+                    drawVector(ctx, bx + personBRef.current.x, by + 40, personBRef.current.v_ground * 12, '#ef4444', '慣性運動');
+                }
+            }
+        };
+
+        const drawPerson = (ctx, x, footY, color, isCrashed, isLoose) => {
+            ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineWidth = 4;
+            if (isCrashed) {
+                ctx.beginPath(); ctx.moveTo(x, footY); ctx.lineTo(x + 40, footY); ctx.stroke();
+                ctx.beginPath(); ctx.arc(x + 50, footY - 5, 8, 0, Math.PI*2); ctx.fill();
+            } else {
+                ctx.beginPath(); ctx.moveTo(x, footY); ctx.lineTo(x, footY - 40); ctx.lineTo(x, footY - 80); ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, footY - 90, 10, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(x, footY - 70);
+                if (!isLoose) ctx.lineTo(x + 10, footY - 100); else ctx.lineTo(x + 15, footY - 50);
+                ctx.stroke();
+            }
+        };
+
+        const drawVector = (ctx, x, y, len, color, label) => {
+            if (Math.abs(len) < 5) return;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y);
+            ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.stroke();
+            const dir = len > 0 ? 1 : -1;
+            ctx.beginPath(); ctx.moveTo(x + len, y); ctx.lineTo(x + len - 8*dir, y - 5); ctx.lineTo(x + len - 8*dir, y + 5); ctx.fillStyle = color; ctx.fill();
+            ctx.fillStyle = color; ctx.font = 'bold 12px Inter'; ctx.fillText(label, x + len/2 - 15, y - 10);
+        };
+
+        useEffect(() => { resetSim(); }, []);
+
+        const Graph = () => {
+            const h = 100, w = 300, maxV = 10, maxT = Math.max(timeRef.current, 60);
+            const mX = t => (t / maxT) * w, mY = v => h - (v / maxV) * h;
+            return (
+                <div className="w-full h-full bg-slate-900 border border-slate-700 rounded relative overflow-hidden p-2">
+                    <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="overflow-visible">
+                        <polyline points={historyRef.current.map(d => `${mX(d.t)},${mY(d.vBus)}`).join(' ')} fill="none" stroke="#f59e0b" strokeWidth="2" />
+                        <polyline points={historyRef.current.map(d => `${mX(d.t)},${mY(d.vPerson)}`).join(' ')} fill="none" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 2" />
+                    </svg>
+                    <div className="absolute top-1 left-2 text-[8px] text-amber-500 font-bold uppercase">巴士速度</div>
+                    <div className="absolute top-4 left-2 text-[8px] text-red-500 font-bold uppercase tracking-tighter">冒失小王速度 (地面)</div>
+                </div>
+            );
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-amber-500/20 p-2 rounded-lg text-amber-500"><i data-lucide="bus"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">牛頓慣性巴士實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Newton's 1st Law</div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 mt-4">
+                    <div className="bg-slate-800 rounded-3xl border border-slate-700 p-2 shadow-2xl relative">
+                        <canvas id="simCanvas" width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-auto rounded-2xl bg-slate-950"></canvas>
+                        <div className="absolute top-6 left-6 bg-slate-900/90 px-5 py-2 rounded-xl border border-slate-700 font-mono text-lg shadow-xl backdrop-blur-md">
+                            時速: {(speed * 5.5).toFixed(0)} <span className="text-xs text-slate-500">km/h</span>
+                        </div>
+                        <div className="absolute top-6 right-6 flex gap-3">
+                            <button onClick={() => setPlaybackSpeed(playbackSpeed === 1 ? 0.2 : 1)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${playbackSpeed < 1 ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>
+                                <i data-lucide="clock" className="w-3.5 h-3.5 inline mr-1"></i> 慢動作模式
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        <div className="lg:col-span-5 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="gamepad-2" className="text-indigo-400"></i> 駕駛座操作</h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={startDriving} disabled={simState !== 'idle'} className={`py-6 rounded-2xl font-bold flex flex-col items-center justify-center gap-2 transition-all shadow-lg ${simState === 'idle' ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20' : 'bg-slate-900 text-slate-600'}`}>
+                                    <i data-lucide="play" className="w-8 h-8"></i>加速前進
+                                </button>
+                                <button onClick={applyBrakes} disabled={simState !== 'moving'} className={`py-6 rounded-2xl font-bold flex flex-col items-center justify-center gap-2 transition-all shadow-lg ${simState === 'moving' ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' : 'bg-slate-900 text-slate-600'}`}>
+                                    <i data-lucide="octagon" className="w-8 h-8"></i>緊急煞車
+                                </button>
+                            </div>
+                            <button onClick={resetSim} className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-2xl font-bold transition-all flex items-center justify-center gap-2"><i data-lucide="rotate-ccw"></i> 重置場景</button>
+                        </div>
+
+                        <div className="lg:col-span-4 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl">
+                            <h2 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6">乘客安全狀態</h2>
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+                                    <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
+                                    <div><div className="font-bold text-white text-sm">安全小明 (Sam)</div><div className="text-[10px] text-slate-500">有抓握把：受外力抵消慣性</div></div>
+                                </div>
+                                <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
+                                    <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_#ef4444] ${simState === 'braking' ? 'animate-ping' : ''} bg-red-500`}></div>
+                                    <div><div className="font-bold text-white text-sm">冒失小王 (Carl)</div><div className="text-[10px] text-slate-500">未抓握把：慣性使其繼續前衝</div></div>
+                                </div>
+                                <div className="h-28"><Graph /></div>
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-3 bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner flex flex-col justify-center">
+                            <h3 className="text-indigo-400 font-bold text-sm mb-4 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                <b>慣性 (Inertia)</b> 不是一種力。當巴士煞車時，小王因為沒有受到足夠的摩擦力作用，會根據<b>牛頓第一定律</b>維持原有的地面速度前進，直到撞上障礙物為止。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
