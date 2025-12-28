@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光電效應實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop Types -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .thumb-color::-webkit-slider-thumb { border-color: currentColor; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } = Recharts;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 550;
+    const HC = 1240; // eV * nm
+
+    const MATERIALS = {
+        Sodium: { wf: 2.36, label: "鈉 Sodium (2.36 eV)", color: "#fbbf24" },
+        Zinc: { wf: 4.30, label: "鋅 Zinc (4.30 eV)", color: "#94a3b8" },
+        Platinum: { wf: 6.35, label: "鉑 Platinum (6.35 eV)", color: "#cbd5e1" },
+        Unknown: { wf: 3.00, label: "未知材料 (?.?? eV)", color: "#a8a29e" }
+    };
+
+    const App = () => {
+        // --- 狀態 ---
+        const [wavelength, setWavelength] = useState(400); // nm
+        const [intensity, setIntensity] = useState(50); // %
+        const [voltage, setVoltage] = useState(0); // V
+        const [material, setMaterial] = useState("Sodium");
+        
+        const [current, setCurrent] = useState(0);
+        const [photonEnergy, setPhotonEnergy] = useState(0);
+        const [maxKE, setMaxKE] = useState(0);
+        
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        const objectsRef = useRef({
+            photons: [],
+            electrons: [],
+            detectedCurrent: 0,
+            lastSpawn: 0
+        });
+
+        const wf = MATERIALS[material].wf;
+        const color = useMemo(() => getWavelengthColor(wavelength), [wavelength]);
+        
+        const updatePhysics = () => {
+            const dt = 1; 
+            const now = performance.now();
+            const state = objectsRef.current;
+            
+            const E_ph = HC / wavelength; 
+            const K_max = E_ph - wf; 
+            
+            // 1. 生成光子
+            const spawnRate = 220 - (intensity * 2); 
+            if (now - state.lastSpawn > spawnRate && intensity > 0) {
+                state.photons.push({
+                    x: 120, y: 40, vx: 2.8, vy: 3.8,
+                    targetY: 280 + Math.random() * 100
+                });
+                state.lastSpawn = now;
+            }
+
+            // 2. 更新光子位置
+            state.photons.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if (p.y >= p.targetY) {
+                    p.dead = true;
+                    // 能量大於功函數時產生電子
+                    if (K_max > 0) {
+                        if (Math.random() > 0.4) spawnElectron(p.x, p.y, K_max);
+                    }
+                }
+            });
+            state.photons = state.photons.filter(p => !p.dead);
+
+            // 3. 更新電子位置
+            let flowCount = 0;
+            state.electrons.forEach(e => {
+                // 電場力作用：F = qE
+                const force = (voltage * 0.08); 
+                e.vx += force * dt;
+                e.x += e.vx; e.y += e.vy;
+
+                // 到達陽極 (收集板)
+                if (e.x > 550) { e.dead = true; flowCount++; }
+                // 撞回陰極 (被遏止)
+                if (e.x < 235) { e.dead = true; }
+                // 出界
+                if (e.y < 0 || e.y > CANVAS_HEIGHT) e.dead = true;
+            });
+            state.electrons = state.electrons.filter(e => !e.dead);
+
+            // 平滑電流讀數
+            state.detectedCurrent = state.detectedCurrent * 0.94 + flowCount * 0.06;
+
+            setCurrent(state.detectedCurrent * (intensity/15)); 
+            setPhotonEnergy(E_ph);
+            setMaxKE(K_max);
+        };
+
+        const spawnElectron = (x, y, kMax) => {
+            const speed = Math.sqrt(kMax) * 2.8; 
+            objectsRef.current.electrons.push({
+                x: x, y: y - 5,
+                vx: speed * (0.85 + Math.random()*0.15),
+                vy: (Math.random() - 0.5) * speed * 0.6,
+                dead: false
+            });
+        };
+
+        const loop = () => {
+            updatePhysics();
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 背景
+            ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 真空管視覺
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.ellipse(400, 300, 220, 140, 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'; ctx.fill();
+
+            // 2. 電極板
+            // 陰極 (Cathode - 發射端)
+            ctx.fillStyle = MATERIALS[material].color;
+            ctx.fillRect(230, 240, 15, 120);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Inter'; ctx.fillText(material, 220, 230);
+            
+            // 陽極 (Anode - 收集端)
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(550, 240, 6, 120);
+
+            // 3. 電路與儀表
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(237, 360); ctx.lineTo(237, 500); ctx.lineTo(350, 500);
+            ctx.moveTo(552, 360); ctx.lineTo(552, 500); ctx.lineTo(450, 500);
+            ctx.stroke();
+
+            // 電源標示
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(350, 480, 100, 40);
+            ctx.fillStyle = voltage >= 0 ? '#10b981' : '#ef4444';
+            ctx.font = 'bold 12px JetBrains Mono'; ctx.textAlign = 'center';
+            ctx.fillText(voltage.toFixed(1) + " V", 400, 505);
+
+            // 4. 繪製光子
+            const state = objectsRef.current;
+            ctx.strokeStyle = color; ctx.lineWidth = 2;
+            state.photons.forEach(p => {
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx*3, p.y - p.vy*3); ctx.stroke();
+                ctx.fillStyle = color; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill();
+            });
+
+            // 5. 繪製電子
+            ctx.fillStyle = '#38bdf8';
+            state.electrons.forEach(e => {
+                ctx.beginPath(); ctx.arc(e.x, e.y, 3, 0, Math.PI*2); ctx.fill();
+                ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 5; ctx.stroke(); ctx.shadowBlur = 0;
+            });
+
+            // 6. 光源
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(90, 10, 60, 45);
+            ctx.beginPath(); ctx.moveTo(120, 55); ctx.lineTo(240, 280); ctx.lineTo(110, 280);
+            const rgb = hexToRgb(color);
+            ctx.fillStyle = `rgba(${rgb}, ${intensity/450})`; ctx.fill();
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [wavelength, intensity, voltage, material]);
+
+        function getWavelengthColor(nm) {
+            if (nm < 400) return "#a855f7"; if (nm < 450) return "#6366f1"; 
+            if (nm < 490) return "#3b82f6"; if (nm < 560) return "#22c55e"; 
+            if (nm < 590) return "#eab308"; if (nm < 635) return "#f97316"; return "#ef4444"; 
+        }
+
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+            return `${r}, ${g}, ${b}`;
+        }
+
+        const graphData = useMemo(() => {
+            const data = [];
+            const Vs_val = Math.max(0, (HC / wavelength) - wf);
+            const sat = intensity * 0.12;
+            for (let v = -3; v <= 3; v += 0.2) {
+                let i_val = 0;
+                if (Vs_val > 0) {
+                    if (v < -Vs_val) i_val = 0;
+                    else if (v >= 0) i_val = sat;
+                    else i_val = sat * (1 - Math.abs(v)/Vs_val);
+                }
+                data.push({ v: v, i: i_val });
+            }
+            return data;
+        }, [wavelength, intensity, wf]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 h-16 shadow-xl z-10">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400"><i data-lucide="zap"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">光電效應實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Quantum Physics</div>
+                </nav>
+
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-4">
+                        <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-6 left-6 flex gap-4">
+                                <div className="bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 backdrop-blur-md shadow-2xl">
+                                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">光電流讀數 (I)</div>
+                                    <div className="text-2xl font-black text-emerald-400 font-mono">{(current * 10).toFixed(2)} <span className="text-xs text-slate-600">μA</span></div>
+                                </div>
+                                <div className="bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 backdrop-blur-md shadow-2xl">
+                                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">最大光電子動能 (Kmax)</div>
+                                    <div className={`text-2xl font-black font-mono ${maxKE > 0 ? 'text-blue-400' : 'text-slate-600'}`}>{maxKE > 0 ? maxKE.toFixed(2) : "0.00"} <span className="text-xs">eV</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-1 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-y-auto custom-scroll p-6 space-y-6">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold mb-3 uppercase tracking-wider" style={{color: color}}>入射光波長 <span>{wavelength} nm</span></label>
+                                    <input type="range" min="200" max="800" step="10" value={wavelength} onChange={(e)=>setWavelength(Number(e.target.value))} className="w-full h-1.5 rounded-lg appearance-none cursor-pointer slider-thumb thumb-color" style={{background: `linear-gradient(to right, #a855f7, #3b82f6, #22c55e, #eab308, #ef4444)`, color: color}} />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">光照強度 <span>{intensity}%</span></label>
+                                    <input type="range" min="0" max="100" value={intensity} onChange={(e)=>setIntensity(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">外加電壓 (V) <span className={voltage < 0 ? 'text-red-400' : 'text-emerald-400'}>{voltage.toFixed(1)} V</span></label>
+                                    <input type="range" min="-3" max="3" step="0.1" value={voltage} onChange={(e)=>setVoltage(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                    <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-bold uppercase tracking-tighter"><span>遏止電勢 (-)</span><span>0</span><span>正向電勢 (+)</span></div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">金屬陰極材料</label>
+                                    <select value={material} onChange={(e)=>setMaterial(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                                        {Object.keys(MATERIALS).map(m => <option key={m} value={m}>{MATERIALS[m].label}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-800">
+                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="line-chart" className="w-3 h-3"></i> I - V 特性曲線</h3>
+                                <div className="h-40 w-full bg-slate-950 rounded-2xl border border-slate-800 p-2 shadow-inner">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={graphData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                            <XAxis dataKey="v" hide type="number" domain={[-3, 3]} />
+                                            <YAxis hide type="number" domain={[0, 'auto']} />
+                                            <Line type="monotone" dataKey="i" stroke="#38bdf8" strokeWidth={3} dot={false} isAnimationActive={false} />
+                                            <ReferenceDot x={voltage} y={current} r={5} fill={voltage < 0 ? "#ef4444" : "#10b981"} stroke="white" strokeWidth={2} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-900/20 border border-indigo-500/20 p-5 rounded-2xl shadow-inner mt-auto">
+                                <h4 className="text-indigo-400 font-bold text-[10px] uppercase mb-2 flex items-center gap-2"><i data-lucide="lightbulb" className="w-3 h-3"></i> 實驗原理</h4>
+                                <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                    愛因斯坦光電方程式：hf = Φ + Kmax。增加波長會降低光子能量，若低於功函數 Φ，則無論強度多大都不會有電流。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
