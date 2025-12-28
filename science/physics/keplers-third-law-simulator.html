@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>克卜勒第三定律實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
+            border-radius: 50%; background: #3b82f6; cursor: pointer; border: 3px solid #ffffff;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+        .stars-bg {
+            background-image: 
+                radial-gradient(1px 1px at 20px 30px, #eee, rgba(0,0,0,0)),
+                radial-gradient(1px 1px at 40px 70px, #fff, rgba(0,0,0,0)),
+                radial-gradient(2px 2px at 50px 160px, #ddd, rgba(0,0,0,0));
+            background-size: 250px 250px;
+        }
+        .orbit-line {
+            border: 1.5px dashed rgba(148, 163, 184, 0.15);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const PIXELS_PER_AU = 120;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [radius, setRadius] = useState(1.0); // 單位：AU
+        const [timeScale, setTimeScale] = useState(1.0);
+        const [angle, setAngle] = useState(0);
+        const [isRunning, setIsRunning] = useState(true);
+        const [dataPoints, setDataPoints] = useState([]);
+
+        const requestRef = useRef();
+        const lastTimeRef = useRef(Date.now());
+        const paramsRef = useRef({ radius, timeScale, isRunning });
+
+        useEffect(() => {
+            paramsRef.current = { radius, timeScale, isRunning };
+        }, [radius, timeScale, isRunning]);
+
+        // --- 物理計算 ---
+        // 克卜勒第三定律：T² = r³ (當單位為年與 AU 時)
+        const period = useMemo(() => Math.sqrt(Math.pow(radius, 3)), [radius]);
+        const rCubed = useMemo(() => Math.pow(radius, 3), [radius]);
+        const tSquared = useMemo(() => Math.pow(period, 2), [period]);
+
+        // --- 動畫循環 ---
+        const loop = () => {
+            const { radius: r, timeScale: ts, isRunning: active } = paramsRef.current;
+            
+            if (active) {
+                const now = Date.now();
+                const dt = (now - lastTimeRef.current) / 1000;
+                lastTimeRef.current = now;
+
+                // 設定：1 秒模擬時間等於 1 年
+                const currentPeriod = Math.sqrt(Math.pow(r, 3));
+                const omega = (2 * Math.PI) / currentPeriod;
+                
+                setAngle(prev => (prev + omega * dt * ts) % (2 * Math.PI));
+            } else {
+                lastTimeRef.current = Date.now();
+            }
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, []);
+
+        // --- 動作處理 ---
+        const recordPoint = () => {
+            const newPoint = { r: radius, t: period, r3: rCubed, t2: tSquared };
+            if (!dataPoints.find(p => Math.abs(p.r - radius) < 0.001)) {
+                setDataPoints(prev => [...prev, newPoint].sort((a, b) => a.r - b.r));
+            }
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-950 text-slate-200 font-sans pb-12 selection:bg-blue-500/30">
+                <nav className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-600/20">
+                            <i data-lucide="orbit" className="w-6 h-6 text-white"></i>
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-bold text-white tracking-tight">克卜勒第三定律實驗室</h1>
+                            <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Planetary Motion Simulator</p>
+                        </div>
+                    </div>
+                    <div className="hidden md:block text-xs text-slate-400 font-mono bg-slate-800 px-3 py-1 rounded-full border border-slate-700 uppercase">
+                        主題：天體力學 (Celestial Mechanics)
+                    </div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    
+                    {/* 左側：互動式星系儀 */}
+                    <div className="lg:col-span-7 flex flex-col gap-6">
+                        <div className="bg-slate-900 rounded-3xl border border-slate-800 p-1 shadow-2xl relative overflow-hidden aspect-square stars-bg flex items-center justify-center">
+                            
+                            {/* 太陽 */}
+                            <div className="w-14 h-14 bg-yellow-400 rounded-full shadow-[0_0_60px_rgba(250,204,21,0.6)] z-10 border-4 border-yellow-200/20 flex items-center justify-center">
+                                <div className="w-full h-full rounded-full animate-pulse bg-yellow-500/30"></div>
+                            </div>
+
+                            {/* 軌道線 */}
+                            <div 
+                                className="orbit-line" 
+                                style={{ width: radius * 2 * PIXELS_PER_AU, height: radius * 2 * PIXELS_PER_AU }}
+                            ></div>
+
+                            {/* 行星 */}
+                            <div 
+                                className="absolute pointer-events-none transition-all duration-75"
+                                style={{
+                                    left: `calc(50% + ${Math.cos(angle) * radius * PIXELS_PER_AU}px)`,
+                                    top: `calc(50% - ${Math.sin(angle) * radius * PIXELS_PER_AU}px)`,
+                                    transform: 'translate(-50%, -50%)'
+                                }}
+                            >
+                                <div className="w-8 h-8 bg-blue-500 rounded-full shadow-[0_0_25px_rgba(59,130,246,0.7)] border-2 border-white/20"></div>
+                                <div className="absolute top-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-950/80 px-3 py-1 rounded-full text-[10px] font-mono border border-white/10 text-blue-300 backdrop-blur-sm">
+                                    r = {radius.toFixed(2)} AU
+                                </div>
+                            </div>
+
+                            <div className="absolute bottom-6 left-8 flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                                <div className="w-12 h-0.5 bg-slate-700 relative">
+                                    <div className="absolute top-0 left-0 w-0.5 h-2 bg-slate-700 -translate-y-1/2"></div>
+                                    <div className="absolute top-0 right-0 w-0.5 h-2 bg-slate-700 -translate-y-1/2"></div>
+                                </div>
+                                0.5 AU (天文單位)
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-xl space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-blue-400 uppercase tracking-widest">軌道半徑 (r)</label>
+                                        <span className="text-2xl font-mono font-black text-white">{radius.toFixed(2)} <span className="text-sm text-slate-500">AU</span></span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0.4" max="2.0" step="0.01" 
+                                        value={radius} onChange={(e) => setRadius(Number(e.target.value))}
+                                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-slate-500 font-bold italic">
+                                        <span>水星軌道</span>
+                                        <span>地球軌道</span>
+                                        <span>火星+</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-emerald-400 uppercase tracking-widest">模擬演化速度</label>
+                                        <span className="text-xl font-mono font-bold text-white">{timeScale.toFixed(1)}x</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0.1" max="5.0" step="0.1" 
+                                        value={timeScale} onChange={(e) => setTimeScale(Number(e.target.value))}
+                                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-2">
+                                <button 
+                                    onClick={() => setIsRunning(!isRunning)}
+                                    className={`flex-1 py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-95 ${isRunning ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40'}`}
+                                >
+                                    <i data-lucide={isRunning ? "pause" : "play"}></i>
+                                    {isRunning ? "暫停模擬" : "繼續模擬"}
+                                </button>
+                                <button 
+                                    onClick={recordPoint}
+                                    className="px-10 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/40 active:scale-95"
+                                >
+                                    <i data-lucide="plus-circle"></i>
+                                    記錄當前數據
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 右側：科學數據分析 */}
+                    <div className="lg:col-span-5 space-y-6">
+                        
+                        <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+                                <i data-lucide="calculator" className="w-24 h-24 text-white"></i>
+                            </div>
+                            
+                            <h2 className="text-white font-bold mb-8 flex items-center text-lg uppercase tracking-wider border-b border-slate-800 pb-4">
+                                <i data-lucide="activity" className="w-5 h-5 mr-3 text-indigo-400"></i>
+                                即時遙測數據 (Live Telemetry)
+                            </h2>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 shadow-inner transition-all">
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">公轉週期 (T)</div>
+                                    <div className="text-3xl font-black font-mono text-blue-400">{period.toFixed(2)} <span className="text-xs font-medium uppercase tracking-tighter">年</span></div>
+                                </div>
+                                <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 shadow-inner transition-all">
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">比值 (T² / r³)</div>
+                                    <div className="text-3xl font-black font-mono text-emerald-400">{(tSquared / rCubed).toFixed(3)}</div>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-8 space-y-4">
+                                <div className="flex justify-between text-xs font-mono">
+                                    <span className="text-slate-500 font-bold uppercase">半徑立方 (r³)</span>
+                                    <span className="text-white font-black">{rCubed.toFixed(3)}</span>
+                                </div>
+                                <div className="flex justify-between text-xs font-mono border-b border-slate-800 pb-4">
+                                    <span className="text-slate-500 font-bold uppercase">週期平方 (T²)</span>
+                                    <span className="text-white font-black">{tSquared.toFixed(3)}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 italic leading-relaxed pt-2">
+                                    提示：觀察 T² 與 r³ 的數值變化。不論你如何改變半徑，這兩個數值始終保持高度同步。
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-xl flex flex-col h-[380px]">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-white font-bold flex items-center uppercase tracking-widest text-sm">
+                                    <i data-lucide="table" className="w-5 h-5 mr-3 text-emerald-400"></i>
+                                    實驗數據列表
+                                </h2>
+                                <button onClick={() => setDataPoints([])} className="text-[10px] text-slate-600 hover:text-red-400 font-black uppercase tracking-tighter transition-colors">
+                                    <i data-lucide="trash-2" className="w-3 h-3 inline mr-1"></i> 清空
+                                </button>
+                            </div>
+                            
+                            <div className="overflow-y-auto custom-scroll rounded-2xl border border-slate-800 flex-1">
+                                <table className="w-full text-xs font-mono text-left">
+                                    <thead className="bg-slate-950 text-slate-500 sticky top-0">
+                                        <tr>
+                                            <th className="p-4 font-black">r (AU)</th>
+                                            <th className="p-4 font-black text-blue-400">r³</th>
+                                            <th className="p-4 font-black text-emerald-400">T²</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {dataPoints.map((pt, i) => (
+                                            <tr key={i} className="hover:bg-slate-800/50 transition-colors group">
+                                                <td className="p-4 text-slate-200">{pt.r.toFixed(2)}</td>
+                                                <td className="p-4 text-blue-300 font-bold">{pt.r3.toFixed(3)}</td>
+                                                <td className="p-4 text-emerald-400 font-bold">{pt.t2.toFixed(3)}</td>
+                                            </tr>
+                                        ))}
+                                        {dataPoints.length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="p-12 text-center text-slate-600 italic">尚未記錄數據點。點擊下方按鈕開始收集。</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
