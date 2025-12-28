@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電流天平實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .digital-font { font-family: 'JetBrains Mono', monospace; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #14b8a6;
+            box-shadow: 0 0 10px rgba(20, 184, 166, 0.5);
+        }
+        .thumb-teal::-webkit-slider-thumb { border-color: #14b8a6; }
+        .thumb-indigo::-webkit-slider-thumb { border-color: #6366f1; }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 450;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const BASE_Y = 350;
+    const G = 9.81;
+
+    const App = () => {
+        // --- 狀態管理 ---
+        const [current, setCurrent] = useState(0.0); // 安培
+        const [length, setLength] = useState(5.0); // 公分
+        const [magneticField, setMagneticField] = useState(0.1); // 特斯拉
+        const [tareOffset, setTareOffset] = useState(0);
+        const [showVectors, setShowVectors] = useState(true);
+
+        const [force, setForce] = useState(0); // 牛頓
+        const [massReading, setMassReading] = useState(0); // 公克
+        const [dataPoints, setDataPoints] = useState([]); 
+
+        const canvasRef = useRef(null);
+        const graphCanvasRef = useRef(null);
+        const BASE_MASS = 200; // 磁鐵組件基礎質量
+
+        // --- 物理引擎 ---
+        useEffect(() => {
+            // F = BIL
+            const L_m = length / 100;
+            const F = magneticField * current * L_m; // 作用在導線上的力
+            setForce(F);
+
+            // 牛頓第三定律：導線受力向上，磁鐵受力向下（讀數增加）
+            const deltaMassG = (F / G) * 1000;
+            const rawReading = BASE_MASS + deltaMassG;
+            setMassReading(rawReading - tareOffset);
+        }, [current, length, magneticField, tareOffset]);
+
+        // --- 動作處理 ---
+        const handleTare = () => {
+            const L_m = length / 100;
+            const F = magneticField * current * L_m;
+            const deltaMassG = (F / G) * 1000;
+            setTareOffset(BASE_MASS + deltaMassG);
+        };
+
+        const recordData = () => {
+            setDataPoints(prev => [...prev, { x: current, y: force * 1000 }].sort((a,b) => a.x - b.x));
+        };
+
+        // --- 繪圖功能 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const scaleX = 220, scaleY = BASE_Y, scaleW = 220;
+            
+            // 1. 繪製電子秤
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(scaleX - scaleW/2, scaleY, scaleW, 45);
+            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(scaleX - scaleW/2 + 10, scaleY - 10, scaleW - 20, 10);
+            ctx.fillStyle = '#94a3b8'; ctx.fillRect(scaleX - 12, scaleY, 24, 20);
+
+            // 電子秤螢幕
+            ctx.fillStyle = '#020617'; ctx.fillRect(scaleX - 65, scaleY + 12, 130, 26);
+            ctx.fillStyle = '#22c55e'; ctx.font = 'bold 20px JetBrains Mono'; ctx.textAlign = 'center';
+            ctx.fillText(massReading.toFixed(2) + " g", scaleX, scaleY + 32);
+
+            // 2. 繪製磁鐵組件
+            const magY = scaleY - 65, magW = 150, magH = 55;
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(scaleX - magW/2, magY, magW/2 - 10, magH); // N
+            ctx.fillStyle = 'white'; ctx.font = 'bold 20px Inter'; ctx.fillText("N", scaleX - magW/4, magY + 35);
+            ctx.fillStyle = '#3b82f6'; ctx.fillRect(scaleX + 10, magY, magW/2 - 10, magH); // S
+            ctx.fillStyle = 'white'; ctx.fillText("S", scaleX + magW/4, magY + 35);
+            ctx.fillStyle = '#475569'; ctx.fillRect(scaleX - magW/2, magY + magH, magW, 12);
+
+            // 3. 繪製懸掛導線 (垂直於磁場)
+            const wireX = scaleX, wireY = magY + magH/2;
+            ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(wireX, wireY, 9, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#a16207'; ctx.lineWidth = 2; ctx.stroke();
+
+            // 電流符號 (進入/離開)
+            ctx.fillStyle = '#000'; ctx.font = 'bold 16px Inter'; ctx.textBaseline = 'middle';
+            if (Math.abs(current) > 0.1) {
+                if (current > 0) { ctx.beginPath(); ctx.arc(wireX, wireY, 2.5, 0, Math.PI*2); ctx.fill(); } // 點 (向外)
+                else { ctx.beginPath(); ctx.moveTo(wireX-4, wireY-4); ctx.lineTo(wireX+4, wireY+4); ctx.moveTo(wireX+4, wireY-4); ctx.lineTo(wireX-4, wireY+4); ctx.stroke(); } // 叉 (向內)
+            }
+
+            // 支架
+            ctx.beginPath(); ctx.moveTo(wireX, wireY - 9); ctx.lineTo(wireX, wireY - 110);
+            ctx.strokeStyle = '#facc15'; ctx.lineWidth = 5; ctx.stroke();
+            ctx.fillStyle = '#334155'; ctx.fillRect(wireX - 70, wireY - 120, 140, 12);
+            ctx.fillRect(wireX + 60, wireY - 120, 12, 220);
+
+            // 4. 向量標註
+            if (showVectors) {
+                drawArrow(ctx, scaleX - 35, wireY, 70, 0, '#3b82f6', 'B (磁場)');
+                if (Math.abs(force) > 0.0001) {
+                    const fLen = force * 2200, fDir = current > 0 ? -1 : 1; 
+                    drawArrow(ctx, wireX, wireY, 0, fLen * fDir, '#10b981', 'F 導線');
+                    drawArrow(ctx, wireX + 45, magY + magH, 0, -fLen * fDir, '#ef4444', 'F 磁鐵 (反作用力)');
+                }
+            }
+        };
+
+        const drawArrow = (ctx, x, y, dx, dy, color, label) => {
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len < 5) return;
+            const angle = Math.atan2(dy, dx);
+            ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+            ctx.moveTo(x, y); ctx.lineTo(x + dx, y + dy); ctx.stroke();
+            ctx.beginPath(); ctx.fillStyle = color; ctx.moveTo(x + dx, y + dy);
+            ctx.lineTo(x + dx - 10 * Math.cos(angle - Math.PI/6), y + dy - 10 * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(x + dx - 10 * Math.cos(angle + Math.PI/6), y + dy - 10 * Math.sin(angle + Math.PI/6));
+            ctx.fill();
+            ctx.fillStyle = color; ctx.font = 'bold 12px Inter'; ctx.fillText(label, x + dx + 8, y + dy + 4);
+        };
+
+        // 繪製 F-I 圖表
+        const drawGraph = () => {
+            const ctx = graphCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            const w = 300, h = 220, pad = 40;
+            ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(pad, h/2); ctx.lineTo(w-pad, h/2); ctx.moveTo(w/2, pad); ctx.lineTo(w/2, h-pad); ctx.stroke();
+
+            ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter';
+            ctx.fillText("電流 I (A)", w - 45, h/2 + 15);
+            ctx.save(); ctx.translate(15, h/2); ctx.rotate(-Math.PI/2); ctx.fillText("磁力 F (mN)", 0, 0); ctx.restore();
+
+            const maxI = 5, maxF = 50; // 50 mN
+            const mapX = (i) => w/2 + (i / maxI) * (w/2 - pad);
+            const mapY = (f) => h/2 - (f / maxF) * (h/2 - pad);
+
+            dataPoints.forEach(p => {
+                ctx.beginPath(); ctx.arc(mapX(p.x), mapY(p.y), 3.5, 0, Math.PI*2);
+                ctx.fillStyle = '#10b981'; ctx.fill();
+            });
+            ctx.beginPath(); ctx.arc(mapX(current), mapY(force*1000), 5, 0, Math.PI*2);
+            ctx.fillStyle = '#ef4444'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.stroke();
+        };
+
+        useEffect(() => { draw(); drawGraph(); }, [current, length, magneticField, massReading, showVectors, dataPoints]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 selection:bg-teal-500/30">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-teal-500/20 p-2 rounded-lg text-teal-400">
+                            <i data-lucide="scale"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">電流天平實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Electromagnetism (F = BIL)
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[450px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-6 left-6 flex gap-3">
+                                <button onClick={handleTare} className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl font-bold text-xs transition-all shadow-lg active:scale-95 uppercase tracking-wider flex items-center gap-2">
+                                    <i data-lucide="refresh-cw" className="w-3.5 h-3.5"></i> 讀數歸零 (Tare)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <div className="flex flex-wrap gap-8 items-center">
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="flex justify-between text-xs font-bold text-teal-400 uppercase tracking-widest mb-3"><span>通過電流 (I)</span><span className="text-white font-mono">{current.toFixed(1)} A</span></label>
+                                    <input type="range" min="-5" max="5" step="0.1" value={current} onChange={(e) => setCurrent(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-teal" />
+                                </div>
+                                <div className="flex-1 min-w-[200px]">
+                                    <label className="flex justify-between text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3"><span>受力長度 (L)</span><span className="text-white font-mono">{length} cm</span></label>
+                                    <input type="range" min="1" max="10" step="0.5" value={length} onChange={(e) => setLength(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-indigo" />
+                                </div>
+                            </div>
+                            <div className="pt-6 border-t border-slate-700 flex justify-between items-center">
+                                <label className="flex items-center gap-3 cursor-pointer p-2 rounded-xl bg-slate-950/50 hover:bg-slate-700 transition-colors border border-slate-700">
+                                    <input type="checkbox" checked={showVectors} onChange={() => setShowVectors(!showVectors)} className="w-5 h-5 rounded border-slate-500 text-teal-500 focus:ring-0 cursor-pointer" />
+                                    <span className="text-sm font-bold text-slate-300">顯示力向量</span>
+                                </label>
+                                <div className="flex gap-3">
+                                    <button onClick={recordData} className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95">記錄數據點</button>
+                                    <button onClick={() => { setDataPoints([]); setTareOffset(0); setCurrent(0); }} className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all"><i data-lucide="rotate-ccw"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="line-chart" className="text-indigo-400"></i> F - I 實驗圖表
+                            </h2>
+                            <canvas ref={graphCanvasRef} width={300} height={220} className="w-full h-auto bg-slate-900 rounded-2xl border border-slate-700" />
+                            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">瞬時計算 (F = BIL)</div>
+                                <div className="flex justify-between items-baseline">
+                                    <span className="text-2xl font-black text-white font-mono">{(force * 1000).toFixed(1)}</span>
+                                    <span className="text-xs text-teal-400 font-bold">mN (毫牛頓)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner space-y-4">
+                            <h3 className="text-indigo-300 font-bold text-sm flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點提示</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                電子秤測得的是磁鐵受到的<b>反作用力</b>。根據牛頓第三定律，這與導線受到的磁力大小相等、方向相反。當電流方向反轉時，磁力方向也會隨之反轉，導致秤重讀數減小。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
