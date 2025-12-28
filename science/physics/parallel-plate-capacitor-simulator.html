@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>平行板電容器模擬器 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .thumb-indigo::-webkit-slider-thumb { border-color: #6366f1; }
+        .thumb-cyan::-webkit-slider-thumb { border-color: #06b6d4; }
+        canvas { border-radius: 1rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 500;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+    const PLATE_WIDTH = 600;
+    const PLATE_X_START = (CANVAS_WIDTH - PLATE_WIDTH) / 2;
+    const PLATE_X_END = PLATE_X_START + PLATE_WIDTH;
+    const TIME_STEP = 1.0; 
+
+    const App = () => {
+        // --- 狀態 ---
+        const [voltage, setVoltage] = useState(200); // 伏特
+        const [separation, setSeparation] = useState(10); // 公分
+        const [showField, setShowField] = useState(true);
+        const [showPotential, setShowPotential] = useState(false);
+        const [particles, setParticles] = useState([]); 
+
+        const [electricField, setElectricField] = useState(0); 
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+
+        // --- 物理計算 ---
+        useEffect(() => {
+            const d_meters = separation / 100;
+            const E = voltage / d_meters; // E = V/d
+            setElectricField(E);
+        }, [voltage, separation]);
+
+        // 質點運動循環
+        const loop = () => {
+            setParticles(prev => {
+                const sepPx = separation * 20; 
+                const plateTopY = CENTER_Y - sepPx / 2;
+                const plateBottomY = CENTER_Y + sepPx / 2;
+
+                return prev.map(p => {
+                    if (p.hit) return p;
+
+                    let ay = 0;
+                    // 如果在板間範圍內受電場力
+                    if (p.x >= PLATE_X_START && p.x <= PLATE_X_END) {
+                        const d_m = separation / 100;
+                        const E = voltage / d_m;
+                        const eDir = voltage >= 0 ? 1 : -1;
+                        const qSign = p.type === 'p' ? 1 : -1;
+                        const massF = p.type === 'p' ? 1.0 : 0.2; // 電子較輕，加速度較大
+                        
+                        // F = qE, a = F/m
+                        const a_mag = (Math.abs(E) * 0.006) / massF;
+                        ay = a_mag * eDir * qSign;
+                    }
+
+                    const nVx = p.vx;
+                    const nVy = p.vy + ay * TIME_STEP;
+                    const nX = p.x + nVx * TIME_STEP;
+                    const nY = p.y + nVy * TIME_STEP;
+                    
+                    let isHit = false;
+                    let fY = nY;
+                    
+                    if (nX >= PLATE_X_START && nX <= PLATE_X_END) {
+                        if (nY <= plateTopY) { isHit = true; fY = plateTopY + 4; }
+                        else if (nY >= plateBottomY) { isHit = true; fY = plateBottomY - 4; }
+                    }
+
+                    const nTrail = [...p.trail];
+                    if (nTrail.length === 0 || Math.hypot(nX - nTrail[nTrail.length-1].x, nY - nTrail[nTrail.length-1].y) > 5) {
+                        nTrail.push({x: nX, y: isHit ? fY : nY});
+                    }
+                    if (nTrail.length > 80) nTrail.shift();
+
+                    return { ...p, x: nX, y: isHit ? fY : nY, vx: isHit ? 0 : nVx, vy: isHit ? 0 : nVy, trail: nTrail, hit: isHit };
+                }).filter(p => p.x < CANVAS_WIDTH + 50 && p.y > -50 && p.y < CANVAS_HEIGHT + 50);
+            });
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [voltage, separation]);
+
+        // --- 繪圖 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const sepPx = separation * 20;
+            const tY = CENTER_Y - sepPx / 2;
+            const bY = CENTER_Y + sepPx / 2;
+
+            // 1. 繪製電場線
+            if (showField && Math.abs(voltage) > 0) {
+                const opacity = Math.min(1, Math.abs(voltage) / 500 + 0.2);
+                ctx.strokeStyle = `rgba(234, 179, 8, ${opacity})`;
+                ctx.fillStyle = `rgba(234, 179, 8, ${opacity})`;
+                ctx.lineWidth = 2;
+                const isDown = voltage > 0;
+                
+                for (let x = PLATE_X_START + 30; x < PLATE_X_END; x += 50) {
+                    ctx.beginPath(); ctx.moveTo(x, tY + 5); ctx.lineTo(x, bY - 5); ctx.stroke();
+                    // 箭頭
+                    const arrowY = isDown ? bY - 15 : tY + 15;
+                    ctx.beginPath();
+                    if (isDown) {
+                        ctx.moveTo(x, arrowY + 8); ctx.lineTo(x - 5, arrowY); ctx.lineTo(x + 5, arrowY);
+                    } else {
+                        ctx.moveTo(x, arrowY - 8); ctx.lineTo(x - 5, arrowY); ctx.lineTo(x + 5, arrowY);
+                    }
+                    ctx.fill();
+                }
+            }
+
+            // 2. 繪製等勢面
+            if (showPotential) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.setLineDash([5, 5]);
+                for(let i=1; i<=4; i++) {
+                    const py = tY + (sepPx / 5) * i;
+                    ctx.beginPath(); ctx.moveTo(PLATE_X_START, py); ctx.lineTo(PLATE_X_END, py); ctx.stroke();
+                }
+                ctx.setLineDash([]);
+            }
+
+            // 3. 繪製電極板
+            const tColor = voltage > 0 ? '#ef4444' : voltage < 0 ? '#3b82f6' : '#64748b';
+            const bColor = voltage > 0 ? '#3b82f6' : voltage < 0 ? '#ef4444' : '#64748b';
+            ctx.fillStyle = tColor; ctx.fillRect(PLATE_X_START, tY - 10, PLATE_WIDTH, 10);
+            ctx.fillStyle = bColor; ctx.fillRect(PLATE_X_START, bY, PLATE_WIDTH, 10);
+            
+            ctx.fillStyle = 'white'; ctx.font = 'bold 16px monospace';
+            ctx.fillText(voltage > 0 ? "++++++" : voltage < 0 ? "------" : "", PLATE_X_START + 20, tY - 18);
+            ctx.fillText(voltage > 0 ? "------" : voltage < 0 ? "++++++" : "", PLATE_X_START + 20, bY + 28);
+
+            // 4. 繪製質點
+            particles.forEach(p => {
+                if (p.trail.length > 1) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = p.type === 'p' ? 'rgba(248, 113, 113, 0.4)' : 'rgba(96, 165, 250, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(p.trail[0].x, p.trail[0].y);
+                    p.trail.forEach(pt => ctx.lineTo(pt.x, pt.y));
+                    ctx.stroke();
+                }
+                ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+                ctx.fillStyle = p.type === 'p' ? '#ef4444' : '#3b82f6'; ctx.fill();
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.stroke();
+                ctx.fillStyle = 'white'; ctx.font = 'bold 10px Inter'; ctx.textAlign = 'center';
+                ctx.fillText(p.type === 'p' ? '+' : '-', p.x, p.y + 3.5);
+            });
+        };
+
+        useEffect(() => { draw(); });
+
+        const fire = (type) => {
+            setParticles(prev => [...prev, {
+                x: 50, y: CENTER_Y, vx: 6, vy: 0, type, trail: [], hit: false
+            }]);
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400">
+                            <i data-lucide="battery-charging"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">平行板電容器模擬器</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Electric Fields (E-Field)
+                    </div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-9 space-y-6">
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-2 shadow-2xl relative overflow-hidden h-[500px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 shadow-xl backdrop-blur-md">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">場強數據 (E)</div>
+                                <div className="text-2xl font-black text-yellow-400 font-mono">
+                                    {Math.abs(electricField).toFixed(0)} <span className="text-xs text-slate-500 font-medium">V/m</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl flex flex-wrap gap-10 items-center">
+                            <div className="flex-1 min-w-[220px]">
+                                <label className="flex justify-between text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3">
+                                    <span>板間電壓 (V)</span>
+                                    <span className="text-white bg-slate-950 px-2 py-0.5 rounded font-mono">{voltage} V</span>
+                                </label>
+                                <input type="range" min="-500" max="500" step="50" value={voltage} onChange={(e) => setVoltage(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-indigo" />
+                            </div>
+
+                            <div className="flex-1 min-w-[220px]">
+                                <label className="flex justify-between text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">
+                                    <span>板間距離 (d)</span>
+                                    <span className="text-white bg-slate-950 px-2 py-0.5 rounded font-mono">{separation} cm</span>
+                                </label>
+                                <input type="range" min="4" max="20" step="1" value={separation} onChange={(e) => setSeparation(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-cyan" />
+                            </div>
+
+                            <div className="flex gap-4">
+                                <button onClick={() => setShowField(!showField)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${showField ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>電場線</button>
+                                <button onClick={() => setShowPotential(!showPotential)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${showPotential ? 'bg-white/10 text-white border-white/30' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>等勢面</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-3 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="crosshair" className="w-5 h-5 text-red-400"></i> 粒子發射器
+                            </h2>
+                            <div className="space-y-3">
+                                <button onClick={() => fire('p')} className="w-full py-4 bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-400 rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="plus-circle"></i> 發射質子 (+)
+                                </button>
+                                <button onClick={() => fire('e')} className="w-full py-4 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-2xl font-bold transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="minus-circle"></i> 發射電子 (-)
+                                </button>
+                                <button onClick={() => { setParticles([]); setVoltage(200); setSeparation(10); }} className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 mt-4">
+                                    <i data-lucide="rotate-ccw" className="w-4 h-4"></i> 重設畫布
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/20 border border-indigo-500/30 p-6 rounded-3xl shadow-inner">
+                            <h3 className="text-indigo-300 font-bold text-sm mb-3 flex items-center gap-2 uppercase">
+                                <i data-lucide="lightbulb" className="w-4 h-4"></i> 觀察重點
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                帶電粒子進入勻強電場後的軌跡為<b>拋物線</b>。這與物體在重力場中的平拋運動極其相似：水平方向為等速運動，垂直方向則是受恆定電力產生的等加速運動。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
