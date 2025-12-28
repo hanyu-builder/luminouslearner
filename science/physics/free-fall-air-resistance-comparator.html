@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自由落體與空氣阻力實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .vacuum-bg {
+            background-image: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+        }
+        .air-bg {
+            background-image: linear-gradient(to bottom, #dbeafe 0%, #eff6ff 100%);
+        }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 400;
+    const CANVAS_HEIGHT = 600;
+    const PIXELS_PER_METER = 50; 
+    const G = 9.81;
+    const DT = 0.016; 
+
+    const App = () => {
+        // --- 狀態 ---
+        const [isVacuum, setIsVacuum] = useState(false);
+        const [simState, setSimState] = useState('idle'); 
+        const [time, setTime] = useState(0);
+        
+        const [ball, setBall] = useState({ y: 0, v: 0 });
+        const [feather, setFeather] = useState({ y: 0, v: 0 });
+        const [history, setHistory] = useState([]); 
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        const BALL_PROPS = { mass: 1.0, k: 0.05 }; 
+        const FEATHER_PROPS = { mass: 0.05, k: 0.35 }; 
+
+        const physicsRef = useRef({
+            t: 0,
+            ball: { y: 0, v: 0 },
+            feather: { y: 0, v: 0 },
+            history: []
+        });
+
+        const startSim = () => {
+            physicsRef.current = {
+                t: 0,
+                ball: { y: 0, v: 0 },
+                feather: { y: 0, v: 0 },
+                history: []
+            };
+            setSimState('running');
+            setBall({ y: 0, v: 0 });
+            setFeather({ y: 0, v: 0 });
+            setHistory([]);
+            loop();
+        };
+
+        const resetSim = () => {
+            setSimState('idle');
+            cancelAnimationFrame(requestRef.current);
+            setBall({ y: 0, v: 0 });
+            setFeather({ y: 0, v: 0 });
+            setTime(0);
+            setHistory([]);
+        };
+
+        const loop = () => {
+            const state = physicsRef.current;
+            const rhoFactor = isVacuum ? 0 : 1; 
+
+            // 鐵球物理：a = g - (k/m)v^2
+            const fDragBall = rhoFactor * BALL_PROPS.k * state.ball.v * state.ball.v;
+            const aBall = G - (fDragBall / BALL_PROPS.mass);
+            state.ball.v += aBall * DT;
+            state.ball.y += state.ball.v * DT;
+
+            // 羽毛物理：阻力明顯較大，且質量輕
+            const fDragFeather = rhoFactor * FEATHER_PROPS.k * state.feather.v * state.feather.v;
+            const aFeather = G - (fDragFeather / FEATHER_PROPS.mass);
+            state.feather.v += aFeather * DT;
+            state.feather.y += state.feather.v * DT;
+
+            state.t += DT;
+
+            // 落地檢測
+            const groundY = (CANVAS_HEIGHT - 60) / PIXELS_PER_METER;
+            if (state.ball.y >= groundY && state.feather.y >= groundY) {
+                setSimState('finished');
+                return; 
+            }
+            
+            if (state.ball.y > groundY) { state.ball.y = groundY; state.ball.v = 0; }
+            if (state.feather.y > groundY) { state.feather.y = groundY; state.feather.v = 0; }
+
+            // 紀錄歷史數據 (v-t 圖)
+            if (Math.floor(state.t * 100) % 5 === 0) {
+                state.history.push({
+                    t: state.t,
+                    vBall: state.ball.v,
+                    vFeather: state.feather.v
+                });
+            }
+
+            setBall({...state.ball});
+            setFeather({...state.feather});
+            setTime(state.t);
+            setHistory([...state.history]);
+
+            if (state.ball.y < groundY || state.feather.y < groundY) {
+                requestRef.current = requestAnimationFrame(loop);
+            } else {
+                setSimState('finished');
+            }
+        };
+
+        // --- 渲染 ---
+        useEffect(() => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const groundY = CANVAS_HEIGHT - 50;
+            
+            // 繪製鐵球
+            const bx = CANVAS_WIDTH / 3;
+            const by = 50 + ball.y * PIXELS_PER_METER;
+            ctx.beginPath();
+            ctx.arc(bx, by, 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#475569'; ctx.fill();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = 'white'; ctx.font = '10px Inter'; ctx.textAlign = 'center';
+            ctx.fillText("鐵球", bx, by + 30);
+
+            // 繪製羽毛
+            const fx = 2 * CANVAS_WIDTH / 3;
+            const fy = 50 + feather.y * PIXELS_PER_METER;
+            ctx.save();
+            ctx.translate(fx, fy);
+            ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.ellipse(0, 0, 10, 22, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(0, 28);
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = 'white'; ctx.fillText("羽毛", fx, fy + 40);
+
+            // 地面
+            ctx.fillStyle = '#334155';
+            ctx.fillRect(0, groundY, CANVAS_WIDTH, 50);
+
+        }, [ball, feather]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        const Graph = ({ data }) => {
+            const w = 320, h = 180, pad = 30;
+            const maxT = data.length > 0 ? Math.max(2, data[data.length-1].t) : 2;
+            const maxV = 15; 
+            const mX = t => pad + (t / maxT) * (w - 2 * pad);
+            const mY = v => h - pad - (v / maxV) * (h - 2 * pad);
+
+            return (
+                <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+                    <line x1={pad} y1={h-pad} x2={w-pad} y2={h-pad} stroke="#475569" strokeWidth="1" />
+                    <line x1={pad} y1={h-pad} x2={pad} y2={pad} stroke="#475569" strokeWidth="1" />
+                    <text x={w/2} y={h-5} fill="#64748b" fontSize="10" textAnchor="middle">時間 (s)</text>
+                    <text x="5" y={h/2} fill="#64748b" fontSize="10" textAnchor="middle" transform={`rotate(-90, 10, ${h/2})`}>速度 (m/s)</text>
+                    {data.length > 1 && (
+                        <>
+                            <polyline points={data.map(d => `${mX(d.t)},${mY(d.vBall)}`).join(' ')} fill="none" stroke="#60a5fa" strokeWidth="2" />
+                            <polyline points={data.map(d => `${mX(d.t)},${mY(d.vFeather)}`).join(' ')} fill="none" stroke="#f43f5e" strokeWidth="2" strokeDasharray="4 2" />
+                        </>
+                    )}
+                </svg>
+            );
+        };
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                            <i data-lucide="feather"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">自由落體與阻尼實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Mechanics (Motion)
+                    </div>
+                </nav>
+
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    
+                    {/* 左側：控制與數據 */}
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg">
+                                <i data-lucide="settings-2" className="text-indigo-400"></i> 環境設定
+                            </h2>
+                            <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                                <button onClick={() => { setIsVacuum(false); resetSim(); }} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${!isVacuum ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>大氣環境</button>
+                                <button onClick={() => { setIsVacuum(true); resetSim(); }} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${isVacuum ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>真空環境</button>
+                            </div>
+                            <button onClick={simState === 'running' ? resetSim : startSim} className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${simState === 'running' ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
+                                <i data-lucide={simState === 'running' ? "rotate-ccw" : "play"}></i>
+                                {simState === 'running' ? '重置實驗' : '釋放物體'}
+                            </button>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+                            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">實時速度數據</h3>
+                            <div className="grid grid-cols-2 gap-3 font-mono">
+                                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 border-l-4 border-l-blue-400">
+                                    <div className="text-[10px] text-slate-500 mb-1">鐵球速度</div>
+                                    <div className="text-lg font-bold text-white">{ball.v.toFixed(2)} <span className="text-[10px]">m/s</span></div>
+                                </div>
+                                <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 border-l-4 border-l-rose-400">
+                                    <div className="text-[10px] text-slate-500 mb-1">羽毛速度</div>
+                                    <div className="text-lg font-bold text-white">{feather.v.toFixed(2)} <span className="text-[10px]">m/s</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl">
+                            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">v - t 關係圖</h3>
+                            <div className="h-44 w-full">
+                                <Graph data={history} />
+                            </div>
+                            <div className="flex justify-center gap-4 mt-2">
+                                <div className="flex items-center gap-2 text-[10px] text-blue-400"><div className="w-2 h-0.5 bg-blue-400"></div> 鐵球</div>
+                                <div className="flex items-center gap-2 text-[10px] text-rose-400"><div className="w-2 h-0.5 bg-rose-400 border-dashed border-rose-400"></div> 羽毛</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 右側：實驗室視覺化 */}
+                    <div className="lg:col-span-8">
+                        <div className={`rounded-[2.5rem] border-8 border-slate-800 h-[600px] relative overflow-hidden shadow-2xl transition-all duration-1000 ${isVacuum ? 'vacuum-bg' : 'air-bg'}`}>
+                            <div className="absolute top-6 left-1/2 -translate-x-1/2 px-6 py-2 rounded-full bg-black/30 backdrop-blur-md border border-white/10 text-white font-bold text-sm flex items-center gap-2 shadow-2xl z-20">
+                                {isVacuum ? <><i data-lucide="moon" className="w-4 h-4 text-indigo-300"></i> 真空艙 (無空氣阻力)</> : <><i data-lucide="cloud" className="w-4 h-4 text-blue-300"></i> 標準大氣環境</>}
+                            </div>
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain relative z-10" />
+                            
+                            {!isVacuum && (
+                                <div className="absolute inset-0 pointer-events-none opacity-20">
+                                    <div className="absolute top-1/4 left-1/4 w-32 h-1 bg-white/20 blur-xl rotate-45"></div>
+                                    <div className="absolute top-2/3 right-1/4 w-48 h-1 bg-white/20 blur-xl -rotate-12"></div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
