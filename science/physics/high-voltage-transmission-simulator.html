@@ -61,6 +61,7 @@
         const [powerLoss, setPowerLoss] = useState(0);
         const [powerDelivered, setPowerDelivered] = useState(0);
         const [efficiency, setEfficiency] = useState(0);
+        const [voltageDrop, setVoltageDrop] = useState(0);
 
         const canvasRef = useRef(null);
         const requestRef = useRef();
@@ -76,34 +77,23 @@
             // P_loss = I^2 * R (焦耳熱損耗)
             const P_loss = I * I * resistance;
             
+            // 電壓降 V_drop = I * R
+            const V_drop = I * resistance;
+            
             let P_useful = P_watts - P_loss;
             if (P_useful < 0) P_useful = 0;
             
-            const eff = (P_useful / P_watts) * 100;
+            const eff = P_watts > 0 ? (P_useful / P_watts) * 100 : 0;
 
             setCurrent(I);
             setPowerLoss(P_loss);
             setPowerDelivered(P_useful);
             setEfficiency(eff);
+            setVoltageDrop(V_drop);
 
         }, [powerGen, voltage, resistance]);
 
-        // --- 動畫循環 ---
-        const loop = () => {
-            // 電子流動速度隨電流大小變化
-            const speed = Math.min(10, current / 12); 
-            offsetRef.current = (offsetRef.current + speed) % 40;
-            draw();
-            requestRef.current = requestAnimationFrame(loop);
-        };
-
-        // 修正：添加依賴項並處理清理函數，避免內存洩漏與 ReferenceError
-        useEffect(() => {
-            requestRef.current = requestAnimationFrame(loop);
-            return () => cancelAnimationFrame(requestRef.current);
-        }, [current, powerLoss, powerGen, efficiency]);
-
-        // --- 畫布渲染函數 ---
+        // --- 動畫渲染函數 ---
         const draw = () => {
             const ctx = canvasRef.current?.getContext('2d');
             if (!ctx) return;
@@ -148,36 +138,33 @@
             ctx.stroke();
             ctx.restore();
 
-            // 繪製流動電子 (代表電流)
+            // 繪製流動電子 (代表電流方向)
             if (current > 0.1 && lossRatio < 0.95) {
-                drawCurrentDots(ctx, PLANT_X, PYLON_Y, CITY_X, PYLON_Y + 25, 60);
+                const count = 18;
+                const spacing = (CITY_X - PLANT_X) / count;
+                const offset = offsetRef.current;
+                ctx.fillStyle = '#fef08a';
+                for (let i = 0; i <= count; i++) {
+                    const relX = (i * spacing + offset * (spacing/40)) % (CITY_X - PLANT_X);
+                    const x = PLANT_X + relX;
+                    const t = relX / (CITY_X - PLANT_X);
+                    const linearY = PYLON_Y + (25 - 0) * t; 
+                    const curveY = linearY + 4 * 60 * t * (1-t);
+                    ctx.beginPath(); ctx.arc(x, curveY, 3, 0, Math.PI*2); ctx.fill();
+                }
             }
 
             // 4. 發電廠視覺
             drawPowerPlant(ctx, PLANT_X, GROUND_Y);
 
-            // 5. 城市視覺
-            drawCity(ctx, CITY_X, GROUND_Y, efficiency / 100);
+            // 5. 城市視覺 (亮度隨效率變化)
+            const br = efficiency / 100;
+            drawCity(ctx, CITY_X, GROUND_Y, br);
             
             // 6. UI 標籤
             ctx.fillStyle = 'white'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
             ctx.fillText("升壓變壓器", PLANT_X + 60, PYLON_Y - 20);
             ctx.fillText("降壓變壓器", CITY_X - 60, PYLON_Y - 20);
-        };
-
-        const drawCurrentDots = (ctx, x1, y1, x2, y2, sag) => {
-            const count = 18;
-            const spacing = (x2 - x1) / count;
-            const offset = offsetRef.current;
-            ctx.fillStyle = '#fef08a';
-            for (let i = 0; i <= count; i++) {
-                const relX = (i * spacing + offset * (spacing/40)) % (x2 - x1);
-                const x = x1 + relX;
-                const t = relX / (x2 - x1);
-                const linearY = y1 + (y2 - y1) * t;
-                const curveY = linearY + 4 * sag * t * (1-t);
-                ctx.beginPath(); ctx.arc(x, curveY, 3, 0, Math.PI*2); ctx.fill();
-            }
         };
 
         const drawPowerPlant = (ctx, x, y) => {
@@ -202,6 +189,18 @@
             for(let wy=y-150; wy<y-10; wy+=18) { ctx.fillRect(x+105, wy, 35, 10); }
             ctx.fillStyle = '#60a5fa'; ctx.font = 'bold 14px Inter'; ctx.fillText("城市區域", x + 65, y + 25);
         };
+
+        // --- 動畫循環 ---
+        useEffect(() => {
+            const loop = () => {
+                const speed = Math.min(10, current / 12); 
+                offsetRef.current = (offsetRef.current + speed) % 40;
+                draw();
+                requestRef.current = requestAnimationFrame(loop);
+            };
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [current, powerLoss, powerGen, efficiency]);
 
         const setPreset = (v) => setVoltage(v);
 
@@ -269,7 +268,7 @@
 
                     <div className="lg:col-span-5 space-y-6">
                         <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
-                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="calculator" className="text-indigo-400"></i> 即時損耗計算</h2>
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="calculator" className="text-indigo-400"></i> 即時損耗計算 (Loss Analysis)</h2>
                             <div className="space-y-4">
                                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700 flex justify-between items-center shadow-inner">
                                     <div><div className="text-[10px] text-slate-500 font-bold uppercase mb-1">輸送電流 (I = P/V)</div><div className="text-sm text-slate-300 font-mono">{(powerGen*1000).toFixed(0)}W / {voltage}V</div></div>
@@ -290,7 +289,7 @@
                         </div>
 
                         <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner">
-                            <h3 className="text-indigo-400 font-bold text-sm mb-3 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點筆記</h3>
+                            <h3 className="text-indigo-300 font-bold text-sm mb-3 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點筆記</h3>
                             <p className="text-xs text-slate-400 leading-relaxed italic">
                                 注意：輸送中的損耗與 <b>電壓的平方</b> 成反比 ($P_{loss} \propto 1/V^2$)。這就是為什麼將電壓提高 10 倍，損耗會大幅減少 100 倍的原因！
                             </p>
