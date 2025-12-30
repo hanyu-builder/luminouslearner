@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>風能發電實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop Types -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #0ea5e9;
+            box-shadow: 0 0 10px rgba(14, 165, 233, 0.5);
+        }
+        .thumb-sky::-webkit-slider-thumb { border-color: #0ea5e9; }
+        .thumb-emerald::-webkit-slider-thumb { border-color: #10b981; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        canvas { border-radius: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+    const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot, CartesianGrid } = Recharts;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    
+    // 物理常數
+    const RHO = 1.225; // 空氣密度 kg/m^3
+    const CP = 0.4;    // 功率係數 (效率約 40%)
+
+    const App = () => {
+        // --- 狀態 ---
+        const [windSpeed, setWindSpeed] = useState(8); // m/s
+        const [bladeLength, setBladeLength] = useState(40); // 米
+        
+        const [powerOutput, setPowerOutput] = useState(0);
+        const [sweptArea, setSweptArea] = useState(0);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        // 動畫狀態
+        const animRef = useRef({
+            angle: 0,
+            particles: []
+        });
+
+        // --- 物理邏輯 ---
+        // P = 0.5 * rho * A * v^3 * Cp
+        const calculatePower = (v, r) => {
+            const area = Math.PI * r * r;
+            return 0.5 * RHO * area * Math.pow(v, 3) * CP;
+        };
+
+        useEffect(() => {
+            const p = calculatePower(windSpeed, bladeLength);
+            setPowerOutput(p);
+            setSweptArea(Math.PI * bladeLength * bladeLength);
+        }, [windSpeed, bladeLength]);
+
+        // 生成圖表數據 (當前葉片長度下的 功率-風速 曲線)
+        const graphData = useMemo(() => {
+            const data = [];
+            for (let v = 0; v <= 25; v+=1) {
+                const p = calculatePower(v, bladeLength);
+                data.push({ v: v, p: p / 1000 }); // 單位：kW
+            }
+            return data;
+        }, [bladeLength]);
+
+        // --- 動畫循環 ---
+        const loop = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            // 旋轉速度與風速成正比
+            const rotationSpeed = windSpeed * 0.015; 
+            animRef.current.angle += rotationSpeed;
+
+            // 風力質點更新
+            if (animRef.current.particles.length < 60) {
+                animRef.current.particles.push({
+                    x: -50,
+                    y: Math.random() * CANVAS_HEIGHT * 0.85,
+                    speed: windSpeed * (0.6 + Math.random() * 0.4),
+                    size: Math.random() * 2 + 1
+                });
+            }
+            animRef.current.particles.forEach(p => {
+                p.x += p.speed * 2.2; 
+                if (p.x > CANVAS_WIDTH + 50) {
+                    p.x = -50;
+                    p.y = Math.random() * CANVAS_HEIGHT * 0.85;
+                    p.speed = windSpeed * (0.6 + Math.random() * 0.4);
+                }
+            });
+
+            draw(ctx);
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        // --- 渲染功能 ---
+        const draw = (ctx) => {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const groundY = CANVAS_HEIGHT - 60;
+            
+            // 繪製背景與地面
+            const gradSky = ctx.createLinearGradient(0, 0, 0, groundY);
+            gradSky.addColorStop(0, '#0f172a');
+            gradSky.addColorStop(1, '#1e293b');
+            ctx.fillStyle = gradSky;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, groundY);
+
+            ctx.fillStyle = '#1e293b'; 
+            ctx.fillRect(0, groundY, CANVAS_WIDTH, 60);
+
+            // 繪製風力質點 (視覺化風速)
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.2)';
+            animRef.current.particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                ctx.fill();
+                // 拖尾效果
+                ctx.strokeStyle = 'rgba(148, 163, 184, 0.1)';
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.speed*12, p.y); ctx.stroke();
+            });
+
+            // 繪製風力發電機
+            const centerX = CANVAS_WIDTH / 2;
+            const hubY = groundY - 260; 
+            const visScale = 2.8; 
+
+            // 塔架
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.moveTo(centerX - 6, hubY); ctx.lineTo(centerX + 6, hubY);
+            ctx.lineTo(centerX + 18, groundY); ctx.lineTo(centerX - 18, groundY);
+            ctx.fill();
+
+            // 葉片 (旋轉)
+            ctx.save();
+            ctx.translate(centerX, hubY);
+            ctx.rotate(animRef.current.angle);
+
+            const visualBladeLen = bladeLength * visScale;
+            ctx.fillStyle = '#f8fafc';
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(18, -visualBladeLen/2, 0, -visualBladeLen);
+                ctx.quadraticCurveTo(-18, -visualBladeLen/2, 0, 0);
+                ctx.fill();
+                ctx.rotate((Math.PI * 2) / 3);
+            }
+            
+            // 輪轂
+            ctx.fillStyle = '#cbd5e1';
+            ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+
+            // 視覺輔助：掃掠面積
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+            ctx.setLineDash([8, 8]); ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(centerX, hubY, visualBladeLen, 0, Math.PI*2); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 標註半徑
+            ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 13px Inter';
+            ctx.fillText(`r = ${bladeLength}m`, centerX + visualBladeLen + 15, hubY + 5);
+            ctx.beginPath(); ctx.moveTo(centerX, hubY); ctx.lineTo(centerX + visualBladeLen, hubY);
+            ctx.strokeStyle = '#38bdf8'; ctx.stroke();
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [windSpeed, bladeLength]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        const formatPower = (w) => {
+            if (w >= 1000000) return (w / 1000000).toFixed(2) + " MW";
+            if (w >= 1000) return (w / 1000).toFixed(1) + " kW";
+            return w.toFixed(0) + " W";
+        };
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 h-16 shadow-xl z-10">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-sky-500/20 p-2 rounded-lg text-sky-400"><i data-lucide="wind"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">風能發電公式實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Renewable Energy</div>
+                </nav>
+
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-4">
+                        
+                        {/* 左側：動畫畫布 */}
+                        <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800 flex items-center justify-center">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-6 left-6 space-y-4">
+                                <div className="bg-slate-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-700 shadow-2xl">
+                                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">理論功率輸出 (P)</div>
+                                    <div className="text-4xl font-black text-emerald-400 font-mono tracking-tighter">{formatPower(powerOutput)}</div>
+                                    <div className="text-[9px] text-indigo-400 mt-2 font-bold italic uppercase tracking-tighter">P = 0.5 &middot; &rho; &middot; A &middot; v&sup3; &middot; Cp</div>
+                                </div>
+                                <div className="bg-slate-900/90 backdrop-blur-md px-5 py-3 rounded-xl border border-slate-700 shadow-xl">
+                                    <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">掃掠面積 (A)</div>
+                                    <div className="text-xl font-bold text-white font-mono">{sweptArea.toFixed(0)} <span className="text-xs text-slate-500">m&sup2;</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 右側：控制與圖表 */}
+                        <div className="lg:col-span-1 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-y-auto custom-scroll p-6 space-y-8">
+                            <div className="space-y-8">
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-sky-400 uppercase tracking-widest mb-3"><span>風速 (v)</span><span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{windSpeed} m/s</span></label>
+                                    <input type="range" min="0" max="25" step="0.5" value={windSpeed} onChange={(e)=>setWindSpeed(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-sky" />
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-bold uppercase italic"><span>無風</span><span>強風</span></div>
+                                    <div className="mt-4 p-3 bg-sky-900/10 border border-sky-500/20 rounded-xl text-[11px] text-sky-200/70 leading-relaxed italic">
+                                        💡 物理特性：功率隨風速的<b>立方 ($v^3$)</b> 增長。這意味著風速加倍，發電量將躍升至 <b>8 倍</b>！
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3"><span>葉片長度 (r)</span><span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{bladeLength} m</span></label>
+                                    <input type="range" min="10" max="80" step="1" value={bladeLength} onChange={(e)=>setBladeLength(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-emerald" />
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-bold uppercase italic"><span>家用型</span><span>離岸型</span></div>
+                                    <div className="mt-4 p-3 bg-emerald-900/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-200/70 leading-relaxed italic">
+                                        💡 物理特性：功率隨半徑的<b>平方 ($r^2$)</b> 增長。更長的葉片能捕捉更大面積的風能。
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-800">
+                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><i data-lucide="line-chart" className="w-3 h-3 text-indigo-400"></i> P - v 功率特性曲線</h3>
+                                <div className="h-44 w-full bg-slate-950 rounded-2xl border border-slate-800 p-2 shadow-inner">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={graphData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                            <XAxis dataKey="v" hide type="number" domain={[0, 25]} />
+                                            <YAxis hide type="number" />
+                                            <Tooltip 
+                                                contentStyle={{backgroundColor: '#020617', border: '1px solid #1e293b', fontSize: '10px', color: '#fff'}}
+                                                labelFormatter={(v) => `風速: ${v} m/s`}
+                                                formatter={(val) => [`${val.toFixed(0)} kW`, '發電功率']}
+                                            />
+                                            <Line type="monotone" dataKey="p" stroke="#0ea5e9" strokeWidth={3} dot={false} isAnimationActive={false} />
+                                            <ReferenceDot x={windSpeed} y={powerOutput/1000} r={5} fill="#10b981" stroke="white" strokeWidth={2} />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                    <div className="flex justify-between text-[8px] font-bold text-slate-600 uppercase tracking-tighter px-2 mt-1"><span>0 m/s</span><span>風速增長 &rarr;</span><span>25 m/s</span></div>
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-900/10 border border-indigo-500/20 p-5 rounded-2xl shadow-inner mt-auto">
+                                <h4 className="text-indigo-400 font-bold text-[10px] uppercase mb-2 flex items-center gap-2"><i data-lucide="lightbulb" className="w-3 h-3"></i> 能源物理考點</h4>
+                                <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                    在 DSE 物理中，計算可再生能源的發電率時，務必區分「風的總動能」與「風力機的轉化功率」。後者受貝茲極限 (Betz limit) 的限制。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
