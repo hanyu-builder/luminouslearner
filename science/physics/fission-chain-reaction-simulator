@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>核分裂連鎖反應實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .canvas-container { cursor: crosshair; }
+        canvas { border-radius: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 500;
+    const ATOM_RADIUS = 13; 
+    const NEUTRON_RADIUS = 3;
+    const ROD_WIDTH = 40;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [controlRodLevel, setControlRodLevel] = useState(50); // 0 (抽出) 到 100 (全插入)
+        const [power, setPower] = useState(0); 
+        const [temperature, setTemperature] = useState(300); 
+        const [simState, setSimState] = useState('running'); // running, meltdown
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        // 物理物件 (Ref 加速運算)
+        const atomsRef = useRef([]);
+        const neutronsRef = useRef([]);
+        const particlesRef = useRef([]); 
+
+        // --- 初始化反應爐 ---
+        const initReactor = () => {
+            const atoms = [];
+            const cols = 12;
+            const rows = 10;
+            const xStep = CANVAS_WIDTH / (cols + 1);
+            const yStep = CANVAS_HEIGHT / (rows + 1);
+
+            for(let i=1; i<=cols; i++) {
+                for(let j=1; j<=rows; j++) {
+                    const x = i * xStep + (Math.random() - 0.5) * 15;
+                    const y = j * yStep + (Math.random() - 0.5) * 15;
+                    atoms.push({
+                        x, y,
+                        type: 'U-235', 
+                        life: 1.0 
+                    });
+                }
+            }
+            atomsRef.current = atoms;
+            neutronsRef.current = [];
+            particlesRef.current = [];
+            setPower(0);
+            setTemperature(300);
+            setSimState('running');
+        };
+
+        useEffect(() => {
+            initReactor();
+        }, []);
+
+        // --- 動作 ---
+        const fireNeutron = () => {
+            if (simState !== 'running') return;
+            neutronsRef.current.push({
+                x: 0,
+                y: CANVAS_HEIGHT / 2,
+                vx: 6,
+                vy: (Math.random() - 0.5) * 1.5,
+                active: true
+            });
+        };
+
+        const triggerFission = (atom) => {
+            atom.type = 'Splitting';
+            atom.life = 1.0; 
+        };
+
+        // --- 物理循環 ---
+        const loop = () => {
+            if (simState === 'meltdown') return;
+
+            // 1. 更新中子
+            neutronsRef.current.forEach(n => {
+                if (!n.active) return;
+                n.x += n.vx;
+                n.y += n.vy;
+
+                // 邊界
+                if (n.x < 0 || n.x > CANVAS_WIDTH || n.y < 0 || n.y > CANVAS_HEIGHT) {
+                    n.active = false; return;
+                }
+
+                // 控制棒碰撞 (吸收中子)
+                const rodY = (controlRodLevel / 100) * CANVAS_HEIGHT;
+                const rods = [CANVAS_WIDTH * 0.25, CANVAS_WIDTH * 0.5, CANVAS_WIDTH * 0.75];
+                if (n.y < rodY) {
+                    for (let rx of rods) {
+                        if (Math.abs(n.x - rx) < ROD_WIDTH/2) {
+                            n.active = false; return;
+                        }
+                    }
+                }
+
+                // 原子核碰撞 (觸發裂變)
+                atomsRef.current.forEach(atom => {
+                    if (atom.type === 'U-235' && Math.hypot(n.x - atom.x, n.y - atom.y) < ATOM_RADIUS) {
+                        n.active = false;
+                        triggerFission(atom);
+                    }
+                });
+            });
+            neutronsRef.current = neutronsRef.current.filter(n => n.active);
+
+            // 2. 更新原子狀態
+            let fissionCount = 0;
+            atomsRef.current.forEach(atom => {
+                if (atom.type === 'Splitting') {
+                    atom.life -= 0.1;
+                    if (atom.life <= 0) {
+                        atom.type = 'Waste'; 
+                        // 產生 2-3 個新中子
+                        const numNeutrons = 2 + Math.floor(Math.random() * 2); 
+                        for(let i=0; i<numNeutrons; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 4 + Math.random() * 2;
+                            neutronsRef.current.push({
+                                x: atom.x, y: atom.y,
+                                vx: Math.cos(angle) * speed,
+                                vy: Math.sin(angle) * speed,
+                                active: true
+                            });
+                        }
+                        particlesRef.current.push({ x: atom.x, y: atom.y, r: 1, alpha: 1 });
+                    }
+                    fissionCount++;
+                }
+            });
+            
+            // 3. 視覺特效
+            particlesRef.current.forEach(p => { p.r += 2; p.alpha -= 0.05; });
+            particlesRef.current = particlesRef.current.filter(p => p.alpha > 0);
+
+            // 4. 數據更新
+            setPower(p => p * 0.92 + fissionCount * 12);
+            const cooling = (temperature - 300) * 0.02;
+            const heating = fissionCount * 0.6;
+            let newTemp = temperature + heating - cooling;
+            
+            if (newTemp > 1200) {
+                setSimState('meltdown');
+                newTemp = 1200;
+            }
+            setTemperature(newTemp);
+
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 背景 (隨溫度變紅)
+            const heatRatio = Math.min(1, (temperature - 300) / 900);
+            ctx.fillStyle = `rgb(${15 + heatRatio * 40}, 20, 35)`; 
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 2. 繪製原子
+            atomsRef.current.forEach(atom => {
+                ctx.beginPath();
+                ctx.arc(atom.x, atom.y, ATOM_RADIUS, 0, Math.PI * 2);
+                if (atom.type === 'U-235') {
+                    ctx.fillStyle = '#22c55e'; ctx.strokeStyle = '#14532d';
+                } else if (atom.type === 'Splitting') {
+                    ctx.fillStyle = '#facc15'; ctx.strokeStyle = '#fff';
+                    const jx = (Math.random()-0.5)*6, jy = (Math.random()-0.5)*6;
+                    ctx.beginPath(); ctx.arc(atom.x+jx, atom.y+jy, ATOM_RADIUS + 2, 0, Math.PI*2);
+                } else {
+                    ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1e293b';
+                }
+                ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+            });
+
+            // 3. 繪製控制棒
+            const rodY = (controlRodLevel / 100) * CANVAS_HEIGHT;
+            const rods = [CANVAS_WIDTH * 0.25, CANVAS_WIDTH * 0.5, CANVAS_WIDTH * 0.75];
+            ctx.fillStyle = '#64748b'; ctx.strokeStyle = '#94a3b8';
+            rods.forEach(x => {
+                ctx.fillRect(x - ROD_WIDTH/2, 0, ROD_WIDTH, rodY);
+                ctx.strokeRect(x - ROD_WIDTH/2, 0, ROD_WIDTH, rodY);
+                ctx.fillStyle = '#334155'; ctx.fillRect(x - ROD_WIDTH/2 - 5, -10, ROD_WIDTH + 10, 20);
+                ctx.fillStyle = '#64748b';
+            });
+
+            // 4. 繪製中子
+            ctx.fillStyle = '#f472b6';
+            neutronsRef.current.forEach(n => {
+                ctx.beginPath(); ctx.arc(n.x, n.y, NEUTRON_RADIUS, 0, Math.PI * 2); ctx.fill();
+            });
+
+            // 5. 繪製爆炸特效
+            particlesRef.current.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(251, 191, 36, ${p.alpha})`; ctx.fill();
+            });
+
+            if (simState === 'meltdown') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                ctx.fillStyle = '#ef4444'; ctx.font = 'black 50px Inter'; ctx.textAlign = 'center';
+                ctx.fillText("核心熔毀 (MELTDOWN)", CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
+                ctx.font = 'bold 20px Inter'; ctx.fillStyle = '#fff';
+                ctx.fillText("核心溫度已失控，請重置反應爐", CANVAS_WIDTH/2, CANVAS_HEIGHT/2 + 50);
+            }
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        });
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-orange-500/20 p-2 rounded-lg text-orange-500"><i data-lucide="atom"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">核分裂連鎖反應實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Nuclear Physics</div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-9 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[500px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} onClick={fireNeutron} className="w-full h-full object-contain canvas-container" />
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-700 text-xs shadow-xl backdrop-blur-md">
+                                <div className="flex justify-between gap-6"><span className="text-slate-500 font-bold">當前中子數</span><span className="text-pink-400 font-mono font-black">{neutronsRef.current.length}</span></div>
+                                <div className="text-[10px] text-slate-600 mt-1 uppercase font-bold tracking-tighter">點擊畫面手動發射中子</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl flex flex-wrap gap-10 items-center">
+                            <div className="flex-1 min-w-[250px]">
+                                <label className="flex justify-between text-xs font-bold text-blue-400 uppercase tracking-widest mb-4"><span>控制棒深度 (Control Rods)</span><span className="text-white font-mono">{controlRodLevel}%</span></label>
+                                <input type="range" min="0" max="100" step="1" value={controlRodLevel} onChange={(e) => setControlRodLevel(Number(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-tighter"><span>抽出 (高反應性)</span><span>全插入 (安全)</span></div>
+                            </div>
+                            <div className="flex gap-4">
+                                <button onClick={fireNeutron} className="px-8 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center gap-2"><i data-lucide="zap"></i> 發射初級中子</button>
+                                <button onClick={initReactor} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold transition-all"><i data-lucide="rotate-ccw"></i> 重置</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-3 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="gauge" className="text-indigo-400"></i> 反應爐監測系統</h2>
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">功率輸出 (Power) <span>{power.toFixed(0)} MW</span></div>
+                                    <div className="h-4 bg-slate-950 rounded-full border border-slate-700 overflow-hidden shadow-inner">
+                                        <div className="h-full bg-gradient-to-r from-emerald-500 to-yellow-400 transition-all duration-300" style={{width: `${Math.min(100, power/4.5)}%`}}></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs font-bold text-slate-500 mb-2 uppercase tracking-widest">核心溫度 (Temp) <span className={temperature > 900 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}>{temperature.toFixed(0)} K</span></div>
+                                    <div className="h-4 bg-slate-950 rounded-full border border-slate-700 overflow-hidden relative shadow-inner">
+                                        <div className="absolute right-0 top-0 bottom-0 w-[20%] bg-red-900/30"></div>
+                                        <div className={`h-full transition-all duration-300 ${temperature > 900 ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${Math.min(100, (temperature-300)/9)}%`}}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-900/10 border border-blue-500/20 p-6 rounded-3xl shadow-inner space-y-4">
+                            <h3 className="text-blue-300 font-bold text-sm flex items-center gap-2 uppercase tracking-widest"><i data-lucide="shield-check" className="w-4 h-4"></i> 安全導引</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                <b>控制棒</b>通常由硼或鎘製成，能像海綿一樣吸收中子。如果溫度過高，請立即將控制棒滑至 100% (SCRAM) 以終止連鎖反應。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
