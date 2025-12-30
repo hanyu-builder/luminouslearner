@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>共振管實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #06b6d4;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        .thumb-cyan::-webkit-slider-thumb { border-color: #06b6d4; }
+        .thumb-rose::-webkit-slider-thumb { border-color: #f43f5e; }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 400;
+    const TUBE_START_X = 150; 
+    const TUBE_Y = CANVAS_HEIGHT / 2;
+    const TUBE_DIAMETER = 120;
+    const MAX_TUBE_LENGTH_PX = 600; 
+    const SPEED_OF_SOUND = 343; // m/s
+
+    const App = () => {
+        // --- 狀態 ---
+        const [frequency, setFrequency] = useState(343); // Hz
+        const [tubeLength, setTubeLength] = useState(0.5); // 米
+        const [isPlaying, setIsPlaying] = useState(false);
+        const [soundEnabled, setSoundEnabled] = useState(false);
+        const [showParticles, setShowParticles] = useState(true);
+        const [showWave, setShowWave] = useState(true);
+
+        const [resonanceFactor, setResonanceFactor] = useState(0);
+        const [harmonic, setHarmonic] = useState(null);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const timeRef = useRef(0);
+        
+        const audioCtxRef = useRef(null);
+        const oscRef = useRef(null);
+        const gainRef = useRef(null);
+
+        // --- 物理運算 ---
+        useEffect(() => {
+            // 封閉管諧振：L = n * lambda / 4 (n 為奇數 1, 3, 5...)
+            const lambda = SPEED_OF_SOUND / frequency;
+            const quarterLambda = lambda / 4;
+            
+            const n_float = tubeLength / quarterLambda;
+            let n_odd = Math.round((n_float - 1) / 2) * 2 + 1;
+            if (n_odd < 1) n_odd = 1;
+
+            const diff = Math.abs(tubeLength - (n_odd * quarterLambda));
+            const windowWidth = 0.05 * lambda; 
+            let factor = Math.exp(-(diff * diff) / (2 * windowWidth * windowWidth));
+            if (factor < 0.01) factor = 0.01;
+            
+            setResonanceFactor(factor);
+            setHarmonic(factor > 0.8 ? n_odd : null);
+
+            // 音訊更新
+            if (gainRef.current) {
+                const targetVol = 0.05 + 0.35 * factor;
+                gainRef.current.gain.setTargetAtTime(soundEnabled ? targetVol : 0, audioCtxRef.current.currentTime, 0.1);
+            }
+            if (oscRef.current) {
+                oscRef.current.frequency.setTargetAtTime(frequency, audioCtxRef.current.currentTime, 0.1);
+            }
+
+        }, [frequency, tubeLength, soundEnabled]);
+
+        // --- 音訊系統 ---
+        const toggleAudio = () => {
+            if (!audioCtxRef.current) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtxRef.current = new AudioContext();
+                const osc = audioCtxRef.current.createOscillator();
+                const gain = audioCtxRef.current.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = frequency;
+                gain.gain.value = 0;
+                osc.connect(gain);
+                gain.connect(audioCtxRef.current.destination);
+                osc.start();
+                oscRef.current = osc;
+                gainRef.current = gain;
+            }
+            if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+            setSoundEnabled(!soundEnabled);
+        };
+
+        const toggleSim = () => {
+            setIsPlaying(!isPlaying);
+            if (!isPlaying) {
+                timeRef.current = performance.now();
+                requestRef.current = requestAnimationFrame(loop);
+            } else {
+                cancelAnimationFrame(requestRef.current);
+            }
+        };
+
+        const loop = (timestamp) => {
+            draw(timestamp / 1000);
+            if (isPlaying) requestRef.current = requestAnimationFrame(loop);
+        };
+
+        // --- 渲染功能 ---
+        const draw = (t) => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const scaleX = MAX_TUBE_LENGTH_PX / 1.2; 
+            const tubePx = tubeLength * scaleX;
+            const tubeTop = TUBE_Y - TUBE_DIAMETER / 2;
+            const tubeBot = TUBE_Y + TUBE_DIAMETER / 2;
+
+            // 1. 揚聲器視覺 (左側)
+            const spkX = TUBE_START_X - 25;
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.moveTo(spkX, TUBE_Y - 50); ctx.lineTo(spkX - 50, TUBE_Y - 50);
+            ctx.lineTo(spkX - 50, TUBE_Y + 50); ctx.lineTo(spkX, TUBE_Y + 50);
+            ctx.lineTo(spkX + 20, TUBE_Y + 70); ctx.lineTo(spkX + 20, TUBE_Y - 70);
+            ctx.closePath(); ctx.fill();
+            
+            // 振膜動畫
+            const diaX = spkX + 20 + Math.sin(t * frequency * 0.1) * 4;
+            ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(diaX, TUBE_Y - 60); ctx.lineTo(diaX, TUBE_Y + 60); ctx.stroke();
+
+            // 2. 共振管與活塞
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(TUBE_START_X, tubeTop, MAX_TUBE_LENGTH_PX + 20, TUBE_DIAMETER);
+            
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(TUBE_START_X, tubeTop); ctx.lineTo(TUBE_START_X + MAX_TUBE_LENGTH_PX + 20, tubeTop);
+            ctx.moveTo(TUBE_START_X, tubeBot); ctx.lineTo(TUBE_START_X + MAX_TUBE_LENGTH_PX + 20, tubeBot);
+            ctx.stroke();
+
+            const pistonX = TUBE_START_X + tubePx;
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(pistonX, TUBE_Y - 5, MAX_TUBE_LENGTH_PX - tubePx + 60, 10); // 桿
+            ctx.fillStyle = '#0891b2'; ctx.fillRect(pistonX, tubeTop + 2, 18, TUBE_DIAMETER - 4); // 活塞頭
+            ctx.beginPath(); ctx.arc(TUBE_START_X + MAX_TUBE_LENGTH_PX + 45, TUBE_Y, 12, 0, Math.PI*2); ctx.fillStyle = '#334155'; ctx.fill();
+
+            // 3. 繪製波形 (位移外絡線)
+            const lambda = SPEED_OF_SOUND / frequency;
+            const k = (2 * Math.PI) / lambda;
+            
+            if (showWave) {
+                const maxVisualAmp = TUBE_DIAMETER / 2 - 10;
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(244, 63, 94, ${0.4 + resonanceFactor * 0.6})`;
+                ctx.lineWidth = 2.5;
+                for (let x = 0; x <= tubePx; x+=2) {
+                    const screenX = pistonX - x; // 從封閉端(節點)向左畫
+                    const dist_m = x / scaleX;
+                    const amp = Math.sin(k * dist_m) * (8 + resonanceFactor * maxVisualAmp);
+                    if (x === 0) ctx.moveTo(screenX, TUBE_Y - amp); else ctx.lineTo(screenX, TUBE_Y - amp);
+                }
+                ctx.stroke();
+                ctx.beginPath();
+                for (let x = 0; x <= tubePx; x+=2) {
+                    const screenX = pistonX - x;
+                    const dist_m = x / scaleX;
+                    const amp = Math.sin(k * dist_m) * (8 + resonanceFactor * maxVisualAmp);
+                    if (x === 0) ctx.moveTo(screenX, TUBE_Y + amp); else ctx.lineTo(screenX, TUBE_Y + amp);
+                }
+                ctx.stroke();
+            }
+
+            // 4. 質點運動 (縱波)
+            if (showParticles) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+                for (let i = 0; i < 300; i++) {
+                    const restX_m = (i / 300) * tubeLength;
+                    const distFromClosed_m = tubeLength - restX_m;
+                    const standingAmp = Math.sin(k * distFromClosed_m) * (4 + resonanceFactor * 32); 
+                    const instantaneousDisp = standingAmp * Math.cos(2 * Math.PI * frequency * t * 0.06); 
+                    const xPx = TUBE_START_X + (restX_m * scaleX) + instantaneousDisp;
+                    const yPx = TUBE_Y + ((i * 17) % (TUBE_DIAMETER - 12)) - (TUBE_DIAMETER/2 - 6);
+                    ctx.beginPath(); ctx.arc(xPx, yPx, 2, 0, Math.PI*2); ctx.fill();
+                }
+            }
+
+            // 5. 標尺
+            ctx.strokeStyle = '#64748b'; ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px monospace';
+            const rulerY = tubeBot + 15;
+            ctx.beginPath(); ctx.moveTo(TUBE_START_X, rulerY); ctx.lineTo(TUBE_START_X + MAX_TUBE_LENGTH_PX, rulerY); ctx.stroke();
+            for (let m = 0; m <= 1.2; m += 0.1) {
+                const x = TUBE_START_X + m * scaleX;
+                if (x > TUBE_START_X + MAX_TUBE_LENGTH_PX) break;
+                ctx.fillRect(x, rulerY, 1, 6);
+                ctx.textAlign = 'center'; ctx.fillText(m.toFixed(1) + 'm', x, rulerY + 18);
+            }
+        };
+
+        useEffect(() => {
+            if (isPlaying) requestRef.current = requestAnimationFrame(loop);
+            else { cancelAnimationFrame(requestRef.current); draw(0); }
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [isPlaying, frequency, tubeLength, showParticles, showWave, resonanceFactor]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400"><i data-lucide="mic-2"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">共振管實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Sound Waves</div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="settings-2" className="text-cyan-400"></i> 聲學參數控制</h2>
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-cyan-400 uppercase tracking-widest mb-4"><span>波源頻率 (f)</span><span className="text-white font-mono">{frequency} Hz</span></label>
+                                <input type="range" min="200" max="1000" step="1" value={frequency} onChange={(e)=>setFrequency(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-cyan" />
+                                <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-bold uppercase italic"><span>λ ≈ {(SPEED_OF_SOUND/frequency).toFixed(2)}m</span></div>
+                            </div>
+                            <div>
+                                <label className="flex justify-between text-xs font-bold text-rose-400 uppercase tracking-widest mb-4"><span>空氣柱長度 (L)</span><span className="text-white font-mono">{tubeLength.toFixed(3)} m</span></label>
+                                <input type="range" min="0.1" max="1.2" step="0.001" value={tubeLength} onChange={(e)=>setTubeLength(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-rose" />
+                            </div>
+                            <div className="space-y-3 pt-2">
+                                <label className="flex items-center justify-between p-4 bg-slate-950/50 rounded-2xl border border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors">
+                                    <span className="text-sm font-bold text-slate-300">模擬真實音效</span>
+                                    <input type="checkbox" checked={soundEnabled} onChange={toggleAudio} className="w-5 h-5 rounded border-slate-600 text-emerald-500 focus:ring-0 cursor-pointer" />
+                                </label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={toggleSim} className={`py-4 rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${isPlaying ? 'bg-slate-700 text-slate-300 border border-slate-600' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'}`}>
+                                        <i data-lucide={isPlaying ? "pause" : "play"}></i> {isPlaying ? "暫停" : "開始"}
+                                    </button>
+                                    <button onClick={()=>{setFrequency(343); setTubeLength(0.5);}} className="py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl font-bold transition-all"><i data-lucide="rotate-ccw"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`bg-slate-800 p-8 rounded-3xl border shadow-xl transition-all duration-500 ${harmonic ? 'border-emerald-500/50 ring-1 ring-emerald-500/20' : 'border-slate-700'}`}>
+                            <h3 className={`text-sm font-bold flex items-center gap-2 uppercase tracking-widest mb-6 ${harmonic ? 'text-emerald-400' : 'text-slate-500'}`}><i data-lucide="activity"></i> 共振狀態監測</h3>
+                            <div className="flex justify-between items-end mb-3 font-mono">
+                                <span className="text-[10px] text-slate-500 uppercase font-bold">Resonance Strength</span>
+                                <span className="text-xl font-black text-white">{(resonanceFactor * 100).toFixed(0)}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-950 rounded-full border border-slate-700 overflow-hidden mb-6">
+                                <div className={`h-full transition-all duration-200 ${harmonic ? 'bg-emerald-500' : 'bg-slate-600'}`} style={{width: `${resonanceFactor * 100}%`}}></div>
+                            </div>
+                            {harmonic ? (
+                                <div className="bg-emerald-500/10 p-5 rounded-2xl border border-emerald-500/30 text-center animate-pulse">
+                                    <div className="text-4xl font-black text-white font-mono">n = {harmonic}</div>
+                                    <div className="text-xs text-emerald-400 font-bold uppercase mt-1">{harmonic === 1 ? '基本頻率 (基音)' : `第 ${harmonic} 諧音`}</div>
+                                </div>
+                            ) : (
+                                <div className="p-5 bg-slate-950/50 rounded-2xl text-center text-[11px] text-slate-500 italic">調整管長或頻率來尋找共振點...</div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-8 space-y-6">
+                        <div className="bg-slate-950 rounded-[2.5rem] border-8 border-slate-800 h-[580px] relative overflow-hidden shadow-2xl flex flex-col justify-center">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-auto object-contain" />
+                            <div className="absolute top-8 right-8 bg-slate-900/80 px-4 py-1.5 rounded-full border border-slate-700 text-xs font-mono text-slate-400 backdrop-blur-md">v_air = 343 m/s</div>
+                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4">
+                                <label className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/10 cursor-pointer hover:bg-black/60 transition-colors backdrop-blur-md">
+                                    <input type="checkbox" checked={showWave} onChange={()=>setShowWave(!showWave)} className="w-4 h-4 rounded border-slate-600 text-rose-500 focus:ring-0" />
+                                    <span className="text-xs font-bold text-slate-300 uppercase">波形包絡線</span>
+                                </label>
+                                <label className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/10 cursor-pointer hover:bg-black/60 transition-colors backdrop-blur-md">
+                                    <input type="checkbox" checked={showParticles} onChange={()=>setShowParticles(!showParticles)} className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-0" />
+                                    <span className="text-xs font-bold text-slate-300 uppercase">空氣質點</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="bg-indigo-900/20 border border-indigo-500/20 p-6 rounded-3xl shadow-inner flex items-start gap-4">
+                            <i data-lucide="lightbulb" className="text-indigo-400 w-5 h-5 shrink-0 mt-1"></i>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                <b>物理關鍵：</b>共振管的閉口端（右側活塞）始終是<b>位移節點</b>（空氣分子靜止），而開口端附近則是<b>位移波腹</b>（空氣分子劇烈振動）。當管長恰好容納奇數個 1/4 波長時，能量會不斷疊加，產生宏亮的共鳴聲。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
