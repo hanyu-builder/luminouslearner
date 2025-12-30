@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歐姆定律繪圖實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .thumb-blue::-webkit-slider-thumb { background: #3b82f6; }
+        .thumb-rose::-webkit-slider-thumb { background: #f43f5e; }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 400;
+    const CANVAS_HEIGHT = 300;
+    const GRAPH_WIDTH = 400;
+    const GRAPH_HEIGHT = 300;
+
+    const App = () => {
+        // --- 狀態管理 ---
+        const [voltage, setVoltage] = useState(5.0); // 伏特
+        const [resistance, setResistance] = useState(100); // 歐姆
+        const [current, setCurrent] = useState(0); // 安培
+
+        const [dataPoints, setDataPoints] = useState([]); // 數據點陣列
+        
+        const circuitCanvasRef = useRef(null);
+        const graphCanvasRef = useRef(null);
+
+        // --- 物理運算 ---
+        useEffect(() => {
+            // I = V / R
+            const i = voltage / resistance;
+            setCurrent(i);
+        }, [voltage, resistance]);
+
+        const recordData = () => {
+            // 避免在同一位置重複打點
+            const exists = dataPoints.some(p => Math.abs(p.v - voltage) < 0.1 && Math.abs(p.i - current) < 0.001);
+            if (!exists) {
+                setDataPoints([...dataPoints, { v: voltage, i: current }]);
+            }
+        };
+
+        const clearData = () => {
+            setDataPoints([]);
+        };
+
+        // --- 繪製電路圖 ---
+        useEffect(() => {
+            const ctx = circuitCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            const w = CANVAS_WIDTH;
+            const h = CANVAS_HEIGHT;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. 繪製導線路徑 (矩形)
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 4;
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            const rectW = 250;
+            const rectH = 150;
+            ctx.rect(cx - rectW/2, cy - rectH/2, rectW, rectH);
+            ctx.stroke();
+
+            // 2. 繪製電池 (左側)
+            const batX = cx - rectW/2;
+            ctx.clearRect(batX - 10, cy - 20, 20, 40);
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(batX, cy - rectH/2); ctx.lineTo(batX, cy - 15); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(batX, cy + 15); ctx.lineTo(batX, cy + rectH/2); ctx.stroke();
+            
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(batX - 15, cy - 5); ctx.lineTo(batX + 15, cy - 5); ctx.stroke(); // 正極 (+)
+            ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(batX - 8, cy + 5); ctx.lineTo(batX + 8, cy + 5); ctx.stroke(); // 負極 (-)
+            
+            ctx.fillStyle = '#facc15';
+            ctx.font = 'bold 16px Inter';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${voltage.toFixed(1)}V`, batX - 25, cy + 8);
+
+            // 3. 繪製電阻器 (頂部)
+            const resX = cx;
+            const resY = cy - rectH/2;
+            ctx.clearRect(resX - 35, resY - 15, 70, 30);
+            ctx.beginPath();
+            ctx.moveTo(resX - 30, resY);
+            for(let i=0; i<6; i++) {
+                ctx.lineTo(resX - 25 + i*10, resY + (i%2===0 ? -10 : 10));
+            }
+            ctx.lineTo(resX + 30, resY);
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#f43f5e';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText(`${resistance}Ω`, resX, resY - 25);
+
+            // 4. 繪製安培計 (右側)
+            const amX = cx + rectW/2;
+            const amY = cy;
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(amX, amY, 22, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Inter';
+            ctx.fillText('A', amX, amY + 5);
+            
+            ctx.fillStyle = '#3b82f6';
+            ctx.font = 'bold 16px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${(current*1000).toFixed(1)} mA`, amX + 35, amY + 7);
+
+            // 5. 電子流動視覺提示
+            if (voltage > 0) {
+                const time = Date.now() / 1000;
+                const speed = current * 40;
+                const offset = (time * speed * 30) % 30;
+                ctx.fillStyle = 'rgba(254, 240, 138, 0.4)';
+                // 僅在底部導線繪製電子點以示範方向
+                const botY = cy + rectH/2;
+                for(let x = cx - rectW/2 + offset; x < cx + rectW/2; x+=30) {
+                    ctx.beginPath(); ctx.arc(x, botY, 2.5, 0, Math.PI*2); ctx.fill();
+                }
+            }
+
+        }, [voltage, resistance, current]);
+
+        // --- 繪製實驗圖表 ---
+        useEffect(() => {
+            const ctx = graphCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            const w = GRAPH_WIDTH;
+            const h = GRAPH_HEIGHT;
+            const padding = 50;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, w, h);
+
+            // 座標軸 (X: 電壓 0-10V, Y: 電流 0-100mA)
+            const maxX = 10;
+            const maxY = 0.1;
+
+            const mapX = (val) => padding + (val / maxX) * (w - 2*padding);
+            const mapY = (val) => h - padding - (val / maxY) * (h - 2*padding);
+
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 2;
+            
+            // X 軸
+            ctx.beginPath(); ctx.moveTo(padding, h - padding); ctx.lineTo(w - padding, h - padding); ctx.stroke();
+            // Y 軸
+            ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, h - padding); ctx.stroke();
+            
+            // 標籤
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 11px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText("電壓 Voltage (V) →", w/2, h - 15);
+            
+            ctx.save();
+            ctx.translate(18, h/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText("電流 Current (A)", 0, 0);
+            ctx.restore();
+
+            // 繪製理論輔助線 (當前電阻的斜率)
+            if (dataPoints.length > 0) {
+                 ctx.strokeStyle = 'rgba(59, 130, 246, 0.2)';
+                 ctx.setLineDash([5, 5]);
+                 ctx.beginPath();
+                 ctx.moveTo(mapX(0), mapY(0));
+                 ctx.lineTo(mapX(10), mapY(10 / resistance));
+                 ctx.stroke();
+                 ctx.setLineDash([]);
+            }
+
+            // 繪製紀錄的數據點
+            dataPoints.forEach(p => {
+                const px = mapX(p.v);
+                const py = mapY(p.i);
+                ctx.beginPath();
+                ctx.arc(px, py, 4.5, 0, Math.PI*2);
+                ctx.fillStyle = '#10b981'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+            });
+
+            // 繪製當前「實時」位置 (紅色光點)
+            const liveX = mapX(voltage);
+            const liveY = mapY(current);
+            ctx.beginPath();
+            ctx.arc(liveX, liveY, 6, 0, Math.PI*2);
+            ctx.shadowBlur = 15; ctx.shadowColor = '#ef4444';
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2.5; ctx.stroke();
+            ctx.shadowBlur = 0;
+
+        }, [dataPoints, voltage, current, resistance]);
+
+        useEffect(() => {
+            if (window.lucide) window.lucide.createIcons();
+        });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                            <i data-lucide="activity"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">歐姆定律繪圖實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: DC Circuits
+                    </div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    
+                    {/* 左側：電路模擬與控制 */}
+                    <div className="lg:col-span-6 flex flex-col gap-6">
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 p-2 shadow-2xl relative overflow-hidden h-[300px]">
+                            <canvas ref={circuitCanvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain bg-slate-950 rounded-2xl" />
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <div>
+                                <label className="flex justify-between text-xs font-bold mb-4 text-blue-400 uppercase tracking-widest">
+                                    <span>調節電壓 (V)</span>
+                                    <span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{voltage.toFixed(1)} V</span>
+                                </label>
+                                <input type="range" min="0" max="10" step="0.1" value={voltage} onChange={(e) => setVoltage(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                            </div>
+
+                            <div>
+                                <label className="flex justify-between text-xs font-bold mb-4 text-rose-400 uppercase tracking-widest">
+                                    <span>更換電阻器 (R)</span>
+                                    <span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{resistance} Ω</span>
+                                </label>
+                                <input type="range" min="50" max="500" step="10" value={resistance} onChange={(e) => { setResistance(Number(e.target.value)); clearData(); }} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-rose" />
+                                <div className="text-[10px] text-slate-500 mt-2 italic">* 改變電阻將自動清空圖表紀錄以重新實驗</div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700">
+                                <button onClick={recordData} className="py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 active:scale-95 transition-all">
+                                    <i data-lucide="plus-circle"></i> 紀錄數據點
+                                </button>
+                                <button onClick={clearData} className="py-4 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all">
+                                    <i data-lucide="trash-2"></i> 清空圖表
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 右側：圖表與數據分析 */}
+                    <div className="lg:col-span-6 space-y-6">
+                        <div className="bg-slate-800 p-2 rounded-3xl border border-slate-700 shadow-xl overflow-hidden h-[340px]">
+                            <canvas ref={graphCanvasRef} width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className="w-full h-full object-contain" />
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl flex flex-col h-[320px]">
+                            <h2 className="text-white font-bold mb-4 flex items-center gap-2 uppercase tracking-widest text-xs border-b border-slate-700 pb-3">
+                                <i data-lucide="table" className="text-indigo-400"></i> 實驗數據紀錄表
+                            </h2>
+                            <div className="overflow-y-auto flex-1 pr-2 custom-scroll">
+                                <table className="w-full text-xs font-mono text-left">
+                                    <thead className="bg-slate-950 text-slate-500 sticky top-0">
+                                        <tr>
+                                            <th className="p-3">電壓 (V)</th>
+                                            <th className="p-3">電流 (mA)</th>
+                                            <th className="p-3 text-right">比值 (V/I)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-700">
+                                        {dataPoints.map((pt, i) => (
+                                            <tr key={i} className="hover:bg-slate-700/30 transition-colors">
+                                                <td className="p-3 text-yellow-400 font-bold">{pt.v.toFixed(2)}</td>
+                                                <td className="p-3 text-blue-400">{(pt.i * 1000).toFixed(1)}</td>
+                                                <td className="p-3 text-right text-slate-400">{(pt.v / pt.i).toFixed(1)} Ω</td>
+                                            </tr>
+                                        ))}
+                                        {dataPoints.length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="p-12 text-center text-slate-600 italic">尚未紀錄任何數據。請調整滑桿並點擊「紀錄數據點」。</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
