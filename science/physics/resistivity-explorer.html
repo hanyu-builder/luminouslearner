@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電阻率探索實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .thumb-blue::-webkit-slider-thumb { border-color: #3b82f6; }
+        .thumb-emerald::-webkit-slider-thumb { border-color: #10b981; }
+        canvas { border-radius: 1rem; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 400;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+
+    // 材料數據 (電阻率單位: Ohm-meters)
+    const MATERIALS = [
+        { name: "銀 (Silver)", rho: 1.59e-8, color: "#e5e7eb", desc: "最佳導體" },
+        { name: "銅 (Copper)", rho: 1.68e-8, color: "#f59e0b", desc: "標準導線材料" },
+        { name: "金 (Gold)", rho: 2.44e-8, color: "#fcd34d", desc: "高抗腐蝕性" },
+        { name: "鋁 (Aluminum)", rho: 2.65e-8, color: "#9ca3af", desc: "輕量化工業用" },
+        { name: "鐵 (Iron)", rho: 9.71e-8, color: "#4b5563", desc: "廉價但高阻" },
+        { name: "鎳鉻合金 (Nichrome)", rho: 1.10e-6, color: "#ef4444", desc: "發熱元件用 (高阻)" }
+    ];
+
+    const App = () => {
+        // --- 狀態 ---
+        const [length, setLength] = useState(0.5); // 公尺 (0.1 - 2.0)
+        const [area, setArea] = useState(1.0); // mm^2 (0.1 - 10.0)
+        const [materialIdx, setMaterialIdx] = useState(1); // 預設：銅
+
+        const [resistance, setResistance] = useState(0);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const electronOffsetRef = useRef(0);
+
+        // --- 物理邏輯 ---
+        useEffect(() => {
+            const mat = MATERIALS[materialIdx];
+            // R = rho * L / A
+            // Area 從 mm^2 換算為 m^2 (x 1e-6)
+            const R = (mat.rho * length) / (area * 1e-6);
+            setResistance(R);
+        }, [length, area, materialIdx]);
+
+        // --- 動畫循環 ---
+        const loop = () => {
+            // 視覺化流速：與電阻成反比
+            // R 範圍約在 0.001 到 20.0
+            const speed = 2.5 / Math.max(0.1, Math.sqrt(resistance * 12));
+            electronOffsetRef.current = (electronOffsetRef.current + speed) % 40;
+            
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        });
+
+        // --- 渲染 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            const mat = MATERIALS[materialIdx];
+            const w = CANVAS_WIDTH;
+            const h = CANVAS_HEIGHT;
+            
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. 背景漸層
+            const bgGrad = ctx.createRadialGradient(CENTER_X, CENTER_Y, 0, CENTER_X, CENTER_Y, 500);
+            bgGrad.addColorStop(0, '#1e293b');
+            bgGrad.addColorStop(1, '#020617');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 2. 繪製導線
+            // 視覺長度映射: 0.1m-2.0m 映射至 150px-650px
+            const visualLen = (length / 2.0) * 500 + 150;
+            // 視覺粗細映射: sqrt(Area) 比例，0.1mm-10mm 映射至 10px-100px
+            const visualThick = (Math.sqrt(area) / Math.sqrt(10)) * 80 + 12;
+
+            const startX = (w - visualLen) / 2;
+            const wireY = h / 2 - visualThick / 2;
+
+            // 導線本體
+            const wireGrad = ctx.createLinearGradient(startX, wireY, startX, wireY + visualThick);
+            wireGrad.addColorStop(0, mat.color);
+            wireGrad.addColorStop(0.5, '#ffffff99');
+            wireGrad.addColorStop(1, mat.color);
+            
+            ctx.fillStyle = wireGrad;
+            ctx.beginPath();
+            ctx.roundRect(startX, wireY, visualLen, visualThick, 4);
+            ctx.fill();
+            
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 3. 繪製電子 (黃色質點)
+            ctx.fillStyle = '#facc15';
+            const offset = electronOffsetRef.current;
+            const rows = Math.max(1, Math.floor(visualThick / 15));
+            
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(startX, wireY, visualLen, visualThick, 4);
+            ctx.clip(); // 限制電子在導線內
+
+            for(let r = 0; r < rows; r++) {
+                const y = wireY + (r + 0.5) * (visualThick / rows);
+                const rowShift = (r % 2) * 20; // 錯位效果
+                const spacing = 40;
+                
+                for(let i = -1; i < visualLen / spacing + 1; i++) {
+                    const x = startX + (i * spacing + offset + rowShift) % (visualLen + spacing);
+                    if (x >= startX && x <= startX + visualLen) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        // 電子發光
+                        ctx.shadowColor = '#facc15';
+                        ctx.shadowBlur = 5;
+                    }
+                }
+            }
+            ctx.restore();
+
+            // 4. 尺寸標註
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '12px Inter';
+            ctx.textAlign = 'center';
+
+            // 長度標註
+            const dimY = wireY + visualThick + 30;
+            ctx.beginPath();
+            ctx.moveTo(startX, dimY); ctx.lineTo(startX, dimY - 10);
+            ctx.moveTo(startX + visualLen, dimY); ctx.lineTo(startX + visualLen, dimY - 10);
+            ctx.moveTo(startX, dimY - 5); ctx.lineTo(startX + visualLen, dimY - 5);
+            ctx.stroke();
+            ctx.fillText(`長度 L = ${length.toFixed(2)} m`, CENTER_X, dimY + 20);
+
+            // 面積標註 (側面)
+            const areaX = startX - 30;
+            ctx.textAlign = 'right';
+            ctx.beginPath();
+            ctx.moveTo(startX, h/2); ctx.lineTo(areaX, h/2);
+            ctx.stroke();
+            ctx.fillText(`面積 A = ${area.toFixed(2)} mm²`, areaX - 8, h/2 + 5);
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 selection:bg-indigo-500/30">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                            <i data-lucide="zap"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">電阻率探索實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Electricity (Resistance)
+                    </div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[400px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain bg-slate-950 rounded-2xl" />
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-4 py-3 rounded-2xl border border-slate-700 backdrop-blur-md shadow-lg">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 tracking-widest">當前材料性質</div>
+                                <div className="text-lg font-black text-white mb-1">{MATERIALS[materialIdx].name}</div>
+                                <div className="font-mono text-xs text-indigo-300">電阻率 ρ = {MATERIALS[materialIdx].rho.toExponential(2)} Ω·m</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-blue-400 uppercase tracking-widest mb-4"><span>導線長度 (L)</span><span className="text-white font-mono">{length.toFixed(2)} m</span></label>
+                                    <input type="range" min="0.1" max="2.0" step="0.1" value={length} onChange={(e) => setLength(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4"><span>橫截面積 (A)</span><span className="text-white font-mono">{area.toFixed(2)} mm²</span></label>
+                                    <input type="range" min="0.1" max="10.0" step="0.1" value={area} onChange={(e) => setArea(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-emerald" />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block">選擇導體材料 (ρ)</label>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                    {MATERIALS.map((m, idx) => (
+                                        <button 
+                                            key={m.name} 
+                                            onClick={() => setMaterialIdx(idx)}
+                                            className={`py-3 px-1 rounded-xl text-[11px] font-bold transition-all border ${materialIdx === idx ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            {m.name.split(' ')[0]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
+                                <i data-lucide="calculator" className="text-indigo-400"></i> 定量運算結果
+                            </h2>
+                            <div className="p-6 rounded-2xl bg-slate-950 border border-slate-700 text-center shadow-inner">
+                                <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">總電阻 (R)</div>
+                                <div className="text-4xl font-black text-emerald-400 font-mono tracking-tighter">
+                                    {resistance < 1 ? (resistance * 1000).toFixed(1) : resistance.toFixed(3)}
+                                    <span className="text-lg text-slate-600 font-medium ml-1">{resistance < 1 ? 'mΩ' : 'Ω'}</span>
+                                </div>
+                            </div>
+                            <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-700/50 space-y-3 font-mono text-xs">
+                                <div className="flex justify-between"><span>電阻率 ρ:</span><span className="text-white">{MATERIALS[materialIdx].rho.toExponential(2)}</span></div>
+                                <div className="flex justify-between"><span>長度 L:</span><span className="text-blue-400">{length.toFixed(2)} m</span></div>
+                                <div className="flex justify-between"><span>面積 A:</span><span className="text-emerald-400">{(area * 1e-6).toExponential(2)} m²</span></div>
+                                <div className="pt-3 border-t border-slate-700 text-center text-[10px] text-indigo-400 font-bold uppercase tracking-widest">公式：R = (ρ &times; L) / A</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner">
+                            <h3 className="text-indigo-300 font-bold text-sm mb-3 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理直覺</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                導線愈<b>長</b>，電阻愈大（路徑愈擁擠）；導線愈<b>粗</b>，電阻愈小（車道愈寬闊）。不同的材料則決定了自由電子流動的固有難度。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
