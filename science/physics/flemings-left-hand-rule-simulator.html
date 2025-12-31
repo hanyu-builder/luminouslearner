@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>佛萊明左手定則實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; margin: 0; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .btn-toggle { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .btn-toggle:active { transform: scale(0.95); }
+        canvas { border-radius: 1.5rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    const CENTER_X = CANVAS_WIDTH / 2;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [fieldDir, setFieldDir] = useState(1); // 1 = 由左至右 (L->R), -1 = 由右至左 (R->L)
+        const [currentDir, setCurrentDir] = useState(1); // 1 = 進入紙面 (Into), -1 = 穿出紙面 (Out)
+        const [currentOn, setCurrentOn] = useState(true);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        // 動畫內部狀態
+        const animRef = useRef({
+            wireY: 0, 
+            wireV: 0, 
+            particles: [] 
+        });
+
+        // --- 物理判定邏輯 ---
+        // 佛萊明左手定則：
+        // 食指 = 磁場 (B) [X軸]
+        // 中指 = 電流 (I) [Z軸]
+        // 大拇指 = 力 (F) [Y軸]
+        // 判定公式：forceDir = -1 * fieldDir * currentDir (考量 Canvas Y 軸向下為正)
+        const forceDir = currentOn ? -1 * fieldDir * currentDir : 0;
+
+        // --- 動畫循環 ---
+        const loop = () => {
+            const state = animRef.current;
+            
+            // 導線物理 (彈簧－質量－阻尼模型)
+            const targetY = forceDir * 55;
+            const stiffness = 0.12;
+            const damping = 0.84;
+            
+            const ay = (targetY - state.wireY) * stiffness;
+            state.wireV += ay;
+            state.wireV *= damping;
+            state.wireY += state.wireV;
+
+            // 電子流動粒子動畫
+            if (currentOn) {
+                if (Math.random() > 0.75) {
+                    state.particles.push({
+                        z: currentDir === 1 ? -120 : 120, // 起始深度
+                        life: 1.0
+                    });
+                }
+            }
+            state.particles.forEach(p => {
+                p.z += currentDir * 6.5; 
+                p.life -= 0.015;
+            });
+            state.particles = state.particles.filter(p => Math.abs(p.z) < 160);
+
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        // --- 渲染功能 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const cx = CANVAS_WIDTH / 2;
+            const cy = CANVAS_HEIGHT / 2;
+            const wy = animRef.current.wireY;
+
+            // 1. 繪製定子磁鐵 (等角投影視覺)
+            const magW = 100, magH = 200, magDist = 180;
+            
+            // 左側磁極
+            ctx.fillStyle = fieldDir === 1 ? '#ef4444' : '#3b82f6';
+            ctx.fillRect(cx - magDist - magW, cy - magH/2, magW, magH);
+            ctx.fillStyle = fieldDir === 1 ? '#b91c1c' : '#1d4ed8';
+            ctx.beginPath();
+            ctx.moveTo(cx - magDist, cy - magH/2); ctx.lineTo(cx - magDist + 20, cy - magH/2 - 20);
+            ctx.lineTo(cx - magDist + 20 + magW, cy - magH/2 - 20); ctx.lineTo(cx - magDist + magW, cy - magH/2);
+            ctx.fill();
+            ctx.fillStyle = 'white'; ctx.font = 'bold 44px Inter'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(fieldDir === 1 ? "N" : "S", cx - magDist - magW/2, cy);
+
+            // 右側磁極
+            ctx.fillStyle = fieldDir === 1 ? '#3b82f6' : '#ef4444';
+            ctx.fillRect(cx + magDist, cy - magH/2, magW, magH);
+            ctx.fillStyle = fieldDir === 1 ? '#1d4ed8' : '#b91c1c';
+            ctx.beginPath();
+            ctx.moveTo(cx + magDist, cy - magH/2); ctx.lineTo(cx + magDist + 20, cy - magH/2 - 20);
+            ctx.lineTo(cx + magDist + 20 + magW, cy - magH/2 - 20); ctx.lineTo(cx + magDist + magW, cy - magH/2);
+            ctx.fill();
+            ctx.fillStyle = 'white'; ctx.fillText(fieldDir === 1 ? "S" : "N", cx + magDist + magW/2, cy);
+
+            // 2. 繪製磁場線 (B)
+            ctx.lineWidth = 2;
+            for (let y = cy - 70; y <= cy + 70; y += 35) {
+                const grad = ctx.createLinearGradient(cx - magDist, 0, cx + magDist, 0);
+                grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+                grad.addColorStop(0.2, 'rgba(56, 189, 248, 0.4)');
+                grad.addColorStop(0.8, 'rgba(56, 189, 248, 0.4)');
+                grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+                ctx.strokeStyle = grad;
+                ctx.beginPath(); ctx.moveTo(cx - magDist, y); ctx.lineTo(cx + magDist, y); ctx.stroke();
+                
+                if (y === cy) {
+                    const arrowX = fieldDir === 1 ? cx + 30 : cx - 30;
+                    ctx.fillStyle = '#38bdf8';
+                    drawArrowHead(ctx, arrowX, y, fieldDir * 12, 0);
+                    ctx.font = 'bold 22px Inter'; ctx.fillText("B", arrowX, y - 20);
+                }
+            }
+
+            // 3. 繪製懸掛導線 (I)
+            const wireColor = '#f59e0b';
+            const p1 = { x: cx - 120, y: cy + wy + 120 }; // 前端 (穿出紙面方向)
+            const p2 = { x: cx + 120, y: cy + wy - 120 }; // 後端 (進入紙面方向)
+            
+            ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.strokeStyle = wireColor;
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+
+            // 電流標誌與粒子
+            if (currentOn) {
+                const midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
+                ctx.fillStyle = '#fff';
+                const dx = p2.x - p1.x, dy = p2.y - p1.y;
+                drawArrowHead(ctx, midX, midY, currentDir * dx * 0.12, currentDir * dy * 0.12);
+                ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 28px Inter';
+                ctx.fillText("I", midX + 25, midY - 25);
+
+                ctx.fillStyle = '#fef08a';
+                animRef.current.particles.forEach(p => {
+                    const t = (p.z + 120) / 240; 
+                    if (t >= 0 && t <= 1) {
+                        ctx.beginPath(); 
+                        ctx.arc(p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t, 3.5, 0, Math.PI*2); 
+                        ctx.fill();
+                    }
+                });
+            }
+
+            // 4. 繪製磁力向量 (F)
+            if (currentOn && forceDir !== 0) {
+                const fy = cy + wy;
+                ctx.lineWidth = 8; ctx.strokeStyle = '#10b981';
+                ctx.beginPath();
+                ctx.moveTo(cx, fy);
+                ctx.lineTo(cx, fy - (forceDir * 120)); 
+                ctx.stroke();
+                drawArrowHead(ctx, cx, fy - (forceDir * 120), 0, -forceDir * 20);
+                ctx.fillStyle = '#10b981'; ctx.font = 'bold 36px Inter';
+                ctx.fillText("F", cx + 30, fy - (forceDir * 70));
+            }
+
+            // 5. 左上角手勢指示
+            drawHandLegend(ctx, 120, 110);
+        };
+
+        const drawArrowHead = (ctx, x, y, dx, dy) => {
+            const headLen = 16;
+            const angle = Math.atan2(dy, dx);
+            ctx.beginPath(); ctx.moveTo(x, y);
+            ctx.lineTo(x - headLen * Math.cos(angle - Math.PI / 6), y - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(x - headLen * Math.cos(angle + Math.PI / 6), y - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.fill();
+        };
+
+        const drawHandLegend = (ctx, x, y) => {
+            // F (大拇指)
+            ctx.strokeStyle = '#10b981'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y-50); ctx.stroke();
+            ctx.fillStyle='#10b981'; ctx.font='bold 12px Inter'; ctx.fillText("大拇指 (力 F)", x, y-65);
+            drawArrowHead(ctx, x, y-50, 0, -10);
+            // B (食指)
+            ctx.strokeStyle = '#38bdf8';
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+50, y); ctx.stroke();
+            ctx.fillStyle='#38bdf8'; ctx.fillText("食指 (磁場 B)", x+60, y+5);
+            drawArrowHead(ctx, x+50, y, 10, 0);
+            // I (中指)
+            ctx.strokeStyle = '#f59e0b';
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x-30, y+30); ctx.stroke();
+            ctx.fillStyle='#f59e0b'; ctx.fillText("中指 (電流 I)", x-40, y+45);
+            drawArrowHead(ctx, x-30, y+30, -10, 10);
+            ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px Inter';
+            ctx.fillText("佛萊明左手定則圖解", x + 10, y + 75);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [fieldDir, currentDir, currentOn]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 h-16 shadow-xl z-10">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-emerald-500/20 p-2 rounded-lg text-emerald-400">
+                            <i data-lucide="hand-metal"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">佛萊明左手定則實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Electromagnetism (Motor Effect)
+                    </div>
+                </nav>
+
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-4">
+                        
+                        {/* 左側：3D 視覺化區域 */}
+                        <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800 flex items-center justify-center">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-6 right-6 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 backdrop-blur-md shadow-2xl flex flex-col gap-2">
+                                <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-red-500"></div><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">N 極 (North)</span></div>
+                                <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">S 極 (South)</span></div>
+                            </div>
+                        </div>
+
+                        {/* 右側：控制面板 */}
+                        <div className="lg:col-span-1 bg-slate-900 flex flex-col h-full overflow-y-auto custom-scroll p-6 space-y-8 shadow-2xl">
+                            <div className="space-y-6">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-4 flex items-center gap-2">
+                                    <i data-lucide="settings-2" className="w-4 h-4"></i> 電路與磁場控制
+                                </h3>
+
+                                <div className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700 space-y-5">
+                                    <div>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <label className="text-xs font-bold text-amber-400 uppercase tracking-widest">電流狀態 (I)</label>
+                                            <button onClick={()=>setCurrentOn(!currentOn)} className={`px-4 py-1 text-[10px] font-black rounded-lg transition-all ${currentOn ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                                                {currentOn ? "通電中" : "斷路"}
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={()=>setCurrentDir(1)} disabled={!currentOn} className={`btn-toggle py-3 rounded-xl border text-[10px] font-bold flex flex-col items-center gap-2 ${currentDir === 1 && currentOn ? 'bg-amber-600 border-amber-400 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-600'}`}>
+                                                <i data-lucide="log-in"></i> 進入紙面
+                                            </button>
+                                            <button onClick={()=>setCurrentDir(-1)} disabled={!currentOn} className={`btn-toggle py-3 rounded-xl border text-[10px] font-bold flex flex-col items-center gap-2 ${currentDir === -1 && currentOn ? 'bg-amber-600 border-amber-400 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-600'}`}>
+                                                <i data-lucide="log-out"></i> 穿出紙面
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-700">
+                                        <label className="text-xs font-bold text-sky-400 uppercase tracking-widest mb-3 block">磁場方向 (B)</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={()=>setFieldDir(1)} className={`btn-toggle py-3 rounded-xl border text-[10px] font-bold flex flex-col items-center gap-2 ${fieldDir === 1 ? 'bg-sky-600 border-sky-400 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-600'}`}>
+                                                <div className="flex items-center gap-1"><span className="text-red-500">N</span> &rarr; <span className="text-blue-500">S</span></div> 由左至右
+                                            </button>
+                                            <button onClick={()=>setFieldDir(-1)} className={`btn-toggle py-3 rounded-xl border text-[10px] font-bold flex flex-col items-center gap-2 ${fieldDir === -1 ? 'bg-sky-600 border-sky-400 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-600'}`}>
+                                                <div className="flex items-center gap-1"><span className="text-blue-500">S</span> &larr; <span className="text-red-500">N</span></div> 由右至左
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">磁力方向結果 (F)</h3>
+                                <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center shadow-inner relative overflow-hidden">
+                                    <div className="text-xs text-slate-500 mb-2 uppercase tracking-tighter">產生的合力方向</div>
+                                    <div className={`text-3xl font-black flex items-center justify-center gap-3 transition-colors duration-500 ${currentOn ? 'text-emerald-400' : 'text-slate-800'}`}>
+                                        {currentOn ? (
+                                            forceDir === 1 ? <><i data-lucide="arrow-big-up-dash" className="w-8 h-8"></i> 向上 (UP)</> : <><i data-lucide="arrow-big-down-dash" className="w-8 h-8"></i> 向下 (DOWN)</>
+                                        ) : "無作用力"}
+                                    </div>
+                                    {currentOn && <div className="absolute inset-x-0 bottom-0 h-1 bg-emerald-500/30 animate-pulse"></div>}
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-900/20 border border-indigo-500/20 p-5 rounded-3xl shadow-inner mt-auto">
+                                <h4 className="text-indigo-400 font-bold text-[10px] uppercase mb-2 flex items-center gap-2"><i data-lucide="lightbulb" className="w-3 h-3"></i> 物理小撇步</h4>
+                                <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                    記住：左手定則是用來判定<b>受力 (F)</b> 的方向。伸出左手，食指指 B（磁場），中指指 I（電流），拇指就會告訴你導線會往哪裡跳！
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
