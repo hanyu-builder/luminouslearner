@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>背景輻射實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .digital-font { font-family: 'JetBrains Mono', monospace; letter-spacing: -1px; }
+        .canvas-container { cursor: default; }
+        canvas { border-radius: 1.5rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 400;
+    const CENTER_Y = CANVAS_HEIGHT / 2;
+    
+    const SOURCE_X = 100;
+    const BARRIER_X = 400;
+    const DETECTOR_X = 700;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [sourceType, setSourceType] = useState('alpha'); 
+        const [barrierType, setBarrierType] = useState('none'); 
+        const [thickness, setThickness] = useState(5); 
+        
+        // 運作狀態
+        const [mode, setMode] = useState('background'); // 'background' 或 'source'
+        const [isCounting, setIsCounting] = useState(false);
+        const [timerDisplay, setTimerDisplay] = useState(0); 
+        const [totalCountsDisplay, setTotalCountsDisplay] = useState(0);
+        const [currentCpm, setCurrentCpm] = useState(0);
+        const [soundEnabled, setSoundEnabled] = useState(false);
+
+        // 實驗結果
+        const [bgRate, setBgRate] = useState(null); 
+        const [sourceRate, setSourceRate] = useState(null); 
+        const [correctedRate, setCorrectedRate] = useState(null);
+
+        // Refs
+        const particlesRef = useRef([]);
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        const audioCtxRef = useRef(null);
+        const lastTickRef = useRef(0);
+        
+        const simStateRef = useRef({
+            isCounting: false,
+            timer: 0,
+            totalCounts: 0,
+            mode: 'background',
+            sourceType: 'alpha',
+            barrierType: 'none'
+        });
+
+        // 同步狀態
+        useEffect(() => {
+            simStateRef.current.mode = mode;
+            simStateRef.current.sourceType = sourceType;
+            simStateRef.current.barrierType = barrierType;
+        }, [mode, sourceType, barrierType]);
+
+        // --- 物理邏輯 ---
+        const getPenetrationChance = (type, barrier) => {
+            if (barrier === 'none') return 1.0; 
+            if (type === 'alpha') {
+                return (barrier === 'paper' || barrier === 'aluminium' || barrier === 'lead') ? 0.0 : 1.0;
+            }
+            if (type === 'beta') {
+                if (barrier === 'paper') return 0.95;
+                return (barrier === 'aluminium' || barrier === 'lead') ? 0.0 : 1.0;
+            }
+            if (type === 'gamma') {
+                if (barrier === 'paper') return 1.0;
+                if (barrier === 'aluminium') return 0.95;
+                if (barrier === 'lead') return 0.1;
+            }
+            return 1.0;
+        };
+
+        const playClick = () => {
+            if (!soundEnabled) return;
+            if (!audioCtxRef.current) {
+                audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+            const osc = audioCtxRef.current.createOscillator();
+            const gain = audioCtxRef.current.createGain();
+            osc.type = 'square';
+            osc.frequency.value = 800 + Math.random() * 200;
+            gain.gain.setValueAtTime(0.1, audioCtxRef.current.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtxRef.current.currentTime + 0.05);
+            osc.connect(gain); gain.connect(audioCtxRef.current.destination);
+            osc.start(); osc.stop(audioCtxRef.current.currentTime + 0.05);
+        };
+        
+        // --- 控制 ---
+        const startCount = () => {
+            if (simStateRef.current.isCounting) return;
+            simStateRef.current.isCounting = true;
+            simStateRef.current.timer = 0;
+            simStateRef.current.totalCounts = 0;
+            setIsCounting(true);
+            setTimerDisplay(0); setTotalCountsDisplay(0); setCurrentCpm(0);
+            lastTickRef.current = performance.now();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        const stopCount = () => {
+            simStateRef.current.isCounting = false;
+            setIsCounting(false);
+            cancelAnimationFrame(requestRef.current);
+            const t = simStateRef.current.timer, c = simStateRef.current.totalCounts;
+            let finalRate = (t > 1.0) ? Math.round(c / (t / 60)) : 0;
+            if (mode === 'background') setBgRate(finalRate);
+            else setSourceRate(finalRate);
+        };
+
+        const reset = () => {
+            simStateRef.current.isCounting = false;
+            simStateRef.current.timer = 0;
+            simStateRef.current.totalCounts = 0;
+            setIsCounting(false); setTimerDisplay(0); setTotalCountsDisplay(0); setCurrentCpm(0);
+            setBgRate(null); setSourceRate(null); setCorrectedRate(null);
+            particlesRef.current = [];
+            requestAnimationFrame(() => draw()); 
+        };
+        
+        const calculateCorrection = () => {
+            if (bgRate !== null && sourceRate !== null) {
+                setCorrectedRate(Math.max(0, sourceRate - bgRate));
+            }
+        };
+
+        // --- 模擬循環 ---
+        const loop = (timestamp) => {
+            const dt = (timestamp - lastTickRef.current) / 1000;
+            lastTickRef.current = timestamp;
+            const state = simStateRef.current;
+            
+            if (state.isCounting && dt < 0.1 && dt > 0) {
+                state.timer += dt;
+                if (state.timer >= 60) { stopCount(); return; }
+            }
+
+            // 1. 生成質點
+            // 背景輻射 (隨機位置)
+            if (Math.random() < 0.05) { 
+                particlesRef.current.push({
+                    x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT,
+                    vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
+                    type: 'bg', dead: false, passed: false
+                });
+            }
+            // 放射源 (僅在 Source 模式)
+            if (state.mode === 'source' && Math.random() < 0.4) {
+                const angle = (Math.random() - 0.5) * 0.5, speed = 5 + Math.random() * 2;
+                particlesRef.current.push({
+                    x: SOURCE_X + 40, y: CENTER_Y + (Math.random() - 0.5) * 20,
+                    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+                    type: state.sourceType, dead: false, passed: false
+                });
+            }
+
+            // 2. 更新質點
+            let hits = 0;
+            particlesRef.current = particlesRef.current.map(p => {
+                if (p.dead) return p;
+                let nextX = p.x + p.vx, nextY = p.y + p.vy;
+                let isDead = false;
+                if (!p.passed && p.type !== 'bg' && nextX >= BARRIER_X - thickness && nextX <= BARRIER_X + thickness) {
+                    const chance = getPenetrationChance(p.type, state.barrierType);
+                    if (Math.random() > chance) { isDead = true; nextX = BARRIER_X - Math.random() * 5; }
+                    else p.passed = true;
+                }
+                if (nextX >= DETECTOR_X - 10 && nextX <= DETECTOR_X + 10 && nextY >= CENTER_Y - 30 && nextY <= CENTER_Y + 30) {
+                    isDead = true; hits++; playClick();
+                }
+                if (nextX < -50 || nextX > CANVAS_WIDTH + 50 || nextY < -50 || nextY > CANVAS_HEIGHT + 50) isDead = true;
+                return { ...p, x: nextX, y: nextY, dead: isDead };
+            }).filter(p => !p.dead || Math.random() > 0.1);
+
+            // 3. 更新數據
+            if (state.isCounting) {
+                if (hits > 0) state.totalCounts += hits;
+                setTotalCountsDisplay(state.totalCounts);
+                setTimerDisplay(state.timer);
+                if (state.timer > 0.5) setCurrentCpm(Math.round(state.totalCounts / (state.timer / 60)));
+            } else {
+                setCurrentCpm(0);
+            }
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        // --- 渲染 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            const state = simStateRef.current;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 放射源
+            if (state.mode === 'source') {
+                ctx.fillStyle = '#334155'; ctx.fillRect(SOURCE_X - 40, CENTER_Y - 40, 80, 80);
+                ctx.fillStyle = '#facc15'; ctx.beginPath();
+                ctx.moveTo(SOURCE_X, CENTER_Y - 20); ctx.lineTo(SOURCE_X + 20, CENTER_Y + 15); ctx.lineTo(SOURCE_X - 20, CENTER_Y + 15); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
+                ctx.fillText(state.sourceType.toUpperCase(), SOURCE_X, CENTER_Y + 55);
+            } else {
+                ctx.strokeStyle = '#334155'; ctx.setLineDash([5, 5]);
+                ctx.strokeRect(SOURCE_X - 40, CENTER_Y - 40, 80, 80); ctx.setLineDash([]);
+                ctx.fillStyle = '#64748b'; ctx.font = 'italic 12px Inter'; ctx.textAlign = 'center';
+                ctx.fillText("(放射源已移除)", SOURCE_X, CENTER_Y + 5);
+                ctx.fillText("正在測量背景輻射", SOURCE_X, CENTER_Y + 22);
+            }
+
+            // 2. 阻隔物
+            if (state.barrierType !== 'none') {
+                const colors = { paper: '#fefce8', aluminium: '#94a3b8', lead: '#475569' };
+                const labels = { paper: '紙張', aluminium: '鋁片', lead: '鉛塊' };
+                ctx.fillStyle = colors[state.barrierType]; ctx.fillRect(BARRIER_X - thickness, CENTER_Y - 100, thickness * 2, 200);
+                ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(labels[state.barrierType], BARRIER_X, CENTER_Y - 110);
+            }
+
+            // 3. 偵測器
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(DETECTOR_X, CENTER_Y - 40, 60, 80);
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2; ctx.strokeRect(DETECTOR_X, CENTER_Y - 40, 10, 80); 
+            ctx.beginPath(); ctx.moveTo(DETECTOR_X + 60, CENTER_Y); ctx.lineTo(CANVAS_WIDTH, CENTER_Y); ctx.stroke();
+
+            // 4. 質點
+            particlesRef.current.forEach(p => {
+                ctx.beginPath();
+                if (p.type === 'bg') { ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'; ctx.arc(p.x, p.y, 2, 0, Math.PI*2); }
+                else if (p.type === 'alpha') { ctx.fillStyle = '#ef4444'; ctx.arc(p.x, p.y, 4, 0, Math.PI*2); }
+                else if (p.type === 'beta') { ctx.fillStyle = '#3b82f6'; ctx.arc(p.x, p.y, 2, 0, Math.PI*2); }
+                else { 
+                    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x - 5, p.y);
+                    ctx.quadraticCurveTo(p.x, p.y - 3, p.x + 5, p.y); ctx.stroke(); return; 
+                }
+                ctx.fill();
+            });
+        };
+
+        useEffect(() => {
+            lastTickRef.current = performance.now();
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, []); 
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500"><i data-lucide="radio"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">背景輻射修正實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Nuclear Physics</div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[400px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            <div className="absolute top-[295px] left-[510px] w-[120px] text-right font-mono text-emerald-400 font-black text-2xl tracking-widest digital-font">
+                                {totalCountsDisplay.toString().padStart(4, '0')}
+                            </div>
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-4 py-3 rounded-xl border border-slate-700 text-xs shadow-xl backdrop-blur-md space-y-2">
+                                <div className="flex justify-between gap-6"><span className="text-slate-500 font-bold uppercase tracking-widest">計時器</span><span className="text-white font-mono">{timerDisplay.toFixed(1)} s</span></div>
+                                <div className="flex justify-between gap-6"><span className="text-slate-500 font-bold uppercase tracking-widest">當前速率</span><span className="text-yellow-400 font-mono font-bold">{currentCpm} CPM</span></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <div className="flex flex-wrap gap-8 items-center justify-between">
+                                <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-700">
+                                    <button onClick={() => { setMode('background'); reset(); }} disabled={isCounting} className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all ${mode === 'background' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>測量背景計數</button>
+                                    <button onClick={() => { setMode('source'); reset(); }} disabled={isCounting} className={`px-6 py-2.5 rounded-xl text-xs font-bold transition-all ${mode === 'source' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>測量放射源計數</button>
+                                </div>
+                                {mode === 'source' && (
+                                    <div className="flex gap-2">
+                                        {['alpha', 'beta', 'gamma'].map(t => <button key={t} onClick={()=>setSourceType(t)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${sourceType===t?'bg-slate-700 border-white text-white':'bg-slate-900 border-slate-700 text-slate-500'}`}>{t}</button>)}
+                                    </div>
+                                )}
+                                <div className="flex gap-3">
+                                    <button onClick={isCounting ? stopCount : startCount} className={`px-10 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${isCounting ? 'bg-slate-700 text-slate-300 border border-slate-600' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}>
+                                        <i data-lucide={isCounting ? "square" : "play"}></i> {isCounting ? "停止計數" : "開始計數 (60s)"}
+                                    </button>
+                                    <button onClick={reset} className="p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl transition-all active:rotate-180"><i data-lucide="rotate-ccw"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="clipboard-check" className="text-indigo-400"></i> 實驗數據紀錄</h2>
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-2xl bg-blue-900/10 border border-blue-500/20">
+                                    <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1">背景輻射率 (Background)</div>
+                                    <div className="text-3xl font-black font-mono text-white">{bgRate !== null ? bgRate : '--'} <span className="text-xs text-slate-500">CPM</span></div>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-red-900/10 border border-red-500/20">
+                                    <div className="text-[10px] text-red-400 font-bold uppercase tracking-widest mb-1">總計數率 (Source + BG)</div>
+                                    <div className="text-3xl font-black font-mono text-white">{sourceRate !== null ? sourceRate : '--'} <span className="text-xs text-slate-500">CPM</span></div>
+                                </div>
+                                <div className="pt-4 border-t border-slate-700">
+                                    <button onClick={calculateCorrection} disabled={bgRate === null || sourceRate === null} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-2xl font-bold transition-all shadow-lg active:scale-95 mb-4">計算修正後淨速率</button>
+                                    <div className="p-5 rounded-2xl bg-emerald-900/10 border border-emerald-500/30 text-center shadow-inner">
+                                        <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1">真實放射源計數率</div>
+                                        <div className="text-4xl font-black text-white font-mono tracking-tighter">{correctedRate !== null ? correctedRate : '--'} <span className="text-xs text-slate-600 font-bold">CPM</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner space-y-3">
+                            <h3 className="text-indigo-300 font-bold text-sm flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點提醒</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                即使放射源不在現場，偵測器也會收到來自宇宙射線與地殼物質的<b>背景輻射</b>。在計算放射源的強度時，必須始終執行 <b>淨計數 = 總計數 - 背景計數</b> 的扣除程序。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
