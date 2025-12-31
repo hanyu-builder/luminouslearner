@@ -19,18 +19,17 @@
     <script src="https://unpkg.com/lucide@0.263.1"></script>
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
         .slider-thumb::-webkit-slider-thumb {
             -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
-            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #6366f1;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff;
         }
-        .thumb-indigo::-webkit-slider-thumb { border-color: #6366f1; }
-        .thumb-pink::-webkit-slider-thumb { border-color: #ec4899; }
-        canvas { border-radius: 1rem; }
+        .thumb-indigo::-webkit-slider-thumb { background: #6366f1; }
+        .thumb-pink::-webkit-slider-thumb { background: #ec4899; }
     </style>
 </head>
 <body>
@@ -72,12 +71,6 @@
         const requestRef = useRef();
         const prevTimeRef = useRef(0);
 
-        const paramsRef = useRef({ fieldType, fieldStrength, velocity, showTrails });
-
-        useEffect(() => {
-            paramsRef.current = { fieldType, fieldStrength, velocity, showTrails };
-        }, [fieldType, fieldStrength, velocity, showTrails]);
-
         // --- 邏輯 ---
         const fire = () => {
             const pType = selectedParticle;
@@ -103,7 +96,6 @@
                 if (!p.active) return p;
 
                 const props = PARTICLES[p.type];
-                const { fieldType, fieldStrength } = paramsRef.current;
                 let ax = 0;
                 let ay = 0;
 
@@ -111,202 +103,273 @@
                 if (p.x >= FIELD_X_START && p.x <= FIELD_X_END && p.y >= FIELD_Y_START && p.y <= FIELD_Y_END) {
                     
                     if (fieldType === 'electric') {
-                        // F = qE. E 是垂直的 (上/下).
-                        // 正向 fieldStrength 代表 E 向下 (+Y).
+                        // F = qE. E 是垂直的 (上/下)
                         const E = fieldStrength * 50; 
+                        
                         if (props.m > 0) {
                             ay = (props.q * E) / props.m;
                         }
+                        
                     } else {
-                        // 磁場 B. F = q(v x B).
-                        // 假設 B 垂直於螢幕. B > 0 代表進入紙面 (X).
-                        // v 向右 (+X). B 向內 (+Z). F = q(v x B) 向左旋轉 (上).
+                        // 磁場
                         const B = fieldStrength * 2; 
+                        
                         const vMag = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
                         if (vMag > 0 && props.m > 0) {
                             const aMag = (props.q * vMag * B) / props.m;
-                            // 垂直向量 (vy, -vx)
                             ax = (p.vy / vMag) * aMag;
                             ay = -(p.vx / vMag) * aMag;
                         }
                     }
                 }
 
+                // 更新速度
                 const newVx = p.vx + ax * safeDt;
                 const newVy = p.vy + ay * safeDt;
+                
+                // 更新位置
                 const newX = p.x + newVx * safeDt;
                 const newY = p.y + newVy * safeDt;
 
+                // 軌跡
                 const newTrail = [...p.trail];
-                if (paramsRef.current.showTrails && (newTrail.length === 0 || Math.hypot(newX - newTrail[newTrail.length-1].x, newY - newTrail[newTrail.length-1].y) > 5)) {
+                if (showTrails && (newTrail.length === 0 || Math.hypot(newX - newTrail[newTrail.length-1].x, newY - newTrail[newTrail.length-1].y) > 5)) {
                     newTrail.push({x: newX, y: newY});
                 }
-                if (newTrail.length > 100) newTrail.shift();
-
+                
+                // 邊界檢查
                 const isActive = newX < CANVAS_WIDTH + 50 && newY > -50 && newY < CANVAS_HEIGHT + 50;
+
                 return { ...p, x: newX, y: newY, vx: newVx, vy: newVy, trail: newTrail, active: isActive };
-            }).filter(p => p.active));
+
+            }).filter(p => p.active)); 
 
             draw();
             requestRef.current = requestAnimationFrame(loop);
         };
 
+        // --- 渲染 ---
         const draw = () => {
             const ctx = canvasRef.current?.getContext('2d');
             if (!ctx) return;
+
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            const { fieldType, fieldStrength, showTrails } = paramsRef.current;
-
             // 1. 繪製場域範圍
-            ctx.fillStyle = fieldType === 'electric' ? 'rgba(99, 102, 241, 0.08)' : 'rgba(236, 72, 153, 0.08)';
+            ctx.fillStyle = fieldType === 'electric' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(236, 72, 153, 0.1)';
             ctx.fillRect(FIELD_X_START, FIELD_Y_START, FIELD_X_END - FIELD_X_START, FIELD_Y_END - FIELD_Y_START);
             ctx.strokeStyle = fieldType === 'electric' ? '#6366f1' : '#ec4899';
             ctx.lineWidth = 2;
             ctx.strokeRect(FIELD_X_START, FIELD_Y_START, FIELD_X_END - FIELD_X_START, FIELD_Y_END - FIELD_Y_START);
 
-            // 場標識
-            const spacing = 45;
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+            // 場指標
             if (fieldType === 'electric') {
-                // 電極板
-                ctx.fillStyle = fieldStrength > 0 ? '#ef4444' : '#3b82f6';
+                // 繪製極板
+                ctx.fillStyle = fieldStrength > 0 ? '#ef4444' : '#3b82f6'; 
                 ctx.fillRect(FIELD_X_START, FIELD_Y_START - 10, FIELD_X_END - FIELD_X_START, 10);
                 ctx.fillStyle = fieldStrength > 0 ? '#3b82f6' : '#ef4444';
                 ctx.fillRect(FIELD_X_START, FIELD_Y_END, FIELD_X_END - FIELD_X_START, 10);
                 
-                // 箭頭
-                const dir = fieldStrength > 0 ? 1 : -1;
-                for(let x=FIELD_X_START + 22; x<FIELD_X_END; x+=spacing) {
-                    for(let y=FIELD_Y_START + 22; y<FIELD_Y_END; y+=spacing) {
-                        ctx.beginPath();
-                        if (dir > 0) { ctx.moveTo(x, y-6); ctx.lineTo(x, y+6); ctx.lineTo(x-3, y+2); ctx.moveTo(x, y+6); ctx.lineTo(x+3, y+2); }
-                        else { ctx.moveTo(x, y+6); ctx.lineTo(x, y-6); ctx.lineTo(x-3, y-2); ctx.moveTo(x, y-6); ctx.lineTo(x+3, y-2); }
-                        ctx.stroke();
+                // 箭頭 (電力線)
+                const dir = fieldStrength > 0 ? 1 : -1; 
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                const spacing = 40;
+                for(let x=FIELD_X_START + 20; x<FIELD_X_END; x+=spacing) {
+                    for(let y=FIELD_Y_START + 20; y<FIELD_Y_END; y+=spacing) {
+                         ctx.beginPath();
+                         if (dir > 0) { // 向下
+                             ctx.moveTo(x, y-5); ctx.lineTo(x, y+5);
+                             ctx.lineTo(x-3, y+2); ctx.moveTo(x, y+5); ctx.lineTo(x+3, y+2);
+                         } else { // 向上
+                             ctx.moveTo(x, y+5); ctx.lineTo(x, y-5);
+                             ctx.lineTo(x-3, y-2); ctx.moveTo(x, y-5); ctx.lineTo(x+3, y-2);
+                         }
+                         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                         ctx.stroke();
                     }
                 }
+
             } else {
-                // 磁場符號
-                for(let x=FIELD_X_START + 22; x<FIELD_X_END; x+=spacing) {
-                    for(let y=FIELD_Y_START + 22; y<FIELD_Y_END; y+=spacing) {
-                        ctx.beginPath();
-                        if (fieldStrength > 0) { // 進入 (X)
-                            ctx.moveTo(x-4, y-4); ctx.lineTo(x+4, y+4); ctx.moveTo(x+4, y-4); ctx.lineTo(x-4, y+4);
-                        } else { // 穿出 (.)
-                            ctx.arc(x, y, 1.5, 0, Math.PI*2); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2);
-                        }
-                        ctx.stroke();
+                // 磁場 (叉叉或點點)
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                const spacing = 40;
+                for(let x=FIELD_X_START + 20; x<FIELD_X_END; x+=spacing) {
+                    for(let y=FIELD_Y_START + 20; y<FIELD_Y_END; y+=spacing) {
+                         ctx.beginPath();
+                         if (fieldStrength > 0) { // 進入紙面 (X)
+                             ctx.moveTo(x-4, y-4); ctx.lineTo(x+4, y+4);
+                             ctx.moveTo(x+4, y-4); ctx.lineTo(x-4, y+4);
+                             ctx.stroke();
+                         } else { // 穿出紙面 (點)
+                             ctx.arc(x, y, 2, 0, Math.PI*2);
+                             ctx.fill();
+                             ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.stroke();
+                         }
                     }
                 }
             }
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 16px Inter';
-            ctx.fillText(fieldType === 'electric' ? "勻強電場 (E)" : "勻強磁場 (B)", FIELD_X_START + 10, FIELD_Y_START - 22);
+            
+            // 標籤
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText(fieldType === 'electric' ? "電場 (E)" : "磁場 (B)", FIELD_X_START + 10, FIELD_Y_START - 20);
 
             // 2. 繪製粒子
             particles.forEach(p => {
-                const color = PARTICLES[p.type].color;
+                // 軌跡
                 if (showTrails && p.trail.length > 0) {
-                    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.globalAlpha = 0.4;
+                    ctx.beginPath();
+                    ctx.strokeStyle = PARTICLES[p.type].color;
+                    ctx.lineWidth = 2;
                     ctx.moveTo(p.trail[0].x, p.trail[0].y);
-                    p.trail.forEach(pt => ctx.lineTo(pt.x, pt.y));
-                    ctx.stroke(); ctx.globalAlpha = 1.0;
+                    for (let i=1; i<p.trail.length; i++) ctx.lineTo(p.trail[i].x, p.trail[i].y);
+                    ctx.stroke();
                 }
-                ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.stroke();
+                
+                // 粒子本體
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+                ctx.fillStyle = PARTICLES[p.type].color;
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.stroke();
             });
 
             // 3. 發射器
-            ctx.fillStyle = '#334155'; ctx.fillRect(0, CENTER_Y - 20, 50, 40);
-            ctx.fillStyle = '#64748b'; ctx.fillRect(50, CENTER_Y - 5, 10, 10);
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(0, CENTER_Y - 20, 50, 40);
+            ctx.fillStyle = '#cbd5e1';
+            ctx.fillRect(50, CENTER_Y - 5, 10, 10); 
         };
 
         useEffect(() => {
             requestRef.current = requestAnimationFrame(loop);
             return () => cancelAnimationFrame(requestRef.current);
-        }, []);
+        });
 
-        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+        useEffect(() => {
+            if (window.lucide) window.lucide.createIcons();
+        });
+
+        const reset = () => {
+            setParticles([]);
+            setFieldStrength(5.0);
+        };
 
         return (
-            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
-                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
                     <div className="flex items-center space-x-3">
-                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
-                            <i data-lucide="crosshair"></i>
+                        <div className="bg-indigo-500/20 p-2 rounded-lg">
+                            <i data-lucide="crosshair" className="w-6 h-6 text-indigo-400"></i>
                         </div>
                         <h1 className="text-xl font-bold text-white tracking-wide">場中偏轉實驗室</h1>
                     </div>
-                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Atomic Physics</div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                        主題：原子物理學
+                    </div>
                 </nav>
 
-                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                <main className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    
+                    {/* 左側：模擬區域 */}
                     <div className="lg:col-span-9 flex flex-col gap-6">
-                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[450px]">
-                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain bg-slate-950 rounded-2xl" />
-                            <div className="absolute bottom-6 left-6 flex gap-3">
-                                <button onClick={() => setFieldType('electric')} className={`px-6 py-2.5 rounded-xl text-xs font-bold border transition-all ${fieldType==='electric' ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800'}`}>電場模式</button>
-                                <button onClick={() => setFieldType('magnetic')} className={`px-6 py-2.5 rounded-xl text-xs font-bold border transition-all ${fieldType==='magnetic' ? 'bg-pink-600 border-pink-400 text-white shadow-lg' : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800'}`}>磁場模式</button>
+                        <div className="bg-slate-950 rounded-2xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[450px]">
+                            <canvas 
+                                ref={canvasRef} 
+                                width={CANVAS_WIDTH} 
+                                height={CANVAS_HEIGHT}
+                                className="w-full h-full object-contain bg-slate-950 rounded-xl"
+                            />
+                            
+                            <div className="absolute bottom-4 left-4 flex gap-2">
+                                <button onClick={() => setFieldType('electric')} className={`px-4 py-2 rounded text-sm font-bold border transition ${fieldType==='electric' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>電場</button>
+                                <button onClick={() => setFieldType('magnetic')} className={`px-4 py-2 rounded text-sm font-bold border transition ${fieldType==='magnetic' ? 'bg-pink-600 border-pink-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>磁場</button>
                             </div>
                         </div>
 
-                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl flex flex-wrap gap-10 items-start">
-                            <div className="space-y-4">
-                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">粒子選擇</h3>
+                        {/* 控制面板 */}
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-wrap gap-8 items-start">
+                            
+                            <div className="space-y-3">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase">粒子類型</h3>
                                 <div className="grid grid-cols-2 gap-2">
                                     {Object.keys(PARTICLES).map(key => (
-                                        <button key={key} onClick={() => setSelectedParticle(key)} className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition-all text-left flex items-center gap-2 ${selectedParticle === key ? 'bg-slate-700 border-white text-white' : 'bg-slate-900 border-slate-700 text-slate-500'}`} style={{ borderColor: selectedParticle === key ? PARTICLES[key].color : '' }}>
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PARTICLES[key].color }}></div>
+                                        <button 
+                                            key={key}
+                                            onClick={() => setSelectedParticle(key)}
+                                            className={`px-3 py-2 rounded text-xs font-bold border transition text-left ${selectedParticle === key ? 'bg-slate-600 border-white text-white' : 'bg-slate-700 border-slate-600 text-slate-400'}`}
+                                            style={{ borderColor: selectedParticle === key ? PARTICLES[key].color : '' }}
+                                        >
                                             {PARTICLES[key].label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="flex-1 space-y-6">
+                            <div className="flex-1 min-w-[200px] space-y-4">
                                 <div>
-                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">場強大小 <span className="text-white font-mono">{fieldStrength.toFixed(1)}</span></label>
-                                    <input type="range" min="-10" max="10" step="1" value={fieldStrength} onChange={(e) => setFieldStrength(Number(e.target.value))} className={`w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb ${fieldType==='electric'?'thumb-indigo':'thumb-pink'}`} />
-                                    <div className="flex justify-between text-[10px] text-slate-600 font-bold mt-2 uppercase"><span>反向</span><span>0</span><span>正向</span></div>
+                                    <label className="flex justify-between text-xs font-bold mb-1 text-slate-300">
+                                        場強大小 <span className="text-white">{fieldStrength.toFixed(1)}</span>
+                                    </label>
+                                    <input type="range" min="-10" max="10" step="1" value={fieldStrength} onChange={(e) => setFieldStrength(Number(e.target.value))} className={`w-full h-2 bg-slate-600 rounded-lg slider-thumb ${fieldType==='electric'?'thumb-indigo':'thumb-pink'}`} />
+                                    <div className="flex justify-between text-[10px] text-slate-500">
+                                        <span>反向</span><span>0</span><span>正向</span>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">粒子初速 <span className="text-white font-mono">{velocity.toFixed(1)}</span></label>
-                                    <input type="range" min="1" max="10" step="0.5" value={velocity} onChange={(e) => setVelocity(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                                    <label className="flex justify-between text-xs font-bold mb-1 text-slate-300">
+                                        粒子初速度 <span className="text-white">{velocity.toFixed(1)}</span>
+                                    </label>
+                                    <input type="range" min="1" max="10" step="0.5" value={velocity} onChange={(e) => setVelocity(Number(e.target.value))} className="w-full h-2 bg-slate-600 rounded-lg slider-thumb" />
                                 </div>
                             </div>
 
                             <div className="flex flex-col gap-3">
-                                <button onClick={fire} className="px-10 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold shadow-lg shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"><i data-lucide="zap"></i> 發射</button>
-                                <button onClick={clear} className="px-10 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold transition-all active:scale-95">清除</button>
+                                <button onClick={fire} className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2">
+                                    <i data-lucide="zap" className="w-5 h-5"></i> 發射
+                                </button>
+                                <button onClick={clear} className="px-8 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-colors">
+                                    清除
+                                </button>
                             </div>
+
                         </div>
                     </div>
 
+                    {/* 右側：資訊 */}
                     <div className="lg:col-span-3 space-y-6">
-                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl">
-                            <h2 className="text-white font-bold mb-6 flex items-center gap-2 text-lg border-b border-slate-700 pb-4">
-                                <i data-lucide="book-open" className="text-indigo-400"></i> 現象觀察
+                        
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                            <h2 className="text-white font-bold mb-4 flex items-center">
+                                <i data-lucide="book-open" className="w-5 h-5 mr-2 text-indigo-400"></i>
+                                現象觀察
                             </h2>
-                            <div className="space-y-6 text-xs text-slate-400 leading-relaxed">
-                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
-                                    <strong className="text-indigo-300 block mb-2 font-black uppercase tracking-widest">電場偏轉：</strong>
-                                    粒子路徑為 <b>拋物線</b>。力方向恆定 ($F=qE$)。偏轉程度與 $q/m$ 成正比。
-                                </div>
-                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
-                                    <strong className="text-pink-400 block mb-2 font-black uppercase tracking-widest">磁場偏轉：</strong>
-                                    粒子路徑為 <b>圓周</b>。力始終與運動方向垂直 ($F \perp v$)。
-                                </div>
-                                <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700">
-                                    <strong className="text-yellow-400 block mb-2 font-black uppercase tracking-widest">伽瑪射線：</strong>
-                                    不帶電 ($q=0$)，故在兩種場中均呈直線傳播！
-                                </div>
+                            <div className="space-y-4 text-xs text-slate-300 leading-relaxed">
+                                <p>
+                                    <strong className="text-white block mb-1">電場 (Electric Field):</strong>
+                                    粒子路徑呈 <strong>拋物線</strong>。力方向恆定 ($F=qE$)。
+                                </p>
+                                <p>
+                                    <strong className="text-white block mb-1">磁場 (Magnetic Field):</strong>
+                                    粒子路徑呈 <strong>圓周</strong>。力始終與運動方向垂直 ($F \perp v$)。
+                                </p>
+                                <p>
+                                    <strong className="text-white block mb-1">伽瑪射線 (Gamma Rays):</strong>
+                                    不帶電 ($q=0$)，因此在兩種場中均呈直線傳播！
+                                </p>
                             </div>
                         </div>
 
-                        <label className="flex items-center justify-between p-5 bg-slate-800 rounded-3xl border border-slate-700 cursor-pointer hover:bg-slate-700 transition-all shadow-lg">
-                            <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">顯示粒子軌跡</span>
-                            <input type="checkbox" checked={showTrails} onChange={() => setShowTrails(!showTrails)} className="w-5 h-5 rounded border-slate-600 text-blue-500 focus:ring-0 cursor-pointer" />
-                        </label>
+                        <div className="p-4 bg-slate-900/50 rounded-xl border border-slate-700/50 flex items-center gap-3">
+                            <input type="checkbox" checked={showTrails} onChange={() => setShowTrails(!showTrails)} className="w-5 h-5 rounded text-blue-500 bg-slate-800 border-slate-600 focus:ring-0 cursor-pointer" />
+                            <span className="text-sm font-bold text-slate-300">顯示粒子軌跡</span>
+                        </div>
+
                     </div>
+
                 </main>
             </div>
         );
