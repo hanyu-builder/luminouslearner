@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流體壓強實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #06b6d4;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+        }
+        .thumb-cyan::-webkit-slider-thumb { border-color: #06b6d4; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        canvas { border-radius: 1.5rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    const SURFACE_Y = 50; 
+    const GRAVITY = 9.81;
+    const ATM_PRESSURE = 101325; // Pa
+
+    const FLUIDS = [
+        { name: "淡水 (Fresh Water)", density: 1000, color: "rgba(56, 189, 248, 0.25)" },
+        { name: "海水 (Sea Water)", density: 1030, color: "rgba(14, 165, 233, 0.35)" },
+        { name: "油 (Oil)", density: 800, color: "rgba(234, 179, 8, 0.25)" },
+        { name: "水銀 (Mercury)", density: 13600, color: "rgba(148, 163, 184, 0.8)" },
+        { name: "汽油 (Gasoline)", density: 700, color: "rgba(249, 115, 22, 0.25)" }
+    ];
+
+    const App = () => {
+        // --- 狀態 ---
+        const [fluidName, setFluidName] = useState("淡水 (Fresh Water)");
+        const [showAtm, setShowAtm] = useState(true); 
+        const [showDam, setShowDam] = useState(false); 
+        const [gaugeY, setGaugeY] = useState(150); 
+        const [isDragging, setIsDragging] = useState(false);
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+
+        // 物理計算數據
+        const currentFluid = useMemo(() => FLUIDS.find(f => f.name === fluidName), [fluidName]);
+        const PIXELS_PER_METER = 50; // 1 米 = 50 像素
+        const depth = Math.max(0, (gaugeY - SURFACE_Y) / PIXELS_PER_METER); 
+        const fluidPressure = currentFluid.density * GRAVITY * depth; 
+        const totalPressure = fluidPressure + (showAtm ? ATM_PRESSURE : 0); 
+
+        // --- 繪圖功能 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 1. 繪製天空
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, SURFACE_Y);
+            skyGrad.addColorStop(0, '#0f172a');
+            skyGrad.addColorStop(1, '#1e293b');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, SURFACE_Y);
+
+            // 2. 繪製液體
+            ctx.fillStyle = currentFluid.color;
+            ctx.fillRect(0, SURFACE_Y, CANVAS_WIDTH, CANVAS_HEIGHT - SURFACE_Y);
+            
+            // 液面線
+            ctx.beginPath();
+            ctx.moveTo(0, SURFACE_Y);
+            ctx.lineTo(CANVAS_WIDTH, SURFACE_Y);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 深度刻度
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'right';
+            for(let y = SURFACE_Y; y < CANVAS_HEIGHT; y += PIXELS_PER_METER) {
+                const d = (y - SURFACE_Y) / PIXELS_PER_METER;
+                ctx.fillRect(40, y, 10, 1);
+                ctx.fillText(`${d.toFixed(0)}m`, 35, y + 3);
+            }
+
+            if (showDam) drawDamMode(ctx);
+            else drawGaugeMode(ctx);
+        };
+
+        const drawGaugeMode = (ctx) => {
+            const x = 300; 
+            const y = gaugeY;
+
+            // 連接線
+            ctx.beginPath();
+            ctx.moveTo(x, 0); ctx.lineTo(x, y);
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2; ctx.stroke();
+
+            // 壓強計本體
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(x, y, 25, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3; ctx.stroke();
+
+            // 壓強向量箭頭 (帕斯卡原理：向各個方向作用)
+            const arrowLen = Math.min(60, 10 + fluidPressure / 5000); 
+            const directions = [0, 45, 90, 135, 180, 225, 270, 315];
+            directions.forEach(deg => {
+                const rad = deg * Math.PI / 180;
+                const r = 25;
+                const sX = x + Math.cos(rad) * (r + arrowLen);
+                const sY = y + Math.sin(rad) * (r + arrowLen);
+                const eX = x + Math.cos(rad) * r;
+                const eY = y + Math.sin(rad) * r;
+                drawArrow(ctx, sX, sY, eX, eY, '#ef4444');
+            });
+
+            // 數據讀數顯示
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'; ctx.strokeStyle = '#38bdf8';
+            ctx.fillRect(x + 45, y - 30, 160, 60);
+            ctx.strokeRect(x + 45, y - 30, 160, 60);
+            
+            ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 18px Orbitron, monospace'; ctx.textAlign = 'left';
+            ctx.fillText(`${(totalPressure/1000).toFixed(1)} kPa`, x + 55, y + 5);
+            ctx.fillStyle = '#94a3b8'; ctx.font = 'bold 10px Inter';
+            ctx.fillText(`深度: ${depth.toFixed(2)} m`, x + 55, y - 12);
+            ctx.fillText(`(含大氣壓: ${showAtm ? '是' : '否'})`, x + 55, y + 20);
+        };
+
+        const drawDamMode = (ctx) => {
+            const damX = 650, bottomW = 180, topW = 40;
+            
+            // 繪製水壩結構 (梯形)
+            ctx.fillStyle = '#475569';
+            ctx.beginPath();
+            ctx.moveTo(damX, SURFACE_Y - 20); 
+            ctx.lineTo(damX + topW, SURFACE_Y - 20); 
+            ctx.lineTo(damX + bottomW, CANVAS_HEIGHT); 
+            ctx.lineTo(damX, CANVAS_HEIGHT); 
+            ctx.closePath(); ctx.fill();
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; ctx.stroke();
+
+            // 繪製壓力分佈 (三角形負載)
+            ctx.strokeStyle = '#ef4444'; ctx.fillStyle = '#ef4444'; ctx.lineWidth = 2;
+            for(let y = SURFACE_Y + 20; y < CANVAS_HEIGHT; y += 40) {
+                const d = (y - SURFACE_Y) / PIXELS_PER_METER;
+                const p = currentFluid.density * GRAVITY * d;
+                const len = p / 2500; 
+                if (len > 5) drawArrow(ctx, damX - len, y, damX, y, '#ef4444');
+            }
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
+            ctx.fillText("壓強隨深度增加而增大", damX - 120, CANVAS_HEIGHT - 40);
+        };
+
+        const drawArrow = (ctx, x1, y1, x2, y2, color) => {
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+            ctx.strokeStyle = color; ctx.stroke();
+            const a = Math.atan2(y2 - y1, x2 - x1), hL = 8;
+            ctx.beginPath(); ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - hL * Math.cos(a - Math.PI/6), y2 - hL * Math.sin(a - Math.PI/6));
+            ctx.lineTo(x2 - hL * Math.cos(a + Math.PI/6), y2 - hL * Math.sin(a + Math.PI/6));
+            ctx.fillStyle = color; ctx.fill();
+        };
+
+        // --- 互動邏輯 ---
+        const handleMouseDown = (e) => {
+            if (showDam) return;
+            const rect = canvasRef.current.getBoundingClientRect();
+            const mX = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+            const mY = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+            if (Math.abs(mX - 300) < 50 && Math.abs(mY - gaugeY) < 50) setIsDragging(true);
+        };
+
+        const handleMouseMove = (e) => {
+            if (isDragging) {
+                const rect = canvasRef.current.getBoundingClientRect();
+                let nY = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+                setGaugeY(Math.max(SURFACE_Y - 40, Math.min(CANVAS_HEIGHT - 30, nY)));
+            }
+        };
+
+        useEffect(() => {
+            draw();
+            requestRef.current = requestAnimationFrame(draw);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [fluidName, gaugeY, showAtm, showDam]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400"><i data-lucide="droplets"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">流體壓強實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Fluid Mechanics</div>
+                </nav>
+
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-4 gap-1">
+                        <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800 flex items-center justify-center">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className={`w-full h-full object-contain ${showDam ? '' : 'cursor-ns-resize'}`} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={()=>setIsDragging(false)} onMouseLeave={()=>setIsDragging(false)} />
+                            {!showDam && <div className="absolute top-20 left-1/2 -translate-x-1/2 pointer-events-none text-slate-500 text-xs font-bold animate-bounce flex items-center gap-2 bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm"><i data-lucide="mouse-pointer-2"></i> 垂直拖動壓強計進行探測</div>}
+                        </div>
+
+                        <div className="lg:col-span-1 bg-slate-900 flex flex-col h-full overflow-y-auto custom-scroll p-6 space-y-8 shadow-2xl">
+                            <div className="space-y-4">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">實時數據回傳</h3>
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between items-center shadow-inner">
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase">深度 (h)</span>
+                                        <span className="text-xl font-mono text-white font-black">{depth.toFixed(2)} m</span>
+                                    </div>
+                                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between items-center shadow-inner transition-all border-l-4 border-l-emerald-500">
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase">總壓強 (P)</span>
+                                        <span className="text-xl font-mono text-emerald-400 font-black">{(totalPressure/1000).toFixed(1)} kPa</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">選擇流體 (密度 ρ)</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {FLUIDS.map(f => (
+                                            <button key={f.name} onClick={() => setFluidName(f.name)} className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition-all ${fluidName === f.name ? 'bg-cyan-600 border-cyan-400 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>{f.name.split(' ')[0]} ({f.density})</button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t border-slate-800">
+                                    <label className="flex items-center justify-between p-4 bg-slate-950/50 rounded-2xl border border-slate-700 cursor-pointer hover:bg-slate-800 transition-colors">
+                                        <span className="text-xs font-bold text-slate-300 uppercase">考慮大氣壓強</span>
+                                        <div className={`w-10 h-5 rounded-full relative transition-colors ${showAtm ? 'bg-cyan-600' : 'bg-slate-700'}`}>
+                                            <input type="checkbox" checked={showAtm} onChange={() => setShowAtm(!showAtm)} className="opacity-0 w-full h-full absolute cursor-pointer z-10" />
+                                            <div className={`w-3 h-3 bg-white rounded-full absolute top-1 transition-all ${showAtm ? 'left-6' : 'left-1'}`}></div>
+                                        </div>
+                                    </label>
+                                    <button onClick={() => setShowDam(!showDam)} className={`w-full py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border transition-all active:scale-95 shadow-lg ${showDam ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}>
+                                        <i data-lucide={showDam ? "gauge" : "brick-wall"}></i> {showDam ? "切換回壓強計" : "觀察水壩受力"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-900/10 border border-indigo-500/20 p-5 rounded-3xl shadow-inner mt-auto">
+                                <div className="text-center mb-3">
+                                    <p className="font-mono text-xl text-cyan-400 font-black">P = h &rho; g</p>
+                                </div>
+                                <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                    提示：液體壓強僅取決於<b>深度</b>與<b>密度</b>，與容器形狀無關。當深度翻倍時，液體產生的壓強也會精確地翻倍。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
