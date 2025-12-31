@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>整流與平滑濾波實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; overflow-y: hidden; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #a855f7;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+        .thumb-purple::-webkit-slider-thumb { border-color: #a855f7; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        canvas { border-radius: 1.5rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    const CANVAS_WIDTH = 900;
+    const CANVAS_HEIGHT = 550;
+    const SCOPE_HEIGHT = 300;
+    
+    // 物理常數
+    const FREQ = 1; // 1 Hz (放慢速度以便觀察)
+    const V_PEAK = 10; // 峰值電壓 (V)
+
+    const App = () => {
+        // --- 狀態 ---
+        const [mode, setMode] = useState("Half-Wave"); // 半波或全波
+        const [capacitance, setCapacitance] = useState(0); // 單位：uF (0 代表斷開開關)
+        const [resistance, setResistance] = useState(10); // 單位：kOhm
+        const [isPaused, setIsPaused] = useState(false);
+        const [timeBase, setTimeBase] = useState(1); 
+
+        const canvasRef = useRef(null);
+        const requestRef = useRef();
+        
+        // 模擬數據儲存
+        const simRef = useRef({
+            time: 0,
+            capacitorV: 0, 
+            history: [] // {t, vin, vout}
+        });
+
+        // --- 物理引擎 ---
+        const updatePhysics = () => {
+            if (isPaused) return;
+
+            const dt = 0.05 * timeBase;
+            const state = simRef.current;
+            state.time += dt;
+
+            // 1. 輸入交流電電壓
+            const omega = 2 * Math.PI * FREQ;
+            const vin = V_PEAK * Math.sin(omega * state.time);
+
+            // 2. 整流邏輯
+            let rectifiedV = 0;
+            if (mode === "Half-Wave") {
+                // 半波整流：二極體僅正半週導通
+                rectifiedV = Math.max(0, vin);
+            } else {
+                // 全波橋式整流：取絕對值
+                rectifiedV = Math.abs(vin);
+            }
+
+            // 3. 平滑濾波 (電容放電)
+            // 如果 Vin > Vcap，二極體導通，電容充電至 Vin
+            // 如果 Vin < Vcap，二極體截止，電容透過電阻 R 放電
+            let vout = 0;
+            
+            if (capacitance === 0) {
+                // 無電容狀態
+                vout = rectifiedV;
+                state.capacitorV = vout;
+            } else {
+                // 有電容狀態：RC 時間常數影響放電速度
+                const rcFactor = capacitance * resistance * 0.5; 
+                let dischargeV = state.capacitorV * (1 - dt / rcFactor);
+                
+                // 充電或放電判定
+                if (rectifiedV > dischargeV) {
+                    vout = rectifiedV;
+                    state.capacitorV = rectifiedV; // 充電
+                } else {
+                    vout = dischargeV;
+                    state.capacitorV = dischargeV; // 放電
+                }
+            }
+
+            // 紀錄歷史波形
+            state.history.push({ t: state.time, vin, vout });
+            if (state.history.length > 400) state.history.shift();
+        };
+
+        const loop = () => {
+            updatePhysics();
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        // --- 渲染 ---
+        const draw = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // --- 1. 示波器螢幕 (上方) ---
+            const scopeX = 50, scopeY = 20, scopeW = CANVAS_WIDTH - 100;
+            
+            ctx.save();
+            ctx.beginPath(); ctx.rect(scopeX, scopeY, scopeW, SCOPE_HEIGHT); ctx.clip();
+            ctx.fillStyle = '#1e293b'; ctx.fill();
+            
+            // 格網線
+            ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+            const gridSize = 50;
+            ctx.beginPath();
+            for(let x=scopeX; x<scopeX+scopeW; x+=gridSize) { ctx.moveTo(x, scopeY); ctx.lineTo(x, scopeY+SCOPE_HEIGHT); }
+            for(let y=scopeY; y<scopeY+SCOPE_HEIGHT; y+=gridSize) { ctx.moveTo(scopeX, y); ctx.lineTo(scopeX+scopeW, y); }
+            ctx.stroke();
+
+            // 中心零位線
+            const centerY = scopeY + SCOPE_HEIGHT / 2;
+            ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(scopeX, centerY); ctx.lineTo(scopeX+scopeW, centerY); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 繪製波形
+            const history = simRef.current.history;
+            const tScale = 20, vScale = 10;
+
+            if (history.length > 1) {
+                const now = simRef.current.time;
+                // 輸入 Vin (灰色虛線)
+                ctx.beginPath(); ctx.strokeStyle = '#64748b'; ctx.lineWidth = 2; ctx.setLineDash([2, 4]);
+                for (let i = 0; i < history.length; i++) {
+                    const p = history[i];
+                    const x = scopeX + scopeW - (now - p.t) * tScale * 10;
+                    const y = centerY - p.vin * vScale;
+                    if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke(); ctx.setLineDash([]);
+
+                // 輸出 Vout (彩色實線)
+                ctx.beginPath(); 
+                ctx.strokeStyle = capacitance > 0 ? '#f472b6' : '#22c55e'; // 有電容粉色，無電容綠色
+                ctx.lineWidth = 3;
+                for (let i = 0; i < history.length; i++) {
+                    const p = history[i];
+                    const x = scopeX + scopeW - (now - p.t) * tScale * 10;
+                    const y = centerY - p.vout * vScale;
+                    if (i===0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            
+            ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px Inter';
+            ctx.fillText("輸入交流電 (AC IN)", scopeX + 10, scopeY + 20);
+            ctx.fillStyle = capacitance > 0 ? '#f472b6' : '#22c55e';
+            ctx.fillText("輸出直流電 (DC OUT)", scopeX + 10, scopeY + 40);
+            ctx.restore(); 
+
+            ctx.strokeStyle = '#475569'; ctx.lineWidth = 4;
+            ctx.strokeRect(scopeX, scopeY, scopeW, SCOPE_HEIGHT);
+
+            // --- 2. 電路圖 (下方) ---
+            const cY = SCOPE_HEIGHT + 70, cX = CANVAS_WIDTH / 2;
+            drawACSource(ctx, cX - 250, cY + 40);
+            
+            // 整流器外盒
+            ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+            ctx.fillRect(cX - 120, cY, 120, 100); ctx.strokeRect(cX - 120, cY, 120, 100);
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = 'bold 12px Inter';
+            ctx.fillText(mode === "Half-Wave" ? "半波整流器" : "橋式整流器", cX - 60, cY + 60);
+            drawDiode(ctx, cX - 60, cY + 35);
+
+            // 導線
+            ctx.beginPath(); ctx.strokeStyle = '#cbd5e1';
+            ctx.moveTo(cX - 210, cY + 30); ctx.lineTo(cX - 120, cY + 30);
+            ctx.moveTo(cX - 210, cY + 70); ctx.lineTo(cX - 120, cY + 70);
+            ctx.moveTo(cX, cY + 20); ctx.lineTo(cX + 280, cY + 20);
+            ctx.moveTo(cX, cY + 80); ctx.lineTo(cX + 280, cY + 80);
+            ctx.stroke();
+
+            // 濾波電容
+            if (capacitance > 0) {
+                drawCapacitor(ctx, cX + 100, cY + 20, cY + 80);
+                ctx.fillStyle = '#f472b6'; ctx.fillText(`${capacitance} \u00B5F`, cX + 100, cY + 105);
+            } else {
+                ctx.fillStyle = '#64748b'; ctx.fillText("開路 (無電容)", cX + 100, cY + 55);
+            }
+
+            // 負載電阻
+            drawResistor(ctx, cX + 220, cY + 20, cY + 80);
+            ctx.fillStyle = '#22c55e'; ctx.fillText(`負載 R: ${resistance} k\u03A9`, cX + 220, cY + 105);
+        };
+
+        const drawACSource = (ctx, x, y) => {
+            ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI*2); ctx.strokeStyle = '#fff'; ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x-12, y); ctx.bezierCurveTo(x-6, y-12, x+6, y+12, x+12, y); ctx.stroke();
+            ctx.font = 'bold 10px Inter'; ctx.fillStyle = '#fff'; ctx.fillText("交流電源", x, y + 40);
+        };
+
+        const drawDiode = (ctx, x, y) => {
+            ctx.beginPath(); ctx.moveTo(x-12, y-10); ctx.lineTo(x-12, y+10); ctx.lineTo(x+10, y); ctx.closePath();
+            ctx.fillStyle = '#94a3b8'; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(x+10, y-12); ctx.lineTo(x+10, y+12); ctx.strokeStyle='#fff'; ctx.stroke();
+        };
+
+        const drawCapacitor = (ctx, x, tY, bY) => {
+            ctx.beginPath(); ctx.moveTo(x, tY); ctx.lineTo(x, tY + 25); ctx.moveTo(x, bY); ctx.lineTo(x, bY - 25); ctx.stroke();
+            ctx.lineWidth = 3; ctx.beginPath();
+            ctx.moveTo(x-15, tY + 25); ctx.lineTo(x+15, tY + 25);
+            ctx.moveTo(x-15, bY - 25); ctx.lineTo(x+15, bY - 25);
+            ctx.stroke(); ctx.lineWidth = 2;
+        };
+
+        const drawResistor = (ctx, x, tY, bY) => {
+            ctx.beginPath(); ctx.moveTo(x, tY); ctx.lineTo(x, tY + 12);
+            let y = tY + 12; const step = (bY - tY - 24) / 6;
+            for(let i=0; i<6; i++) ctx.lineTo(i%2===0 ? x+10 : x-10, y + step/2 + i*step);
+            ctx.lineTo(x, bY - 12); ctx.lineTo(x, bY); ctx.stroke();
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        }, [mode, capacitance, resistance, isPaused]);
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="h-screen bg-slate-900 text-slate-200 font-sans overflow-hidden flex flex-col select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between shrink-0 h-16 shadow-xl z-10">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-purple-500/20 p-2 rounded-lg text-purple-400"><i data-lucide="activity"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">整流與平滑濾波實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: Electronics</div>
+                </nav>
+
+                <main className="flex-1 overflow-hidden">
+                    <div className="h-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-4">
+                        <div className="lg:col-span-3 bg-slate-950 relative border-r border-slate-800 flex items-center justify-center">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                        </div>
+
+                        <div className="lg:col-span-1 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-y-auto custom-scroll p-6 space-y-8 shadow-2xl">
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">1. 選擇整流電路</h3>
+                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800 shadow-inner">
+                                    <button onClick={()=>setMode("Half-Wave")} className={`py-2.5 rounded-lg text-xs font-bold transition-all ${mode === "Half-Wave" ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>半波整流</button>
+                                    <button onClick={()=>setMode("Full-Wave")} className={`py-2.5 rounded-lg text-xs font-bold transition-all ${mode === "Full-Wave" ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>全波整流</button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-8">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">2. 調節濾波參數</h3>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-pink-400 uppercase mb-3"><span>濾波電容 (C)</span><span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{capacitance} &mu;F</span></label>
+                                    <input type="range" min="0" max="100" step="10" value={capacitance} onChange={(e)=>setCapacitance(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-purple" />
+                                    <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-bold uppercase italic"><span>無電容 (原波形)</span><span>大電容 (平滑)</span></div>
+                                </div>
+
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-emerald-400 uppercase mb-3"><span>負載電阻 (R)</span><span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{resistance} k&Omega;</span></label>
+                                    <input type="range" min="1" max="20" step="1" value={resistance} onChange={(e)=>setResistance(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-green" />
+                                    <div className="mt-3 p-3 bg-emerald-900/10 border border-emerald-500/20 rounded-xl text-[10px] text-slate-400 leading-relaxed italic">
+                                        物理提示：電阻 R 愈小，放電愈快，漣波 (Ripple) 愈明顯。時間常數 &tau; = R &times; C。
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-slate-800 space-y-4">
+                                <button onClick={()=>setIsPaused(!isPaused)} className={`w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-3 border transition-all active:scale-95 shadow-lg ${isPaused ? 'bg-amber-600 border-amber-400 text-white shadow-amber-900/20' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+                                    <i data-lucide={isPaused ? "play" : "pause"}></i> {isPaused ? "恢復示波器運作" : "凍結示波器畫面"}
+                                </button>
+                                <div className="bg-indigo-900/10 border border-indigo-500/20 p-5 rounded-3xl shadow-inner">
+                                    <h4 className="text-indigo-400 font-bold text-[10px] uppercase mb-2 flex items-center gap-2"><i data-lucide="lightbulb" className="w-3 h-3"></i> 實驗觀察</h4>
+                                    <p className="text-[11px] text-slate-400 leading-relaxed italic">
+                                        請觀察<b>全波整流</b>如何將負半週反轉。當你增加電容 C 時，輸出波形會變得更加平直，這就是我們電子設備所需穩定直流電的基礎。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
