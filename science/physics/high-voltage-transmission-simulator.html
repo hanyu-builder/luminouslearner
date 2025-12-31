@@ -28,9 +28,10 @@
             border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
             box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
         }
-        .thumb-blue::-webkit-slider-thumb { border-color: #3b82f6; }
-        .thumb-red::-webkit-slider-thumb { border-color: #ef4444; }
-        .thumb-amber::-webkit-slider-thumb { border-color: #f59e0b; }
+        .thumb-blue::-webkit-slider-thumb { border-color: #3b82f6; background: #3b82f6; }
+        .thumb-red::-webkit-slider-thumb { border-color: #ef4444; background: #ef4444; }
+        .thumb-amber::-webkit-slider-thumb { border-color: #f59e0b; background: #f59e0b; }
+        
         canvas { border-radius: 1.5rem; background-color: #020617; }
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
@@ -42,79 +43,89 @@
 <div id="root"></div>
 
 <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo } = React;
 
     const CANVAS_WIDTH = 800;
     const CANVAS_HEIGHT = 450;
+    
     const PLANT_X = 100;
     const CITY_X = 700;
     const GROUND_Y = 380;
     const PYLON_Y = 150;
 
     const App = () => {
-        // --- 狀態管理 ---
+        // --- 狀態控制 ---
         const [powerGen, setPowerGen] = useState(100); // 單位：kW
         const [voltage, setVoltage] = useState(1000); // 單位：V
         const [resistance, setResistance] = useState(2.0); // 單位：Ω
         
-        const [current, setCurrent] = useState(0);
-        const [powerLoss, setPowerLoss] = useState(0);
-        const [powerDelivered, setPowerDelivered] = useState(0);
-        const [efficiency, setEfficiency] = useState(0);
-        const [voltageDrop, setVoltageDrop] = useState(0);
-
         const canvasRef = useRef(null);
         const requestRef = useRef();
         const offsetRef = useRef(0);
 
-        // --- 物理核心運算 ---
-        useEffect(() => {
+        // --- 核心物理邏輯 ---
+        // 使用 useMemo 集中管理所有派生數據，確保變數在渲染作用域內始終可用
+        const physics = useMemo(() => {
             const P_watts = powerGen * 1000;
-            
-            // I = P / V (輸送電流)
+            // 電流 I = P / V
             const I = P_watts / voltage;
-            
-            // P_loss = I^2 * R (焦耳熱損耗)
+            // 損耗功率 Ploss = I^2 * R
             const P_loss = I * I * resistance;
-            
-            // 電壓降 V_drop = I * R
+            // 線路壓降 Vdrop = I * R
             const V_drop = I * resistance;
             
             let P_useful = P_watts - P_loss;
-            if (P_useful < 0) P_useful = 0;
+            if (P_useful < 0) P_useful = 0; 
             
             const eff = P_watts > 0 ? (P_useful / P_watts) * 100 : 0;
 
-            setCurrent(I);
-            setPowerLoss(P_loss);
-            setPowerDelivered(P_useful);
-            setEfficiency(eff);
-            setVoltageDrop(V_drop);
-
+            return {
+                current: I,
+                powerLoss: P_loss,
+                powerDelivered: P_useful,
+                efficiency: eff,
+                voltageDrop: V_drop
+            };
         }, [powerGen, voltage, resistance]);
 
-        // --- 動畫渲染函數 ---
+        // --- 動畫循環 ---
+        const loop = () => {
+            // 電子流動視覺速度與電流強度成正比
+            const speed = Math.min(10, physics.current / 12); 
+            offsetRef.current = (offsetRef.current + speed) % 40;
+            
+            draw();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        });
+
+        // --- 渲染功能 ---
         const draw = () => {
             const ctx = canvasRef.current?.getContext('2d');
             if (!ctx) return;
             ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            // 1. 繪製背景 (星空)
-            const skyGrad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-            skyGrad.addColorStop(0, '#020617');
-            skyGrad.addColorStop(1, '#0f172a');
-            ctx.fillStyle = skyGrad;
+            // 1. 繪製背景 (夜空)
+            const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            grad.addColorStop(0, '#020617');
+            grad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = grad;
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            // 2. 地面
+            // 2. 繪製地面
             ctx.fillStyle = '#020617';
             ctx.beginPath();
             ctx.moveTo(0, GROUND_Y); ctx.lineTo(CANVAS_WIDTH, GROUND_Y);
             ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT); ctx.lineTo(0, CANVAS_HEIGHT);
             ctx.fill();
 
-            // 3. 輸電線路 (視覺化發熱效果)
-            const lossRatio = powerLoss / (powerGen * 1000);
+            // 3. 繪製輸電線路 (包含發熱視覺)
+            // 修正：確保引用 physics.powerLoss 避免 ReferenceError
+            const lossRatio = powerGen > 0 ? (physics.powerLoss / (powerGen * 1000)) : 0;
             let wireColor = '#64748b'; 
             let glow = 0;
             
@@ -126,20 +137,19 @@
             ctx.shadowColor = '#ef4444'; ctx.shadowBlur = glow;
             ctx.strokeStyle = wireColor; ctx.lineWidth = 4;
             
-            // 繪製高壓電纜
+            // 下垂電纜曲線
             ctx.beginPath();
             ctx.moveTo(PLANT_X, PYLON_Y);
             ctx.quadraticCurveTo((PLANT_X + CITY_X)/2, PYLON_Y + 60, CITY_X, PYLON_Y + 25);
             ctx.stroke();
-            
             ctx.beginPath();
             ctx.moveTo(PLANT_X, PYLON_Y + 35);
             ctx.quadraticCurveTo((PLANT_X + CITY_X)/2, PYLON_Y + 95, CITY_X, PYLON_Y + 60);
             ctx.stroke();
             ctx.restore();
 
-            // 繪製流動電子 (代表電流方向)
-            if (current > 0.1 && lossRatio < 0.95) {
+            // 繪製電流點
+            if (physics.current > 0.1 && lossRatio < 0.95) {
                 const count = 18;
                 const spacing = (CITY_X - PLANT_X) / count;
                 const offset = offsetRef.current;
@@ -154,17 +164,16 @@
                 }
             }
 
-            // 4. 發電廠視覺
+            // 4. 繪製發電廠
             drawPowerPlant(ctx, PLANT_X, GROUND_Y);
 
-            // 5. 城市視覺 (亮度隨效率變化)
-            const br = efficiency / 100;
-            drawCity(ctx, CITY_X, GROUND_Y, br);
+            // 5. 繪製城市 (亮度隨輸送效率變化)
+            drawCity(ctx, CITY_X, GROUND_Y, physics.efficiency / 100);
             
-            // 6. UI 標籤
+            // 6. 標籤文字
             ctx.fillStyle = 'white'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'center';
-            ctx.fillText("升壓變壓器", PLANT_X + 60, PYLON_Y - 20);
-            ctx.fillText("降壓變壓器", CITY_X - 60, PYLON_Y - 20);
+            ctx.fillText("升壓變壓器", PLANT_X + 60, PYLON_Y - 25);
+            ctx.fillText("降壓變壓器", CITY_X - 60, PYLON_Y - 25);
         };
 
         const drawPowerPlant = (ctx, x, y) => {
@@ -190,20 +199,6 @@
             ctx.fillStyle = '#60a5fa'; ctx.font = 'bold 14px Inter'; ctx.fillText("城市區域", x + 65, y + 25);
         };
 
-        // --- 動畫循環 ---
-        useEffect(() => {
-            const loop = () => {
-                const speed = Math.min(10, current / 12); 
-                offsetRef.current = (offsetRef.current + speed) % 40;
-                draw();
-                requestRef.current = requestAnimationFrame(loop);
-            };
-            requestRef.current = requestAnimationFrame(loop);
-            return () => cancelAnimationFrame(requestRef.current);
-        }, [current, powerLoss, powerGen, efficiency]);
-
-        const setPreset = (v) => setVoltage(v);
-
         useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
         return (
@@ -217,17 +212,17 @@
                 </nav>
 
                 <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
-                    <div className="lg:col-span-12 flex flex-col gap-6">
+                    <div className="lg:col-span-12">
                         <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[450px]">
                             <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
-                            <div className={`absolute top-6 right-6 px-8 py-3 rounded-2xl border font-black text-xl shadow-2xl backdrop-blur-md transition-all ${efficiency > 90 ? 'bg-emerald-600/90 border-emerald-400 text-white' : efficiency > 40 ? 'bg-yellow-600/90 border-yellow-400 text-white' : 'bg-red-600/90 border-red-400 text-white animate-pulse'}`}>
-                                輸送效率: {efficiency.toFixed(1)}%
+                            <div className={`absolute top-6 right-6 px-8 py-3 rounded-2xl border font-black text-xl shadow-2xl backdrop-blur-md transition-all ${physics.efficiency > 90 ? 'bg-emerald-600/90 border-emerald-400 text-white' : physics.efficiency > 40 ? 'bg-yellow-600/90 border-yellow-400 text-white' : 'bg-red-600/90 border-red-400 text-white animate-pulse'}`}>
+                                輸送效率: {physics.efficiency.toFixed(1)}%
                             </div>
-                            {efficiency <= 0 && (
+                            {physics.efficiency <= 0 && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
                                     <div className="text-center p-10 border-4 border-red-500 rounded-3xl shadow-[0_0_50px_rgba(239,68,68,0.5)]">
-                                        <h2 className="text-5xl font-black text-white mb-4 animate-bounce">電網崩潰！</h2>
-                                        <p className="text-xl text-red-400 font-bold uppercase tracking-widest">線路損耗過大，電力無法抵達城市</p>
+                                        <h2 className="text-5xl font-black text-white mb-4 animate-bounce uppercase">電網崩潰！</h2>
+                                        <p className="text-xl text-red-400 font-bold uppercase tracking-widest leading-relaxed">線路損耗過大<br/>電力無法抵達城市</p>
                                     </div>
                                 </div>
                             )}
@@ -237,14 +232,14 @@
                     <div className="lg:col-span-7 flex flex-col gap-6">
                         <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
                             <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="sliders" className="text-blue-400"></i> 電網參數控制面板</h2>
-                            <div className="space-y-8">
+                            <div className="space-y-10">
                                 <div>
-                                    <div className="flex justify-between items-end mb-3">
-                                        <label className="text-xs font-bold text-blue-400 uppercase tracking-widest">輸送電壓 (V)</label>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <label className="text-xs font-bold text-blue-400 uppercase tracking-widest">輸送電壓 (Voltage, V)</label>
                                         <div className="flex gap-2">
-                                            <button onClick={()=>setPreset(240)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">240V (家用)</button>
-                                            <button onClick={()=>setPreset(11000)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">11kV (區域)</button>
-                                            <button onClick={()=>setPreset(132000)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">132kV (主網)</button>
+                                            <button onClick={() => setVoltage(240)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">240V (家用)</button>
+                                            <button onClick={() => setVoltage(11000)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">11kV (區域)</button>
+                                            <button onClick={() => setVoltage(132000)} className="px-3 py-1 bg-slate-950 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-400 border border-slate-700 transition-all">132kV (主網)</button>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-6">
@@ -269,21 +264,21 @@
                     <div className="lg:col-span-5 space-y-6">
                         <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
                             <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="calculator" className="text-indigo-400"></i> 即時損耗計算 (Loss Analysis)</h2>
-                            <div className="space-y-4">
+                            <div className="space-y-4 font-mono">
                                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700 flex justify-between items-center shadow-inner">
-                                    <div><div className="text-[10px] text-slate-500 font-bold uppercase mb-1">輸送電流 (I = P/V)</div><div className="text-sm text-slate-300 font-mono">{(powerGen*1000).toFixed(0)}W / {voltage}V</div></div>
-                                    <div className="text-2xl font-black text-yellow-400 font-mono tracking-tighter">{current.toFixed(1)} A</div>
+                                    <div><div className="text-[10px] text-slate-500 font-bold uppercase mb-1">輸送電流 (I = P/V)</div><div className="text-sm text-slate-400">{(powerGen*1000).toFixed(0)}W / {voltage}V</div></div>
+                                    <div className="text-2xl font-black text-yellow-400 tracking-tighter">{physics.current.toFixed(1)} A</div>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700 flex justify-between items-center shadow-inner">
-                                    <div><div className="text-[10px] text-slate-500 font-bold uppercase mb-1">功率損耗 (Ploss = I²R)</div><div className="text-sm text-slate-300 font-mono">{current.toFixed(1)}² &times; {resistance}</div></div>
+                                    <div><div className="text-[10px] text-slate-500 font-bold uppercase mb-1">功率損耗 (Ploss = I²R)</div><div className="text-sm text-slate-400">{physics.current.toFixed(1)}² &times; {resistance}</div></div>
                                     <div className="text-right">
-                                        <div className={`text-2xl font-black font-mono tracking-tighter ${powerLoss > 1000 ? 'text-red-400' : 'text-white'}`}>{(powerLoss/1000).toFixed(2)} <span className="text-xs">kW</span></div>
-                                        <div className="text-[10px] text-red-500 font-bold italic">{((powerLoss / (powerGen*1000))*100).toFixed(1)}% 損失</div>
+                                        <div className={`text-2xl font-black ${physics.powerLoss > 1000 ? 'text-red-400' : 'text-white'} tracking-tighter`}>{(physics.powerLoss/1000).toFixed(2)} <span className="text-xs">kW</span></div>
+                                        <div className="text-[10px] text-red-500 font-bold italic">{((physics.powerLoss / (powerGen*1000))*100).toFixed(1)}% 損失</div>
                                     </div>
                                 </div>
                                 <div className="p-5 rounded-2xl bg-emerald-900/10 border border-emerald-500/20 flex justify-between items-center">
                                     <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">抵達城市功率</span>
-                                    <span className="text-3xl font-black text-white font-mono tracking-tighter">{(powerDelivered/1000).toFixed(2)} <span className="text-sm">kW</span></span>
+                                    <span className="text-3xl font-black text-white tracking-tighter">{(physics.powerDelivered/1000).toFixed(2)} <span className="text-sm">kW</span></span>
                                 </div>
                             </div>
                         </div>
@@ -291,7 +286,7 @@
                         <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner">
                             <h3 className="text-indigo-300 font-bold text-sm mb-3 flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點筆記</h3>
                             <p className="text-xs text-slate-400 leading-relaxed italic">
-                                注意：輸送中的損耗與 <b>電壓的平方</b> 成反比 ($P_{loss} \propto 1/V^2$)。這就是為什麼將電壓提高 10 倍，損耗會大幅減少 100 倍的原因！
+                                注意：輸電線路中的損耗與 <b>電壓的平方</b> 成反比 ($P_{loss} \propto 1/V^2$)。這就是為什麼將電壓提高 10 倍，損耗會大幅減少 100 倍的原因！
                             </p>
                         </div>
                     </div>
