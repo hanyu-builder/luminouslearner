@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電池內阻實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: #ffffff; cursor: pointer; border: 2px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .thumb-blue::-webkit-slider-thumb { border-color: #3b82f6; }
+        .thumb-orange::-webkit-slider-thumb { border-color: #f97316; }
+        .thumb-emerald::-webkit-slider-thumb { border-color: #10b981; }
+        canvas { border-radius: 1rem; background-color: #020617; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 450;
+    const GRAPH_WIDTH = 300;
+    const GRAPH_HEIGHT = 200;
+
+    const App = () => {
+        // --- 狀態管理 ---
+        const [emf, setEmf] = useState(12.0); // 電動勢 (E)
+        const [internalR, setInternalR] = useState(2.0); // 內阻 (r)
+        const [loadR, setLoadR] = useState(10.0); // 負載電阻 (R)
+        
+        // 計算數據
+        const [current, setCurrent] = useState(0); // I
+        const [terminalV, setTerminalV] = useState(0); // V
+        const [internalDrop, setInternalDrop] = useState(0); // Ir
+        const [powerLoad, setPowerLoad] = useState(0);
+        const [powerLost, setPowerLost] = useState(0);
+
+        const canvasRef = useRef(null);
+        const graphCanvasRef = useRef(null);
+        const requestRef = useRef();
+        const electronOffsetRef = useRef(0);
+
+        // --- 物理邏輯 ---
+        useEffect(() => {
+            // I = E / (R + r)
+            const totalR = loadR + internalR;
+            const I = totalR > 0.01 ? emf / totalR : emf / 0.01; 
+            
+            // V = E - Ir  或  V = I * R
+            const V_term = I * loadR;
+            const V_drop = I * internalR;
+
+            setCurrent(I);
+            setTerminalV(V_term);
+            setInternalDrop(V_drop);
+            setPowerLoad(I * I * loadR);
+            setPowerLost(I * I * internalR);
+
+        }, [emf, internalR, loadR]);
+
+        // --- 動畫循環 ---
+        const loop = () => {
+            // 電子流速與電流成正比
+            const speed = Math.min(10, current * 2.5);
+            electronOffsetRef.current = (electronOffsetRef.current - speed) % 20; 
+            
+            drawCircuit();
+            drawGraph();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+
+        useEffect(() => {
+            requestRef.current = requestAnimationFrame(loop);
+            return () => cancelAnimationFrame(requestRef.current);
+        });
+
+        // --- 渲染功能 ---
+        const drawCircuit = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const cx = 250, cy = CANVAS_HEIGHT / 2;
+            const w = 300, h = 200;
+            const left = cx - w/2, right = cx + w/2, top = cy - h/2, bottom = cy + h/2;
+
+            // 1. 繪製導線
+            ctx.lineWidth = 4; ctx.strokeStyle = '#fbbf24'; ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(left, top); ctx.lineTo(right, top);
+            ctx.lineTo(right, bottom); ctx.lineTo(left, bottom);
+            ctx.lineTo(left, top); ctx.stroke();
+
+            // 2. 繪製「真實電池」範圍 (虛線框)
+            ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([5, 5]); ctx.lineWidth = 2;
+            ctx.strokeRect(left - 40, top + 20, 80, h - 40);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#94a3b8'; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'left';
+            ctx.fillText("真實電池 (含內阻)", left - 35, top + 15);
+
+            // 3. 繪製電動勢源 (理想電池符號)
+            const batY = cy - 40;
+            drawBatterySymbol(ctx, left, batY, emf);
+            
+            // 4. 繪製內阻器 (r)
+            const rY = cy + 40;
+            drawResistor(ctx, left, rY, '#ef4444', true);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 14px Inter'; ctx.fillText(`r`, left + 25, rY + 5);
+
+            // 5. 繪製負載電阻 (R)
+            drawResistor(ctx, right, cy, '#3b82f6', false);
+            ctx.fillStyle = '#3b82f6'; ctx.fillText(`負載 R`, right + 25, cy + 5);
+
+            // 6. 電壓計 (跨接在電池兩端)
+            drawTerminal(ctx, left, top + 20);
+            drawTerminal(ctx, left, bottom - 20);
+            drawVoltmeter(ctx, left - 120, cy, terminalV);
+            
+            // 電壓計接線
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2; ctx.beginPath();
+            ctx.moveTo(left - 120, cy - 30); ctx.lineTo(left - 120, top + 20); ctx.lineTo(left, top + 20);
+            ctx.moveTo(left - 120, cy + 30); ctx.lineTo(left - 120, bottom - 20); ctx.lineTo(left, bottom - 20);
+            ctx.stroke();
+
+            // 7. 安培計
+            drawAmmeter(ctx, (left + right) / 2, top, current);
+
+            // 8. 繪製電子
+            if (current > 0.01) {
+                drawElectrons(ctx, left, top, right, top, current);
+                drawElectrons(ctx, right, top, right, bottom, current);
+                drawElectrons(ctx, right, bottom, left, bottom, current);
+                drawElectrons(ctx, left, bottom, left, top, current);
+            }
+        };
+
+        const drawGraph = () => {
+            const ctx = graphCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            const w = GRAPH_WIDTH, h = GRAPH_HEIGHT, pad = 35;
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, w, h);
+
+            // 座標軸
+            const maxV = 15, maxI = 15;
+            const mapX = (i) => pad + (i / maxI) * (w - 2*pad);
+            const mapY = (v) => h - pad - (v / maxV) * (h - 2*pad);
+
+            ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(pad, h-pad); ctx.lineTo(w-pad, h-pad); // X
+            ctx.moveTo(pad, pad); ctx.lineTo(pad, h-pad); // Y
+            ctx.stroke();
+            
+            ctx.fillStyle = '#94a3b8'; ctx.font = '10px Inter'; ctx.textAlign = 'center';
+            ctx.fillText("電流 I (A)", w/2, h - 5);
+            ctx.save(); ctx.translate(10, h/2); ctx.rotate(-Math.PI/2); ctx.fillText("路端電壓 V (V)", 0, 0); ctx.restore();
+
+            // 繪製 V = E - Ir 直線
+            ctx.strokeStyle = '#4b5563'; ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.moveTo(mapX(0), mapY(emf)); ctx.lineTo(mapX(emf/internalR), mapY(0)); ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // 當前工作點
+            const cx = mapX(current), cy = mapY(terminalV);
+            if (cx < w && cy > 0) {
+                ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fillStyle = '#ef4444'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                // 輔助線
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.setLineDash([2, 2]);
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, h-pad); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(pad, cy); ctx.stroke();
+            }
+        };
+
+        // --- 繪圖輔助 ---
+        const drawBatterySymbol = (ctx, x, y, v) => {
+            ctx.lineWidth = 4; ctx.strokeStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(x, y - 25); ctx.lineTo(x, y + 25); ctx.stroke();
+            ctx.clearRect(x - 10, y - 5, 20, 10);
+            ctx.beginPath(); ctx.moveTo(x - 18, y - 6); ctx.lineTo(x + 18, y - 6); ctx.stroke(); // 正極
+            ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x - 10, y + 6); ctx.lineTo(x + 10, y + 6); ctx.stroke(); // 負極
+            ctx.fillStyle = '#facc15'; ctx.font = 'bold 12px Inter'; ctx.textAlign = 'right';
+            ctx.fillText(`E = ${v}V`, x - 25, y + 4);
+        };
+
+        const drawResistor = (ctx, x, y, color, isVertical) => {
+            ctx.save(); ctx.translate(x, y); if (isVertical) ctx.rotate(Math.PI/2);
+            ctx.beginPath(); ctx.moveTo(-25, 0);
+            for(let i=0; i<4; i++) ctx.lineTo(-15 + i*10, (i%2===0 ? -10 : 10));
+            ctx.lineTo(15, 0); ctx.lineTo(25, 0);
+            ctx.lineWidth = 3; ctx.strokeStyle = color; ctx.stroke();
+            ctx.restore();
+        };
+
+        const drawVoltmeter = (ctx, x, y, val) => {
+            ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, 28, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center';
+            ctx.fillText('V', x, y - 6);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 12px JetBrains Mono';
+            ctx.fillText(val.toFixed(2), x, y + 12);
+        };
+
+        const drawAmmeter = (ctx, x, y, val) => {
+            ctx.fillStyle = '#1e293b'; ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, 24, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px Inter'; ctx.textAlign = 'center';
+            ctx.fillText('A', x, y + 7);
+            ctx.fillStyle = '#facc15'; ctx.fillText(`${val.toFixed(2)} A`, x, y - 30);
+        };
+
+        const drawTerminal = (ctx, x, y) => {
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
+        };
+
+        const drawElectrons = (ctx, x1, y1, x2, y2, current) => {
+            const dist = Math.hypot(x2 - x1, y2 - y1);
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            const speed = Math.min(5, current * 1.5);
+            const spacing = 30;
+            const offset = (electronOffsetRef.current * speed) % spacing;
+            ctx.fillStyle = '#fef08a';
+            for (let d = offset; d < dist; d += spacing) {
+                const ex = x1 + d * Math.cos(angle);
+                const ey = y1 + d * Math.sin(angle);
+                ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, Math.PI*2); ctx.fill();
+            }
+        };
+
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-orange-500/20 p-2 rounded-lg text-orange-400"><i data-lucide="battery"></i></div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">電池內阻實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">Topic: DC Circuits</div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[450px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain rounded-2xl" />
+                            <div className="absolute top-6 left-6 bg-slate-900/90 px-5 py-3 rounded-2xl border border-slate-700 backdrop-blur-md shadow-lg space-y-2">
+                                <div className="flex justify-between gap-6"><span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">總電流 (I)</span><span className="text-lg font-black text-yellow-400 font-mono">{current.toFixed(2)} A</span></div>
+                                <div className="flex justify-between gap-6"><span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">總電阻 (R+r)</span><span className="text-lg font-black text-blue-400 font-mono">{(loadR + internalR).toFixed(1)} Ω</span></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-700 pb-4"><i data-lucide="sliders" className="text-indigo-400"></i> 電路參數控制面板</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-orange-400 uppercase tracking-widest mb-3"><span>電動勢 (E)</span><span className="text-white font-mono">{emf} V</span></label>
+                                    <input type="range" min="1" max="24" step="1" value={emf} onChange={(e)=>setEmf(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-orange" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-red-400 uppercase tracking-widest mb-3"><span>電池內阻 (r)</span><span className="text-white font-mono">{internalR} Ω</span></label>
+                                    <input type="range" min="0.1" max="5.0" step="0.1" value={internalR} onChange={(e)=>setInternalR(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-red" />
+                                </div>
+                                <div>
+                                    <label className="flex justify-between text-xs font-bold text-blue-400 uppercase tracking-widest mb-3"><span>負載電阻 (R)</span><span className="text-white font-mono">{loadR} Ω</span></label>
+                                    <input type="range" min="0" max="20" step="0.5" value={loadR} onChange={(e)=>setLoadR(Number(e.target.value))} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb thumb-blue" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-sm uppercase tracking-widest border-b border-slate-700 pb-3"><i data-lucide="line-chart" className="text-indigo-400"></i> V - I 特性曲線</h2>
+                            <canvas ref={graphCanvasRef} width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className="w-full h-auto bg-slate-900 rounded-2xl border border-slate-700" />
+                            <div className="p-4 rounded-xl bg-slate-950 border border-slate-700 text-center font-mono text-[10px] text-slate-500">
+                                曲線方程式：V = {emf} - {internalR}I
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-5">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-sm uppercase tracking-widest border-b border-slate-700 pb-3"><i data-lucide="pie-chart" className="text-emerald-400"></i> 功率分配與效率</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1.5"><span className="text-blue-400 font-bold">輸出功率 (I²R)</span><span className="text-white font-mono">{powerLoad.toFixed(1)} W</span></div>
+                                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-blue-500 transition-all duration-500" style={{width: `${(powerLoad/(powerLoad+powerLost+0.001))*100}%`}}></div></div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1.5"><span className="text-red-400 font-bold">內耗功率 (I²r)</span><span className="text-white font-mono">{powerLost.toFixed(1)} W</span></div>
+                                    <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden shadow-inner"><div className="h-full bg-red-500 transition-all duration-500" style={{width: `${(powerLost/(powerLoad+powerLost+0.001))*100}%`}}></div></div>
+                                </div>
+                                <div className="pt-3 border-t border-slate-700 flex justify-between items-center"><span className="text-xs font-bold text-slate-500 uppercase">傳輸效率</span><span className="text-2xl font-black text-emerald-400 font-mono">{((powerLoad/(powerLoad+powerLost+0.0001))*100).toFixed(1)}%</span></div>
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-6 rounded-3xl shadow-inner space-y-3">
+                            <h3 className="text-indigo-300 font-bold text-sm flex items-center gap-2 uppercase tracking-widest"><i data-lucide="lightbulb" className="w-4 h-4"></i> 物理考點</h3>
+                            <p className="text-xs text-slate-400 leading-relaxed italic">
+                                <b>路端電壓：</b> 隨著負載電阻 R 減小，電流 I 增加，導致內阻分壓 Ir 變大，最終使輸出的路端電壓 V 下降。這就是為什麼高功率電器啟動時，家中的燈光會閃爍。
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
