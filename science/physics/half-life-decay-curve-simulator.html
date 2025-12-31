@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>半衰期實驗室 | Luminous Learner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.263.1"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; cursor: pointer; border: 2px solid #ffffff; background: #6366f1;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+        .thumb-indigo::-webkit-slider-thumb { background: #6366f1; }
+        canvas { image-rendering: pixelated; border-radius: 1rem; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 450;
+    const TOTAL_ATOMS = 1000;
+    
+    // 圖表配置
+    const GRAPH_HEIGHT = 150;
+    const GRAPH_WIDTH = 250;
+
+    const App = () => {
+        // --- 狀態 ---
+        const [halfLife, setHalfLife] = useState(5.0); // 模擬秒數
+        const [simState, setSimState] = useState('idle'); // idle, running, paused, finished
+        const [time, setTime] = useState(0);
+        const [remaining, setRemaining] = useState(TOTAL_ATOMS);
+        const [isotope, setIsotope] = useState('自定義');
+
+        const canvasRef = useRef(null);
+        const graphCanvasRef = useRef(null);
+        const requestRef = useRef();
+        const lastTimeRef = useRef(0);
+        
+        // 物理數據 (使用 Ref 以確保效能)
+        const atomsRef = useRef(new Uint8Array(TOTAL_ATOMS).fill(1)); // 1 = 母核, 0 = 子核
+        const historyRef = useRef([]); 
+
+        // --- 邏輯 ---
+        const resetSim = () => {
+            setSimState('idle');
+            cancelAnimationFrame(requestRef.current);
+            setTime(0);
+            setRemaining(TOTAL_ATOMS);
+            atomsRef.current.fill(1); 
+            historyRef.current = [{t: 0, N: TOTAL_ATOMS}];
+            drawAtoms();
+            drawGraph();
+        };
+
+        const startSim = () => {
+            if (simState === 'running') return;
+            setSimState('running');
+            lastTimeRef.current = performance.now();
+            requestRef.current = requestAnimationFrame(loop);
+        };
+        
+        const pauseSim = () => {
+             setSimState('paused');
+             cancelAnimationFrame(requestRef.current);
+        };
+
+        const loop = (timestamp) => {
+            const dt = (timestamp - lastTimeRef.current) / 1000;
+            lastTimeRef.current = timestamp;
+            
+            const safeDt = Math.min(dt, 0.1);
+            
+            // 衰變常數 λ = ln(2) / T_half
+            // 衰變機率 P = 1 - exp(-λ * dt)
+            const lambda = Math.log(2) / halfLife;
+            const probDecay = 1 - Math.exp(-lambda * safeDt);
+            
+            let currentCount = 0;
+            const atoms = atomsRef.current;
+            let changed = false;
+
+            for (let i = 0; i < TOTAL_ATOMS; i++) {
+                if (atoms[i] === 1) {
+                    if (Math.random() < probDecay) {
+                        atoms[i] = 0; 
+                        changed = true;
+                    } else {
+                        currentCount++;
+                    }
+                }
+            }
+            
+            setTime(t => {
+                const newTime = t + safeDt;
+                const lastRec = historyRef.current[historyRef.current.length-1];
+                if (newTime - lastRec.t > 0.1) {
+                    historyRef.current.push({ t: newTime, N: currentCount });
+                }
+                return newTime;
+            });
+            
+            setRemaining(currentCount);
+
+            if (changed) drawAtoms();
+            drawGraph(); 
+            
+            if (currentCount === 0 || time > halfLife * 6) {
+                setSimState('finished');
+            } else {
+                requestRef.current = requestAnimationFrame(loop);
+            }
+        };
+
+        // --- 繪製原子 ---
+        const drawAtoms = () => {
+            const ctx = canvasRef.current?.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            const atoms = atomsRef.current;
+            const cols = 40;
+            const rows = 25;
+            const size = 12;
+            const gap = 4;
+            const startX = (CANVAS_WIDTH - (cols * (size+gap))) / 2;
+            const startY = (CANVAS_HEIGHT - (rows * (size+gap))) / 2;
+
+            for (let i = 0; i < TOTAL_ATOMS; i++) {
+                const c = i % cols;
+                const r = Math.floor(i / cols);
+                const x = startX + c * (size + gap);
+                const y = startY + r * (size + gap);
+
+                ctx.beginPath();
+                if (atoms[i] === 1) {
+                    ctx.fillStyle = '#6366f1'; 
+                    ctx.shadowColor = '#6366f1';
+                    ctx.shadowBlur = 5;
+                } else {
+                    ctx.fillStyle = '#1e293b'; 
+                    ctx.shadowBlur = 0;
+                }
+                ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+        };
+        
+        // --- 繪製曲線圖 ---
+        const drawGraph = () => {
+            const ctx = graphCanvasRef.current?.getContext('2d');
+            if (!ctx) return;
+            
+            const w = GRAPH_WIDTH, h = GRAPH_HEIGHT, pad = 25;
+            ctx.clearRect(0, 0, w, h);
+            
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.strokeStyle = '#334155'; ctx.strokeRect(0, 0, w, h);
+
+            const maxT = halfLife * 5, maxN = TOTAL_ATOMS;
+            const mapX = (t) => pad + (t / maxT) * (w - 2*pad);
+            const mapY = (n) => h - pad - (n / maxN) * (h - 2*pad);
+
+            // 理論平滑線
+            ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'; ctx.lineWidth = 1.5;
+            for (let x = 0; x <= w - 2*pad; x+=2) {
+                const t = (x / (w - 2*pad)) * maxT;
+                const N_theory = TOTAL_ATOMS * Math.pow(0.5, t / halfLife);
+                const y = mapY(N_theory);
+                if (x===0) ctx.moveTo(pad, y); else ctx.lineTo(pad + x, y);
+            }
+            ctx.stroke();
+
+            // 實際數據線
+            ctx.beginPath(); ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
+            const history = historyRef.current;
+            if (history.length > 0) {
+                ctx.moveTo(mapX(history[0].t), mapY(history[0].N));
+                for (let i=1; i<history.length; i++) {
+                    ctx.lineTo(mapX(history[i].t), mapY(history[i].N));
+                }
+                ctx.lineTo(mapX(time), mapY(remaining));
+            }
+            ctx.stroke();
+            
+            // 半衰期標記
+            ctx.font = '8px monospace'; ctx.fillStyle = '#64748b'; ctx.textAlign = 'center';
+            for(let i=1; i<=4; i++) {
+                const x = mapX(i * halfLife);
+                if (x > w - pad) break;
+                ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, h - pad); ctx.stroke();
+                ctx.setLineDash([]); ctx.fillText(`${i}T`, x, h - 8);
+            }
+        };
+
+        useEffect(() => { resetSim(); }, []);
+        useEffect(() => { drawGraph(); }, [halfLife]);
+        useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
+
+        const setPreset = (name, hl) => {
+            setIsotope(name);
+            setHalfLife(hl);
+            resetSim();
+        };
+
+        return (
+            <div className="min-h-screen bg-slate-900 text-slate-200 font-sans pb-12 select-none">
+                <nav className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-xl">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400">
+                            <i data-lucide="atom"></i>
+                        </div>
+                        <h1 className="text-xl font-bold text-white tracking-wide">半衰期衰變實驗室</h1>
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono bg-slate-950 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-widest">
+                        Topic: Nuclear Physics
+                    </div>
+                </nav>
+
+                <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
+                    <div className="lg:col-span-8 flex flex-col gap-6">
+                        <div className="bg-slate-950 rounded-3xl border border-slate-700 p-1 shadow-2xl relative overflow-hidden h-[480px]">
+                            <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
+                            
+                            <div className="absolute bottom-6 right-6 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+                                <canvas ref={graphCanvasRef} width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className="block bg-slate-900/40" />
+                            </div>
+                            
+                            <div className="absolute top-6 left-6 flex flex-col gap-3">
+                                <div className="bg-slate-900/90 px-4 py-2.5 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">母核 (未衰變)</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-slate-700"></span>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">子核 (已穩定)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-4 space-y-6">
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-8">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-800 pb-4">
+                                <i data-lucide="settings-2" className="text-indigo-400"></i> 同位素設定
+                            </h2>
+
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">預設同位素</label>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <button onClick={() => setPreset('碘-131', 2.0)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${isotope==='碘-131' ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'}`}>碘-131 (快速衰變)</button>
+                                    <button onClick={() => setPreset('碳-14', 6.0)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${isotope==='碳-14' ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'}`}>碳-14 (中速)</button>
+                                    <button onClick={() => setPreset('鈾-238', 12.0)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${isotope==='鈾-238' ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-300'}`}>鈾-238 (慢速)</button>
+                                </div>
+                            </div>
+
+                            <div className="pt-4">
+                                <label className="flex justify-between text-xs font-bold text-indigo-300 uppercase tracking-widest mb-4">
+                                    <span>半衰期 (T<sub>1/2</sub>)</span>
+                                    <span className="text-white font-mono bg-slate-950 px-2 py-0.5 rounded">{halfLife.toFixed(1)} s</span>
+                                </label>
+                                <input type="range" min="1.0" max="20.0" step="0.5" value={halfLife} onChange={(e) => { setHalfLife(Number(e.target.value)); setIsotope('自定義'); }} disabled={simState === 'running'} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer slider-thumb" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button onClick={simState === 'running' ? pauseSim : startSim} disabled={simState === 'finished'} className={`py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg ${simState === 'running' ? 'bg-amber-600/20 text-amber-500 border border-amber-500/50' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'} ${simState === 'finished' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    <i data-lucide={simState === 'running' ? "pause" : "play"}></i> {simState === 'running' ? "暫停" : "開始實驗"}
+                                </button>
+                                <button onClick={resetSim} className="py-4 bg-slate-700 hover:bg-slate-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center active:rotate-180"><i data-lucide="rotate-ccw"></i></button>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+                            <h2 className="text-white font-bold flex items-center gap-2 text-lg border-b border-slate-800 pb-4"><i data-lucide="calculator" className="text-indigo-400"></i> 即時數據監測</h2>
+                            <div className="space-y-4 font-mono">
+                                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-700 flex justify-between items-center shadow-inner">
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">時間 t</span>
+                                    <span className="text-xl font-bold text-white">{time.toFixed(2)} <span className="text-xs text-slate-600">s</span></span>
+                                </div>
+                                <div className="p-4 rounded-2xl bg-indigo-900/10 border border-indigo-500/20 flex justify-between items-center">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">剩餘原子數 (N)</span>
+                                        <span className="text-3xl font-black text-white tracking-tighter">{remaining}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">百分比</div>
+                                        <div className="text-xl font-bold text-indigo-300">{((remaining/TOTAL_ATOMS)*100).toFixed(1)}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
